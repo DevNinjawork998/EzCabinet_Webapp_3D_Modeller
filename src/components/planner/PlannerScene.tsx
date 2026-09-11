@@ -1264,7 +1264,12 @@ function Worktop({
 	}> = [];
 	for (const position of positionsOf(layout, "floor")) {
 		if (position.family.kind !== "base") continue;
-		const topMm = position.family.floorHeightMm + position.family.heightMm;
+		// Off the cabinet's actual height, not its family's. A unit lifted by its
+		// handle carries its slab up with it — and because a differing `topMm`
+		// already splits the run, the lift breaks the slab either side of it
+		// rather than tilting one across the step.
+		const topMm =
+			engine.floorHeightMmOf(position, layout) + position.family.heightMm;
 		const previous = spans[spans.length - 1];
 		if (
 			previous &&

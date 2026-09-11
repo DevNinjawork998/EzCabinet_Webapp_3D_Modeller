@@ -429,11 +429,11 @@ describe("dragModule", () => {
 		expect(next.wall.find((m) => m.id === "w")?.hangAtMm).toBe(1650);
 	});
 
-	it("ignores a hang height given for a floor cabinet", () => {
+	it("moves a floor cabinet on both axes too", () => {
 		const placed = addModule(layout, "base-cabinet", 0, "a", 600);
-		const next = dragModule(placed, "a", { xMm: 300, hangAtMm: 1650 });
+		const next = dragModule(placed, "a", { xMm: 300, hangAtMm: 400 });
 		expect(at(next, "a")).toBe(300);
-		expect(next.floor.find((m) => m.id === "a")).not.toHaveProperty("hangAtMm");
+		expect(next.floor.find((m) => m.id === "a")?.hangAtMm).toBe(400);
 	});
 
 	it("clamps the hang height to the slider's own range", () => {
@@ -1179,9 +1179,27 @@ describe("setHangAt", () => {
 		);
 	});
 
-	it("ignores a floor unit — only the hung row moves vertically", () => {
+	it("lifts a floor unit off the floor, and drops it back", () => {
 		const placed = addModule(layout, "base-cabinet", 0, "b", 600);
-		expect(setHangAt(placed, "b", 1600)).toBe(placed);
+		const lifted = setHangAt(placed, "b", 400);
+		const [only] = positionsOf(lifted, "floor");
+		expect(floorHeightMmOf(only, lifted)).toBe(400);
+
+		const down = setHangAt(lifted, "b", null);
+		const [back] = positionsOf(down, "floor");
+		expect(floorHeightMmOf(back, down)).toBe(back.family.floorHeightMm);
+	});
+
+	// The floor row answers to the room rather than to the hang slider: a wall
+	// unit may not come below 1200, but a base unit's home is 0.
+	it("clamps a floor unit to the floor and to the ceiling above it", () => {
+		const placed = addModule(layout, "base-cabinet", 0, "b", 600);
+		const [only] = positionsOf(placed, "floor");
+
+		expect(setHangAt(placed, "b", -500).floor[0].hangAtMm).toBe(0);
+		expect(setHangAt(placed, "b", 9000).floor[0].hangAtMm).toBe(
+			placed.ceilingHeightMm - only.family.heightMm,
+		);
 	});
 
 	it("is overridden by ceiling mode, which lines every top up", () => {

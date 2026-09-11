@@ -190,14 +190,27 @@ const find = (
 };
 
 /**
- * Whether this cabinet has a hang height of its own to drag.
+ * Whether this cabinet has a height of its own to drag.
  *
  * The scene needs the same answer `dragModule` acts on — a handle that stands
  * up and offers an axis the engine has stopped granting is worse than no
  * handle — so the rule lives here once and both read it.
+ *
+ * A floor unit always has one. It used to have none, on the reasoning that a
+ * base cabinet stands on the floor and that is that; but the handle offers two
+ * axes and one of them did nothing, which reads as a broken control rather
+ * than as a rule. `floorHeightMm` was already catalogue data an admin could
+ * raise, so "off the floor" was always a state this engine could be in — the
+ * customer simply had no way to ask for it.
+ *
+ * A wall unit's is the one that can be taken away: ceiling mode aligns every
+ * wall top to the ceiling, so a per-cabinet height has nothing to say.
  */
-export const canHangAt = (layout: PlannerLayout, id: string): boolean =>
-	!layout.wallToCeiling && find(layout, id)?.row === "wall";
+export const canHangAt = (layout: PlannerLayout, id: string): boolean => {
+	const found = find(layout, id);
+	if (!found) return false;
+	return found.row === "floor" || !layout.wallToCeiling;
+};
 
 const withX = (
 	layout: PlannerLayout,
@@ -783,11 +796,14 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 	}
 
 	/**
-	 * Raise or lower one wall cabinet out of the row. `null` puts it back.
+	 * Raise or lower one cabinet out of its row. `null` puts it back.
 	 *
-	 * Clamped to the same range the hang slider allows, so a cabinet can never
-	 * be nudged somewhere the slider could not have put the whole row — the
-	 * gizmo is a shortcut, not a second set of rules.
+	 * The two rows are clamped by different rules because they are answering
+	 * different questions. A wall unit is held to the same range the hang slider
+	 * allows, so a cabinet can never be nudged somewhere the slider could not
+	 * have put the whole row — the gizmo is a shortcut, not a second set of
+	 * rules. A floor unit has no slider to agree with, so the only rule is the
+	 * room: it stays on or above the floor, and its top stays under the ceiling.
 	 */
 	function setHangAt(
 		layout: PlannerLayout,
@@ -795,22 +811,43 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 		hangAtMm: number | null,
 	): PlannerLayout {
 		const found = find(layout, id);
-		if (found?.row !== "wall") return layout;
+		if (!found || !canHangAt(layout, id)) return layout;
 
 		const next = { ...found.placed };
 		if (hangAtMm === null) {
 			delete next.hangAtMm;
 		} else {
-			next.hangAtMm = Math.max(
-				WALL_HANG_LIMITS.minMm,
-				Math.min(WALL_HANG_LIMITS.maxMm, Math.round(hangAtMm)),
-			);
+			next.hangAtMm = Math.round(clampHangAt(layout, found.row, id, hangAtMm));
 		}
 
 		return {
 			...layout,
-			wall: layout.wall.map((module) => (module.id === id ? next : module)),
+			[found.row]: layout[found.row].map((module) =>
+				module.id === id ? next : module,
+			),
 		};
+	}
+
+	/** How high this row lets one cabinet be lifted. See `setHangAt`. */
+	function clampHangAt(
+		layout: PlannerLayout,
+		row: Row,
+		id: string,
+		hangAtMm: number,
+	): number {
+		if (row === "wall") {
+			return Math.max(
+				WALL_HANG_LIMITS.minMm,
+				Math.min(WALL_HANG_LIMITS.maxMm, hangAtMm),
+			);
+		}
+		// Its own height, so a tall unit runs out of headroom before a base one.
+		// Absent (an id that is not placed) the cabinet cannot be lifted at all,
+		// which is the safe way for a lookup miss to fail.
+		const heightMm =
+			positionsOf(layout, row).find((p) => p.placed.id === id)?.family
+				.heightMm ?? layout.ceilingHeightMm;
+		return Math.max(0, Math.min(layout.ceilingHeightMm - heightMm, hangAtMm));
 	}
 
 	/**
@@ -946,6 +983,13 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 		const spans: SkirtingSpan[] = [];
 
 		for (const position of positionsOf(layout, "floor")) {
+			// A unit lifted off the floor has no feet down there to hide, and a
+			// kick board floating in the gap under it would be a board standing
+			// on nothing. It gets none, and it breaks the stretch either side —
+			// the same way a gap does, and for the same reason.
+			if (floorHeightMmOf(position, layout) > position.family.floorHeightMm) {
+				continue;
+			}
 			const stand = standOf(position.family, construction);
 			if (stand.heightMm <= 0) continue;
 
@@ -984,7 +1028,14 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 		position: Positioned,
 		layout: PlannerLayout,
 	): number {
-		if (position.family.kind !== "wall") return position.family.floorHeightMm;
+		if (position.family.kind !== "wall") {
+			// Lifted off the floor by its handle, or standing at whatever height
+			// the catalogue gives the family. Everything downstream — the scene,
+			// the contact shadows, the measuring tool, the worktop — reads this
+			// one function, so a floor unit dragged upward carries all of them
+			// with it.
+			return position.placed.hangAtMm ?? position.family.floorHeightMm;
+		}
 		// Ceiling mode aligns the tops, so a per-cabinet figure has nothing to
 		// say there.
 		if (layout.wallToCeiling) return hangingHeightMmOf(layout);

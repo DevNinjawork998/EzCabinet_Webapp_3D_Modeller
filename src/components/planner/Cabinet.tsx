@@ -223,7 +223,23 @@ export function Cabinet({
 					z: family.depthMm / 2,
 				},
 			};
-	const legParts = parts.filter((part) => part.role === "leg");
+	// Feet are for standing on the floor. A cabinet dragged up off it is being
+	// shown floating — legs dangling under it read as a cabinet on stilts rather
+	// than one the customer has lifted. Its own stated height against its
+	// family's is the whole test; no new prop needed.
+	//
+	// This reaches the procedural fallback only. A drafted mesh keeps the feet
+	// the drafter drew, because they cannot be picked out at render time: the
+	// converter buckets by role, and `roles.ts` puts feet and handles in the
+	// same `hardware` bucket — it tells them apart by what stands on the floor,
+	// which is a fact about the source file, not about the merged group. Losing
+	// the handles to hide the feet is the worse trade on a page that has to
+	// sell. Splitting feet into their own role at intake is the real fix, and it
+	// means re-converting and re-publishing every design.
+	// ponytail: fallback only; needs a `foot` role in lib/mesh to cover drafted
+	// meshes.
+	const lifted = floorHeightMm > family.floorHeightMm;
+	const legParts = lifted ? [] : parts.filter((part) => part.role === "leg");
 	const leaves = parts.filter((part) => part.role === "doorLeaf");
 	const drawerFronts = parts.filter((part) => part.role === "drawerFront");
 	const drawerBoxes = parts.filter((part) => part.role === "drawerBox");
