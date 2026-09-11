@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
 	CEILING_LIMITS,
+	CONSTRUCTION,
 	familyIn,
 	PLANNER_CATALOGUE,
 	ROOM_DEPTH_LIMITS,
@@ -1190,6 +1191,60 @@ describe("setHangAt", () => {
 		expect(floorHeightMmOf(back, down)).toBe(back.family.floorHeightMm);
 	});
 
+	// A cabinet cannot pass through the one above it any more than through the
+	// one beside it. Until floor units could move vertically, nothing had to
+	// say so — and the first thing a lifted base unit did was drive its worktop
+	// through the wall cabinet over it.
+	it("stops a rising floor unit under the wall unit above it", () => {
+		let placed = addModule(layout, "base-cabinet", 0, "b", 600);
+		placed = addModule(placed, "wall-cabinet", 0, "w", 600);
+		const [wall] = positionsOf(placed, "wall");
+		const [base] = positionsOf(placed, "floor");
+
+		const lifted = setHangAt(placed, "b", 9000);
+		// Flush against the wall unit's underside, not through it — and the
+		// worktop counts, because the slab sits on top of the carcass.
+		expect(lifted.floor[0].hangAtMm).toBe(
+			floorHeightMmOf(wall, placed) -
+				base.family.heightMm -
+				CONSTRUCTION.worktopThicknessMm,
+		);
+	});
+
+	it("stops a descending wall unit on top of a lifted floor unit", () => {
+		let placed = addModule(layout, "base-cabinet", 0, "b", 600);
+		placed = addModule(placed, "wall-cabinet", 0, "w", 600);
+		const [base] = positionsOf(placed, "floor");
+
+		// Raise the base until its top is above the slider's own minimum, so the
+		// wall unit's limit has to come from the cabinet rather than the slider.
+		const topOf = (hangAtMm: number) =>
+			hangAtMm + base.family.heightMm + CONSTRUCTION.worktopThicknessMm;
+		const raisedMm =
+			WALL_HANG_LIMITS.minMm +
+			100 -
+			base.family.heightMm -
+			CONSTRUCTION.worktopThicknessMm;
+		const lifted = setHangAt(placed, "b", raisedMm);
+		const pushed = setHangAt(lifted, "w", 0);
+		expect(pushed.wall[0].hangAtMm).toBe(topOf(raisedMm));
+	});
+
+	// Only what is actually overhead counts: a wall unit further along the wall
+	// is not in the way, however high the base unit goes.
+	it("ignores a wall unit that does not sit over it", () => {
+		let placed = addModule(layout, "base-cabinet", 0, "b", 600);
+		placed = addModule(placed, "wall-cabinet", 2000, "w", 600);
+		const [base] = positionsOf(placed, "floor");
+
+		const lifted = setHangAt(placed, "b", 9000);
+		expect(lifted.floor[0].hangAtMm).toBe(
+			placed.ceilingHeightMm -
+				base.family.heightMm -
+				CONSTRUCTION.worktopThicknessMm,
+		);
+	});
+
 	// The floor row answers to the room rather than to the hang slider: a wall
 	// unit may not come below 1200, but a base unit's home is 0.
 	it("clamps a floor unit to the floor and to the ceiling above it", () => {
@@ -1198,7 +1253,9 @@ describe("setHangAt", () => {
 
 		expect(setHangAt(placed, "b", -500).floor[0].hangAtMm).toBe(0);
 		expect(setHangAt(placed, "b", 9000).floor[0].hangAtMm).toBe(
-			placed.ceilingHeightMm - only.family.heightMm,
+			placed.ceilingHeightMm -
+				only.family.heightMm -
+				CONSTRUCTION.worktopThicknessMm,
 		);
 	});
 

@@ -828,26 +828,88 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 		};
 	}
 
-	/** How high this row lets one cabinet be lifted. See `setHangAt`. */
+	/**
+	 * How high this row lets one cabinet be lifted, and what is in the way.
+	 *
+	 * Two rules stacked. The row's own comes first: a wall unit is held to the
+	 * hang slider's range, so the gizmo stays a shortcut rather than a second
+	 * set of rules; a floor unit has no slider to agree with, so its rule is the
+	 * room — on or above the floor, top under the ceiling, its own height
+	 * deciding where it runs out of headroom.
+	 *
+	 * Then the other row. A cabinet cannot pass through the one above or below
+	 * it any more than it can pass through its neighbour, and until floor units
+	 * could move vertically nothing had to say so — a base unit dragged up went
+	 * clean through the wall unit over it, worktop and all. This is `clampX`'s
+	 * rule turned ninety degrees, anchors and all: it stops flush against the
+	 * underside of whatever is above, or the top of whatever is below.
+	 */
+	/**
+	 * How much vertical room a cabinet actually takes up.
+	 *
+	 * Not its carcass height: a base unit wears a worktop, and the slab sits on
+	 * top of the carcass rather than inside it. Clamping to the carcass alone
+	 * stopped the cabinet flush and drove forty millimetres of worktop through
+	 * the wall unit above — which is the part you see. `Worktop` in the scene
+	 * draws from the same two numbers.
+	 */
+	function occupiedHeightMm(family: Family): number {
+		return (
+			family.heightMm +
+			(family.kind === "base" ? construction.worktopThicknessMm : 0)
+		);
+	}
+
 	function clampHangAt(
 		layout: PlannerLayout,
 		row: Row,
 		id: string,
 		hangAtMm: number,
 	): number {
-		if (row === "wall") {
-			return Math.max(
-				WALL_HANG_LIMITS.minMm,
-				Math.min(WALL_HANG_LIMITS.maxMm, hangAtMm),
-			);
+		const own = positionsOf(layout, row).find((p) => p.placed.id === id);
+		// An id that is not placed has nothing to clamp against, and nothing to
+		// clamp: hand the figure back rather than inventing a bound for it.
+		if (!own) return hangAtMm;
+		const heightMm = occupiedHeightMm(own.family);
+
+		const rowMinMm = row === "wall" ? WALL_HANG_LIMITS.minMm : 0;
+		const rowMaxMm =
+			row === "wall"
+				? WALL_HANG_LIMITS.maxMm
+				: layout.ceilingHeightMm - heightMm;
+
+		// Where it is now decides which side of an obstacle it stops on — the
+		// same reason `clampX` takes a `fromMm`. Anything it already overlaps is
+		// neither above nor below it and is left out: a cabinet the catalogue has
+		// wedged should not be shoved somewhere arbitrary by a drag.
+		const fromMm = floorHeightMmOf(own, layout);
+		const leftMm = own.xMm;
+		const rightMm = own.xMm + own.widthMm;
+
+		let ceilingMm = layout.ceilingHeightMm;
+		let floorMm = 0;
+		for (const other of positionsOf(
+			layout,
+			row === "wall" ? "floor" : "wall",
+		)) {
+			// Touching end to end is not overlapping, so a cabinet is free to pass
+			// a neighbour that merely abuts its x span.
+			if (other.xMm + other.widthMm <= leftMm || other.xMm >= rightMm) continue;
+			const bottomMm = floorHeightMmOf(other, layout);
+			const topMm = bottomMm + occupiedHeightMm(other.family);
+			if (bottomMm >= fromMm + heightMm) {
+				ceilingMm = Math.min(ceilingMm, bottomMm);
+			} else if (topMm <= fromMm) {
+				floorMm = Math.max(floorMm, topMm);
+			}
 		}
-		// Its own height, so a tall unit runs out of headroom before a base one.
-		// Absent (an id that is not placed) the cabinet cannot be lifted at all,
-		// which is the safe way for a lookup miss to fail.
-		const heightMm =
-			positionsOf(layout, row).find((p) => p.placed.id === id)?.family
-				.heightMm ?? layout.ceilingHeightMm;
-		return Math.max(0, Math.min(layout.ceilingHeightMm - heightMm, hangAtMm));
+
+		const minMm = Math.max(rowMinMm, floorMm);
+		const maxMm = Math.min(rowMaxMm, ceilingMm - heightMm);
+		// Boxed in with no room to move: hold it where it is. Clamping into an
+		// inverted range would snap it to one end of a gap it does not fit.
+		if (maxMm < minMm) return fromMm;
+		return Math.max(minMm, Math.min(maxMm, hangAtMm));
 	}
 
 	/**
