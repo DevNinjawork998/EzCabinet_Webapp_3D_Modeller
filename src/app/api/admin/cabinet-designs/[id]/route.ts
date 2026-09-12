@@ -6,7 +6,15 @@ import {
 	fetchMeshFile,
 	sha256Hex,
 } from "@/lib/catalogue/meshBlob";
+import { publishVersion } from "@/lib/catalogue/publishVersion";
+import { removeDesign } from "@/lib/catalogue/removeDesign";
 import { getPublishedPlannerCatalogue } from "@/lib/catalogue/store";
+import {
+	createDraftVersion,
+	latestDraftVersion,
+	mergeBase,
+} from "@/lib/catalogue/versions";
+import { plannerCatalogueSchema } from "@/lib/planner/catalogueSchema";
 
 export const runtime = "nodejs";
 
@@ -115,19 +123,27 @@ export async function PATCH(
  * row pointing at a file that is already gone breaks every page that renders
  * the design.
  *
- * **A design that is live in the planner cannot be deleted here.** Families
- * live inside a `CatalogueVersion`'s JSON, not in a table, so Postgres cannot
- * enforce this with a foreign key — deleting the row would leave a family in
- * the live catalogue that nothing points at, priced and visible to customers,
+ * **A design that is in the planner is not deleted silently.** Families live
+ * inside a `CatalogueVersion`'s JSON, not in a table, so Postgres cannot
+ * enforce this with a foreign key — deleting the row alone would leave a family
+ * in the catalogue that nothing points at, priced and visible to customers,
  * with no way left to find where it came from. That is exactly how the
- * "Testing123" family outlived its design. Remove it at `/admin/catalogue` and
- * publish, then delete here.
+ * "Testing123" family outlived its design.
+ *
+ * So the caller says which it means. Without `?fromPlanner=1` this refuses with
+ * the family it found, which is what the admin page turns into a confirm
+ * dialog; with it, the cabinet comes out of the catalogue, that version is
+ * published, and only then is the row deleted. It used to send the admin to
+ * `/admin/catalogue` to do the first two by hand, which is two page hops for
+ * what is one intent.
  */
 export async function DELETE(
-	_request: Request,
+	request: Request,
 	{ params }: { params: Promise<{ id: string }> },
 ) {
 	const { id } = await params;
+	const fromPlanner =
+		new URL(request.url).searchParams.get("fromPlanner") === "1";
 
 	const existing = await prisma.cabinetDesign.findUnique({ where: { id } });
 	if (!existing) {
@@ -135,21 +151,69 @@ export async function DELETE(
 	}
 
 	if (existing.familyId) {
-		// Only the *published* catalogue blocks a delete. A family sitting in an
-		// unpublished draft has never been seen by a customer, and the draft can
-		// simply be discarded.
-		const { data: live } = await getPublishedPlannerCatalogue();
-		const family = live.families.find((f) => f.id === existing.familyId);
+		// The same base a design *push* would build on: the open draft when it is
+		// newer than live, otherwise the published catalogue. Checking only the
+		// published one would let a design be deleted out from under a family
+		// sitting in a draft — which publishes the orphan rather than preventing
+		// it.
+		const published = await getPublishedPlannerCatalogue();
+		const openDraft = await latestDraftVersion("PLANNER");
+		const chosen = mergeBase(
+			{ id: published.id, version: published.version },
+			openDraft && { id: openDraft.id, version: openDraft.version },
+		);
+		const onDraft = openDraft && chosen.id === openDraft.id ? openDraft : null;
+		const base = onDraft
+			? plannerCatalogueSchema.parse(onDraft.data)
+			: published.data;
+
+		const family = base.families.find((f) => f.id === existing.familyId);
 		if (family) {
-			return NextResponse.json(
-				{
-					error: "in_planner",
-					familyId: family.id,
-					familyLabel: family.label,
-					message: `This design is live in the planner as "${family.label}". Remove that cabinet at /admin/catalogue and publish, then delete this design.`,
-				},
-				{ status: 409 },
-			);
+			if (!fromPlanner) {
+				const rung = family.sizes.length > 1 ? ` ${existing.widthMm}mm` : "";
+				return NextResponse.json(
+					{
+						error: "in_planner",
+						familyId: family.id,
+						familyLabel: family.label,
+						live: onDraft === null,
+						message: `This design is in the planner as "${family.label}"${rung}. Deleting it removes that cabinet from the catalogue and publishes the change.`,
+					},
+					{ status: 409 },
+				);
+			}
+
+			const removal = removeDesign(base, {
+				familyId: existing.familyId,
+				widthMm: existing.widthMm,
+			});
+			if (!removal.ok) {
+				return NextResponse.json(
+					{ error: "cannot_remove", message: removal.message },
+					{ status: 409 },
+				);
+			}
+			if (removal.changed) {
+				const draft = await createDraftVersion({
+					product: "PLANNER",
+					data: removal.catalogue,
+					note: `${existing.name} (${existing.sku}) removed from the design library`,
+				});
+				const result = await publishVersion(draft.id);
+				if (!result.ok) {
+					// The row still exists and still points at the family, so the
+					// catalogue and the library agree — nothing is orphaned, and
+					// retrying is safe.
+					return NextResponse.json(
+						{
+							error: result.error,
+							message:
+								"Could not publish the catalogue without this cabinet, so the design was kept.",
+						},
+						{ status: result.status },
+					);
+				}
+			}
 		}
 	}
 

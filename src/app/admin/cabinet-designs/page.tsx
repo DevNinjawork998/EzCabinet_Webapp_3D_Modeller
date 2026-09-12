@@ -98,9 +98,9 @@ const REACH_LABEL: Record<Reach, string> = {
 
 const REACH_HINT: Record<Reach, string> = {
 	library:
-		"In the design library only. No customer can see this — use “Add to planner”.",
+		"In the design library only. No customer can see this — use “Publish to planner”.",
 	queued:
-		"Added to a catalogue draft. Publish that draft at /admin/catalogue to make it live.",
+		"Merged into a catalogue draft but never published. Use “Publish to planner” to finish it.",
 	live: "Live in the published catalogue — customers can place this cabinet.",
 };
 
@@ -197,6 +197,38 @@ type BatchRow = {
 	/** Filled once the row has been through the API. */
 	result: "pending" | "saved" | string;
 };
+
+/** What both publish routes answer with — the single-design one flattens the
+ * batch arrays back out, so the fields differ by name only. */
+type PushBody = {
+	status: "draft_created" | "already_in_catalogue";
+	draftId?: string;
+	draftVersion?: number;
+	basedOnVersionId?: string;
+	basedOnDraftVersion?: number;
+	changes?: string[];
+	meshNote?: string | null;
+	meshNotes?: string[];
+} | null;
+
+/**
+ * What a confirm sheet is confirming.
+ *
+ * Two shapes, one sheet, because they are the same moment from opposite
+ * directions: something is about to change what a customer can place, here is
+ * what it is, say go. `draftId` is the version the publish call flips live —
+ * built by the merge that just ran, or the open draft a re-push found already
+ * holding this design.
+ */
+type Confirm =
+	| {
+			kind: "publish";
+			draftId: string;
+			title: string;
+			changes: string[];
+			notes: string[];
+	  }
+	| { kind: "delete"; design: CabinetDesign; message: string };
 
 const LABEL_CLASS =
 	"mb-1 font-semibold text-[11px] text-neutral-600 uppercase tracking-wide";
@@ -367,6 +399,16 @@ export default function CabinetDesignsPage() {
 	const [pushing, setPushing] = useState<string | null>(null);
 	/** What the last push did, shown until the next action. */
 	const [pushed, setPushed] = useState<string | null>(null);
+	/**
+	 * The one thing standing between a design and a customer.
+	 *
+	 * A merge builds a draft and a delete builds a removal; both then need a
+	 * person to look at what changed and say go. That used to mean a trip to
+	 * `/admin/catalogue`, which is where the two-page dance came from — the
+	 * review is worth keeping, the page hop never was.
+	 */
+	const [confirm, setConfirm] = useState<Confirm | null>(null);
+	const [confirmBusy, setConfirmBusy] = useState(false);
 
 	async function load() {
 		setLoading(true);
@@ -584,32 +626,84 @@ export default function CabinetDesignsPage() {
 	 * disarms any other. Archiving already covers "hide this from customers",
 	 * so anyone reaching here means it.
 	 */
-	async function removeItem(d: CabinetDesign) {
+	async function removeItem(d: CabinetDesign, fromPlanner = false) {
 		setConfirmingDelete(null);
 		setPushed(null);
-		const res = await fetch(`/api/admin/cabinet-designs/${d.id}`, {
-			method: "DELETE",
-		});
+		const res = await fetch(
+			`/api/admin/cabinet-designs/${d.id}${fromPlanner ? "?fromPlanner=1" : ""}`,
+			{ method: "DELETE" },
+		);
 		if (!res.ok) {
-			// The guard's own message names the family and says where to remove
-			// it — far more use than "could not delete".
 			const body = await res.json().catch(() => null);
+			// The design is in the catalogue. That is not a refusal any more — it
+			// is the second half of the same job, so ask rather than send the
+			// admin to another page to do it by hand.
+			if (body?.error === "in_planner") {
+				setConfirm({ kind: "delete", design: d, message: body.message });
+				return;
+			}
 			setError(body?.message ?? `Could not delete ${d.name}.`);
 			return;
 		}
+		setConfirm(null);
+		setPushed(
+			fromPlanner
+				? `${d.name} deleted and removed from the planner.`
+				: `${d.name} deleted.`,
+		);
 		load();
 	}
 
 	/**
-	 * Puts this design into the planner catalogue — as a DRAFT.
+	 * Turns a merge result into either a confirm sheet or a plain message.
+	 *
+	 * A merge that changed something has a draft to publish, so it asks. A merge
+	 * that changed nothing has nothing to publish — unless the design is sitting
+	 * in an open draft that was never published, which is the one case where
+	 * "already in the catalogue" and "no customer can see it" are both true.
+	 * That draft is the base the merge just ran against, so its id is already in
+	 * hand.
+	 */
+	function afterMerge(title: string, body: NonNullable<PushBody>) {
+		const notes: string[] =
+			body.meshNotes ?? (body.meshNote ? [body.meshNote] : []);
+		const draftId =
+			body.draftId ?? (body.basedOnDraftVersion ? body.basedOnVersionId : null);
+
+		if (!draftId) {
+			setPushed(
+				[
+					`${title} is already live in the planner — nothing to add.`,
+					...notes,
+				].join(" "),
+			);
+			load();
+			return;
+		}
+
+		setConfirm({
+			kind: "publish",
+			draftId,
+			title,
+			changes: body.changes ?? [],
+			notes,
+		});
+		load();
+	}
+
+	/**
+	 * Merges this design into the planner catalogue, then asks before it goes
+	 * live.
 	 *
 	 * The design library used to be a dead end: an admin uploaded, priced and
 	 * "published" a design and no customer could ever see it, because the
-	 * planner reads only the published `CatalogueVersion`. This is the bridge.
+	 * planner reads only the published `CatalogueVersion`. Then it was a
+	 * half-bridge — the merge landed in a draft and the admin had to finish the
+	 * job at `/admin/catalogue`, which is two pages for one intent.
 	 *
-	 * It deliberately stops at a draft. Someone reviews the price and where the
-	 * cabinet sits at `/admin/catalogue` and publishes there, because that
-	 * document prices real kitchens.
+	 * The review it was protecting is kept, as the confirm sheet: the merge is
+	 * still a numbered `CatalogueVersion` and going live is still a deliberate,
+	 * separate click. It just happens where the admin already is.
 	 */
 	async function pushToPlanner(d: CabinetDesign) {
 		setPushing(d.id);
@@ -626,23 +720,47 @@ export default function CabinetDesignsPage() {
 				);
 				return;
 			}
-			// "Already in the catalogue" read as "customers can see it", which is
-			// the opposite of true in the common re-push case: the merge base is
-			// usually an open draft, and nothing on a draft reaches the planner.
-			// Say which document already holds it.
-			const summary =
-				body.status !== "already_in_catalogue"
-					? `${d.name} added to draft v${body.draftVersion} as "${body.familyLabel}". Review the price and publish it at /admin/catalogue.`
-					: body.basedOnDraftVersion
-						? `${d.name} is already in draft v${body.basedOnDraftVersion} as "${body.familyLabel}" — nothing to add. Publish that draft at /admin/catalogue to put it in front of customers.`
-						: `${d.name} is already in the live catalogue as "${body.familyLabel}" — nothing to add.`;
-			// The mesh is what the customer will actually look at, so a design
-			// that fell back to procedural geometry has to say so here rather
-			// than reporting a clean success and rendering a generic box.
-			setPushed(body.meshNote ? `${summary} ${body.meshNote}` : summary);
-			load();
+			afterMerge(d.name, body);
 		} finally {
 			setPushing(null);
+		}
+	}
+
+	/**
+	 * The second click: flips the draft the merge built to PUBLISHED.
+	 *
+	 * Deliberately the existing catalogue endpoint rather than a new one — the
+	 * transaction that supersedes the live pricing document should have exactly
+	 * one implementation, and this page is not the place for a second.
+	 */
+	async function publishConfirmed() {
+		if (confirm?.kind !== "publish") return;
+		setConfirmBusy(true);
+		setError(null);
+		try {
+			const res = await fetch(
+				`/api/admin/catalogue/versions/${confirm.draftId}/publish`,
+				{ method: "POST" },
+			);
+			const body = await res.json().catch(() => null);
+			if (!res.ok) {
+				setError(
+					body?.error === "invalid_catalogue"
+						? "That draft no longer validates, so it was not published. Open it at /admin/catalogue to see what is wrong."
+						: `Could not publish the catalogue (${body?.error ?? res.status}).`,
+				);
+				return;
+			}
+			setConfirm(null);
+			setPushed(
+				[
+					`${confirm.title} is live in the planner — catalogue v${body.version}.`,
+					...confirm.notes,
+				].join(" "),
+			);
+			load();
+		} finally {
+			setConfirmBusy(false);
 		}
 	}
 
@@ -772,9 +890,9 @@ export default function CabinetDesignsPage() {
 		});
 		const body = await res.json().catch(() => null);
 		setSaving(false);
-		load();
 
 		if (!res.ok) {
+			load();
 			setError(
 				body?.message ??
 					`Saved ${ids.length} design${ids.length === 1 ? "" : "s"}, but could not add them to the catalogue.`,
@@ -782,19 +900,14 @@ export default function CabinetDesignsPage() {
 			return;
 		}
 
-		const notes: string[] = body.meshNotes ?? [];
-		setPushed(
-			[
-				body.status !== "already_in_catalogue"
-					? `${ids.length} design${ids.length === 1 ? "" : "s"} saved and added to draft v${body.draftVersion}. Review the prices and publish it at /admin/catalogue.`
-					: body.basedOnDraftVersion
-						? `${ids.length} design${ids.length === 1 ? "" : "s"} saved — already in draft v${body.basedOnDraftVersion}, nothing to add. Publish that draft at /admin/catalogue.`
-						: `${ids.length} design${ids.length === 1 ? "" : "s"} saved — already in the live catalogue, nothing to add.`,
-				...notes,
-			].join(" "),
-		);
+		// Close first: the confirm sheet sits behind the upload panel, and an
+		// admin who cannot see what they are approving will not approve it.
 		setPanelOpen(false);
 		setBatch(null);
+		afterMerge(
+			`${ids.length} design${ids.length === 1 ? "" : "s"}`,
+			body as NonNullable<PushBody>,
+		);
 	}
 
 	async function save() {
@@ -917,8 +1030,8 @@ export default function CabinetDesignsPage() {
 					<div>
 						<h1 className="mb-1 font-semibold text-[22px]">Cabinet designs</h1>
 						<p className="text-neutral-500 text-sm">
-							Upload design exports and describe them. “Add to planner” turns
-							one into a catalogue draft; publishing it is a separate step.
+							Upload design exports, describe them, and publish them straight to
+							the planner. You confirm what changes before customers see it.
 						</p>
 					</div>
 					<button
@@ -956,6 +1069,96 @@ export default function CabinetDesignsPage() {
 					<p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2.5 text-[13px] text-red-900">
 						{error}
 					</p>
+				)}
+
+				{/* The gate. Everything above this point is reversible; the button
+				    inside it is what a customer sees. */}
+				{confirm && (
+					<div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 p-6">
+						<div className="w-full max-w-[520px] rounded-xl border border-neutral-200 bg-white p-5 shadow-xl">
+							{confirm.kind === "publish" ? (
+								<>
+									<h2 className="font-semibold text-[15px]">
+										Publish to the planner?
+									</h2>
+									<p className="mt-1 text-[13px] text-neutral-500">
+										{confirm.title} is ready. This is what customers will get.
+									</p>
+									<ul className="mt-3 flex flex-col gap-1.5 rounded-lg bg-neutral-50 p-3 text-[13px]">
+										{confirm.changes.length > 0 ? (
+											confirm.changes.map((change) => (
+												<li key={change} className="text-neutral-800">
+													{change}
+												</li>
+											))
+										) : (
+											<li className="text-neutral-500">
+												No change to the catalogue — the draft is already up to
+												date.
+											</li>
+										)}
+									</ul>
+									{/* The mesh is what the customer actually looks at, so a
+									    design that fell back to procedural geometry has to say
+									    so here rather than reporting a clean success. */}
+									{confirm.notes.map((note) => (
+										<p
+											key={note}
+											className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-900"
+										>
+											{note}
+										</p>
+									))}
+								</>
+							) : (
+								<>
+									<h2 className="font-semibold text-[15px]">
+										Delete {confirm.design.name}?
+									</h2>
+									<p className="mt-1 text-[13px] text-neutral-600">
+										{confirm.message}
+									</p>
+									<p className="mt-2 text-[13px] text-neutral-500">
+										The design file goes too. Archive instead if you only want
+										it out of the list.
+									</p>
+								</>
+							)}
+							<div className="mt-4 flex items-center justify-end gap-2">
+								<button
+									type="button"
+									onClick={() => setConfirm(null)}
+									className="rounded-[9px] border border-neutral-300 px-3.5 py-2 font-medium text-[13px]"
+								>
+									{confirm.kind === "publish" ? "Not yet" : "Keep it"}
+								</button>
+								<button
+									type="button"
+									disabled={confirmBusy}
+									onClick={() =>
+										confirm.kind === "publish"
+											? publishConfirmed()
+											: removeItem(confirm.design, true)
+									}
+									className={`rounded-[9px] px-3.5 py-2 font-medium text-[13px] text-white disabled:opacity-50 ${
+										confirm.kind === "publish" ? "bg-neutral-900" : "bg-red-600"
+									}`}
+								>
+									{confirmBusy
+										? "Working…"
+										: confirm.kind === "publish"
+											? "Publish"
+											: "Remove and delete"}
+								</button>
+							</div>
+							{confirm.kind === "publish" && (
+								<p className="mt-3 text-[12px] text-neutral-400">
+									“Not yet” keeps it as a draft — nothing reaches customers, and
+									you can publish it later at /admin/catalogue.
+								</p>
+							)}
+						</div>
+					</div>
 				)}
 
 				<div className="flex flex-wrap items-center gap-2.5">
@@ -1170,7 +1373,9 @@ export default function CabinetDesignsPage() {
 															disabled={pushing === d.id}
 															className="text-blue-700 text-xs underline disabled:text-neutral-400"
 														>
-															{pushing === d.id ? "Adding…" : "Add to planner"}
+															{pushing === d.id
+																? "Preparing…"
+																: "Publish to planner"}
 														</button>
 													)}
 													<button
@@ -1535,8 +1740,7 @@ export default function CabinetDesignsPage() {
 									    planner catalogue and that version being published. */}
 										<p className="mb-2 text-[11px] text-neutral-400">
 											Filters this list only. To put a cabinet in front of
-											customers, use “Add to planner”, then publish the
-											catalogue.
+											customers, use “Publish to planner”.
 										</p>
 										<div className="flex gap-2">
 											<button
@@ -1590,7 +1794,7 @@ export default function CabinetDesignsPage() {
 								{saving
 									? "Saving…"
 									: batch
-										? `Upload ${batch.length} and add to planner`
+										? `Upload ${batch.length} and publish`
 										: editingId
 											? "Save changes"
 											: "Upload design"}
