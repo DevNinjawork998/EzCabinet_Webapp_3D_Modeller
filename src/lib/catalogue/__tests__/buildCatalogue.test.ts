@@ -56,6 +56,23 @@ describe("buildCatalogue", () => {
 		]);
 	});
 
+	it("carries a weighed design's weight onto its size, and none otherwise", () => {
+		const built = buildCatalogue(
+			[design({ weightKg: 38.5 }), design({ id: "bc-600", widthMm: 600 })],
+			PLANNER_CATALOGUE,
+		);
+
+		expect(built.families.map((f) => f.sizes[0].weightKg)).toEqual([
+			undefined,
+			38.5,
+		]);
+		// Built and parsed cabinets agree, key order included — the page compares
+		// them as JSON, so a misplaced `weightKg` would read as an unpublished edit.
+		expect(JSON.stringify(plannerCatalogueSchema.parse(built).families)).toBe(
+			JSON.stringify(built.families),
+		);
+	});
+
 	it("keeps three widths of one cabinet as three separate cabinets", () => {
 		const built = buildCatalogue(
 			[

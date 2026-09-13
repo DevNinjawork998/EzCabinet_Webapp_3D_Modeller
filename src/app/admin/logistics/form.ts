@@ -43,6 +43,8 @@ export type DeliveryRow = {
 	splitFromNumber: number | null;
 	/** The unguessable half of the customer's `/track/…` link — see `Delivery`. */
 	publicToken: string;
+	/** The paid order this job delivers, when it came from one. */
+	orderId: string | null;
 	createdAt: string;
 };
 
@@ -88,6 +90,7 @@ export const emptyItem = (): FormItem => ({
 
 export const blankForm = (workshopAddress: string) => ({
 	id: null as string | null,
+	orderId: null as string | null,
 	customerName: "",
 	customerPhone: "",
 	siteAddress: "",
@@ -111,6 +114,7 @@ export function localDateTime(iso: string | null): string {
 /** An existing job back into the same form. */
 export const formFrom = (row: DeliveryRow): FormState => ({
 	id: row.id,
+	orderId: row.orderId,
 	customerName: row.customerName,
 	customerPhone: row.customerPhone,
 	siteAddress: row.siteAddress,
@@ -118,6 +122,34 @@ export const formFrom = (row: DeliveryRow): FormState => ({
 	pickupAddress: row.pickupAddress,
 	scheduledAt: localDateTime(row.scheduledAt),
 	items: row.items.map((item) => ({ ...item, uid: crypto.randomUUID() })),
+});
+
+/**
+ * A paid order as a new job: its customer, its address, and one row per
+ * cabinet from `lib/orders/items.ts`. The admin still reviews before saving —
+ * weights can be blank, and worktops or panels are not rows yet.
+ */
+export const formFromOrder = (
+	order: {
+		id: string;
+		customerName: string;
+		customerPhone: string;
+		siteAddress: string;
+		addressNotes: string | null;
+	},
+	items: DeliveryItem[],
+	workshopAddress: string,
+): FormState => ({
+	...blankForm(workshopAddress),
+	orderId: order.id,
+	customerName: order.customerName,
+	customerPhone: order.customerPhone,
+	siteAddress: order.siteAddress,
+	addressNotes: order.addressNotes ?? "",
+	items:
+		items.length > 0
+			? items.map((item) => ({ ...item, uid: crypto.randomUUID() }))
+			: [emptyItem()],
 });
 
 /**
@@ -148,5 +180,6 @@ export function toPayload(state: FormState) {
 		items: state.items
 			.filter((i) => i.label.trim() !== "")
 			.map(({ uid: _uid, ...item }) => item),
+		orderId: state.orderId,
 	};
 }

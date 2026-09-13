@@ -1,3 +1,4 @@
+import { withBotId } from "botid/next/config";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -27,4 +28,5 @@ const nextConfig: NextConfig = {
 	skipTrailingSlashRedirect: true,
 };
 
-export default nextConfig;
+// BotID guards checkout (`/api/orders`) — see `src/instrumentation-client.ts`.
+export default withBotId(nextConfig);

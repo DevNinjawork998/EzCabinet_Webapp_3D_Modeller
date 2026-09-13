@@ -1,0 +1,50 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/lib/catalogue/db";
+
+export const runtime = "nodejs";
+
+const bodySchema = z.object({
+	/** Who saw the transfer land. Admin auth has no per-user identity. */
+	actor: z.string().trim().min(1).max(120),
+	paymentRef: z.string().trim().max(120).nullable().default(null),
+});
+
+/**
+ * Manual payment: an admin confirms the bank transfer arrived.
+ *
+ * A conditional update rather than read-then-write, so two admins pressing at
+ * once cannot both mark it, and a cancelled order cannot be revived as paid.
+ */
+export async function POST(
+	request: Request,
+	{ params }: { params: Promise<{ id: string }> },
+) {
+	const { id } = await params;
+	const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+	if (!parsed.success) {
+		return NextResponse.json(
+			{ error: "invalid_body", issues: parsed.error.issues },
+			{ status: 400 },
+		);
+	}
+
+	const { count } = await prisma.order.updateMany({
+		where: { id, status: "AWAITING_PAYMENT" },
+		data: {
+			status: "PAID",
+			paidAt: new Date(),
+			paidBy: parsed.data.actor,
+			paymentRef: parsed.data.paymentRef,
+		},
+	});
+	if (count === 1) return NextResponse.json({ ok: true });
+
+	const exists = await prisma.order.findUnique({
+		where: { id },
+		select: { id: true },
+	});
+	return exists
+		? NextResponse.json({ error: "not_awaiting_payment" }, { status: 409 })
+		: NextResponse.json({ error: "not_found" }, { status: 404 });
+}

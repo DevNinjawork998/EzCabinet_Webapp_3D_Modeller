@@ -28,6 +28,7 @@ const createSchema = z.object({
 	heightMm: z.number().int().positive(),
 	depthMm: z.number().int().positive(),
 	priceRm: z.number().min(0),
+	weightKg: z.number().positive().nullable().default(null),
 	sku: z.string().min(1),
 	description: z.string().optional(),
 	tags: z.string().optional(),

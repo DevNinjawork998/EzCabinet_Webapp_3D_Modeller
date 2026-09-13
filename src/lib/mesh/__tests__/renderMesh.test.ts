@@ -271,6 +271,22 @@ describe("splitDoorLeaves", () => {
 		expect(right.bboxMm.max[0] - right.bboxMm.min[0]).toBeCloseTo(398, 0);
 	});
 
+	// The client's own exports: BC 600 draws its leaves 2.3mm apart, BC 800
+	// exactly 3mm. A threshold of "more than 3mm" split only the 900, and the
+	// other two swung open as one leaf.
+	it.each([2.3, 3])("splits a pair drawn %smm apart", (revealMm) => {
+		const pair = PAIR.replace(
+			inchBox("Door_R_", [mm(402), 0, 0], [mm(800), mm(16), mm(720)], 32),
+			inchBox(
+				"Door_R_",
+				[mm(398 + revealMm), 0, 0],
+				[mm(800), mm(16), mm(720)],
+				32,
+			),
+		);
+		expect(splitDoorLeaves(doorOf(pair))).toHaveLength(2);
+	});
+
 	it("keeps every triangle", () => {
 		const door = doorOf(PAIR);
 		const split = splitDoorLeaves(door);

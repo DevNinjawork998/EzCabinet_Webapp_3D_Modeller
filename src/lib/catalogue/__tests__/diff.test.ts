@@ -65,6 +65,15 @@ describe("summariseCatalogueChanges", () => {
 		]);
 	});
 
+	it("counts a weight-only change, so publishing it is not a no-op", () => {
+		const next = clone(PLANNER_CATALOGUE);
+		next.families[0].sizes[0].weightKg = 42;
+
+		expect(summariseCatalogueChanges(PLANNER_CATALOGUE, next)).toEqual([
+			"1 cabinet weight changed",
+		]);
+	});
+
 	it("notices finishes, rates and construction changes", () => {
 		const next = clone(PLANNER_CATALOGUE);
 		next.finishes.push({ id: "test", label: "Test", hex: "#123456" });

@@ -33,6 +33,7 @@ const patchSchema = z.object({
 	heightMm: z.number().int().positive().optional(),
 	depthMm: z.number().int().positive().optional(),
 	priceRm: z.number().min(0).optional(),
+	weightKg: z.number().positive().nullable().optional(),
 	sku: z.string().min(1).optional(),
 	description: z.string().optional(),
 	tags: z.string().optional(),

@@ -81,6 +81,9 @@ export const RATES = {
 	endPanelBaseRm: 150,
 	endPanelWallRm: 90,
 	endPanelTallRm: 330,
+	/** PLACEHOLDER — the flat delivery charge on an order, taken from the
+	 * client's Order Confirmation design. Confirm with Infinite Cabinet. */
+	deliveryFlatRm: 85,
 };
 /** Underside of the wall cabinets — the sample job's own hanging height. */
 export const WALL_CABINET_FLOOR_MM = 1500;

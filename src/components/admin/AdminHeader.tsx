@@ -17,6 +17,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 const TABS = [
 	{ label: "Cabinet designs", href: "/admin/cabinet-designs" },
+	{ label: "Orders", href: "/admin/orders" },
 	{ label: "Logistics", href: "/admin/logistics" },
 	{ label: "Site content", href: "/admin/site-content" },
 	{ label: "Tutorials", href: "/admin/tutorials" },

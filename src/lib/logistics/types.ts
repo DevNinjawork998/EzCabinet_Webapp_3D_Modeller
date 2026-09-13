@@ -48,6 +48,8 @@ export const deliveryInputSchema = z.object({
 	items: z.array(deliveryItemSchema).max(200).default([]),
 	// Accepts the ISO string a JSON body carries; null clears the date.
 	scheduledAt: z.iso.datetime().nullable().default(null),
+	/** The paid order this job delivers, when it was created from one. */
+	orderId: z.string().min(1).max(64).nullable().default(null),
 });
 
 export type DeliveryInput = z.infer<typeof deliveryInputSchema>;

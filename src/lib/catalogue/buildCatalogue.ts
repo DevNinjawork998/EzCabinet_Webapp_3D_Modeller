@@ -46,6 +46,8 @@ export type DesignRow = {
 	heightMm: number;
 	depthMm: number;
 	priceRm: number;
+	/** Null or absent when nobody has weighed it. */
+	weightKg?: number | null;
 	status: "PUBLISHED" | "ARCHIVED";
 	meshPathname: string | null;
 	/** What the file holds, written when the design is converted. Unknown
@@ -89,6 +91,8 @@ export function buildCatalogue(
 				{
 					widthMm: design.widthMm,
 					priceRm: design.priceRm,
+					// Logistics pre-fills a delivery row from this; absent stays blank.
+					...(design.weightKg != null ? { weightKg: design.weightKg } : {}),
 					// A design whose file would not convert has no mesh and is drawn
 					// procedurally — still sellable, never pointed at a missing file.
 					...(design.meshPathname ? { meshDesignId: design.id } : {}),

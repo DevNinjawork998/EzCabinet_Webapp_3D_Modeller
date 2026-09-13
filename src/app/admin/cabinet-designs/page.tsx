@@ -53,6 +53,7 @@ type CabinetDesign = {
 	heightMm: number;
 	depthMm: number;
 	priceRm: number;
+	weightKg: number | null;
 	sku: string;
 	description: string | null;
 	tags: string | null;
@@ -171,6 +172,8 @@ type Form = {
 	h: string;
 	d: string;
 	price: string;
+	/** Blank means not weighed — sent as null, never 0. */
+	weight: string;
 	sku: string;
 	description: string;
 	tags: string;
@@ -186,6 +189,7 @@ function emptyForm(room: Room): Form {
 		h: "",
 		d: "",
 		price: "",
+		weight: "",
 		sku: "",
 		description: "",
 		tags: "",
@@ -751,6 +755,7 @@ function CabinetDesigns() {
 			h: String(d.heightMm),
 			d: String(d.depthMm),
 			price: String(d.priceRm),
+			weight: d.weightKg === null ? "" : String(d.weightKg),
 			sku: d.sku,
 			description: d.description ?? "",
 			tags: d.tags ?? "",
@@ -993,6 +998,10 @@ function CabinetDesigns() {
 				heightMm: Number(form.h),
 				depthMm: Number(form.d),
 				priceRm: Number(form.price),
+				weightKg:
+					form.weight.trim() === "" || !(Number(form.weight) > 0)
+						? null
+						: Number(form.weight),
 				sku: form.sku,
 				description: form.description || undefined,
 				tags: form.tags || undefined,
@@ -1647,6 +1656,22 @@ function CabinetDesigns() {
 											<p className="mt-1 text-[11px] text-neutral-400">
 												All-in, door included.
 											</p>
+											<label className="mt-3 block">
+												<span className={LABEL_CLASS}>Weight (kg)</span>
+												<input
+													type="number"
+													min={0}
+													step="0.1"
+													value={form.weight}
+													onChange={(e) => setField("weight", e.target.value)}
+													placeholder="Not weighed"
+													className={fieldClass(false, "w-full")}
+												/>
+												<span className="mt-1 block text-[11px] text-neutral-400">
+													Optional. Fills the weight on deliveries made from
+													orders — parcel partners need it.
+												</span>
+											</label>
 											{missing.has("price") && (
 												<p className="mt-1 text-[11px] text-red-600">
 													Required

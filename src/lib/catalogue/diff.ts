@@ -22,6 +22,7 @@ export function summariseCatalogueChanges(
 
 	let priceChanges = 0;
 	let sizeChanges = 0;
+	let weightChanges = 0;
 	const dimensionChanges: string[] = [];
 
 	for (const [id, nextFamily] of nextFamilies) {
@@ -50,6 +51,26 @@ export function summariseCatalogueChanges(
 		for (const widthMm of livePrices.keys()) {
 			if (!nextPrices.has(widthMm)) sizeChanges++;
 		}
+
+		// A weight never reaches a customer, but logistics pre-fills delivery rows
+		// from it — and publish treats "no change lines" as nothing to publish.
+		const liveWeights = new Map(
+			liveFamily.sizes.map((s) => [s.widthMm, s.weightKg]),
+		);
+		for (const size of nextFamily.sizes) {
+			if (
+				liveWeights.has(size.widthMm) &&
+				liveWeights.get(size.widthMm) !== size.weightKg
+			) {
+				weightChanges++;
+			}
+		}
+	}
+
+	if (weightChanges > 0) {
+		lines.push(
+			`${weightChanges} cabinet ${weightChanges === 1 ? "weight" : "weights"} changed`,
+		);
 	}
 
 	if (priceChanges > 0) {

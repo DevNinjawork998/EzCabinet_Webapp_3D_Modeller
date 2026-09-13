@@ -457,15 +457,30 @@ export function CatalogueSettings({
 				title="Rates"
 				subtitle="Charged on top of the per-cabinet prices."
 			>
-				<Num
-					label="Worktop RM per running foot"
-					value={ratesOf(draft).worktopRmPerFt}
-					onChange={(v) =>
-						edit((n) => {
-							n.rates = { ...n.rates, worktopRmPerFt: v };
-						})
-					}
-				/>
+				<div className="flex flex-wrap gap-4">
+					<Num
+						label="Worktop RM per running foot"
+						value={ratesOf(draft).worktopRmPerFt}
+						onChange={(v) =>
+							edit((n) => {
+								n.rates = { ...n.rates, worktopRmPerFt: v };
+							})
+						}
+					/>
+					<Num
+						label="Delivery RM per order"
+						value={ratesOf(draft).deliveryFlatRm}
+						onChange={(v) =>
+							edit((n) => {
+								n.rates = {
+									worktopRmPerFt: ratesOf(n).worktopRmPerFt,
+									...n.rates,
+									deliveryFlatRm: v,
+								};
+							})
+						}
+					/>
+				</div>
 			</SectionCard>
 
 			<SectionCard

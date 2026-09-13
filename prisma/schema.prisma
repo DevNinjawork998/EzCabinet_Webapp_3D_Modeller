@@ -98,6 +98,9 @@ model CabinetDesign {
   heightMm     Int
   depthMm      Int
   priceRm      Float
+  /// What one of these weighs, in kg. Null until someone weighs it — a delivery
+  /// row pre-filled from an order then leaves weight blank rather than guess.
+  weightKg     Float?
   sku          String              @unique
   description  String?
   tags         String?
@@ -299,12 +302,66 @@ model Delivery {
   /// count. Separate from `id` as well, so a link forwarded to the wrong
   /// WhatsApp group can be rotated without moving the job.
   publicToken       String         @unique @default(cuid())
+  /// The paid order this job delivers, when it came from one. SetNull rather
+  /// than cascade: a job already booked with a carrier outlives a removed order.
+  orderId           String?
+  order             Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
   events DeliveryEvent[]
 
   @@index([status, scheduledAt])
+  @@index([orderId])
+}
+
+/// A customer's checkout: the design they drew, what it was charged, and
+/// whether it has been paid. Deliveries are created from a paid order, with
+/// their item rows pre-filled from `design` — see `lib/orders`.
+model Order {
+  id                 String      @id @default(cuid())
+  /// Printed as `IC-YYYYMMDD-NNN` (`lib/orders/ref.ts`) and said on the phone.
+  number             Int         @unique @default(autoincrement())
+  /// The key to the customer's confirmation page, never `number` — same
+  /// reasoning as `Delivery.publicToken`.
+  publicToken        String      @unique @default(cuid())
+  status             OrderStatus @default(AWAITING_PAYMENT)
+  customerName       String
+  /// E.164, via `lib/logistics/phone.ts`.
+  customerPhone      String
+  customerEmail      String?
+  siteAddress        String
+  addressNotes       String?
+  roomId             String
+  finishId           String
+  /// `{ schemaVersion, layout }` — the layout document exactly as ordered.
+  design             Json
+  /// The published catalogue version it was priced against: the price history.
+  catalogueVersionId String
+  /// The price breakdown as charged, so the order keeps its figures after the
+  /// catalogue moves on.
+  breakdown          Json
+  cabinetsRm         Float
+  deliveryRm         Float
+  totalRm            Float
+  /// `manual` — bank transfer, marked paid by an admin — until a gateway exists.
+  paymentProvider    String      @default("manual")
+  paymentRef         String?
+  paidAt             DateTime?
+  /// Admin auth is one shared password, so this typed name is the record.
+  paidBy             String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  deliveries Delivery[]
+
+  @@index([status, createdAt])
+}
+
+enum OrderStatus {
+  AWAITING_PAYMENT
+  PAID
+  CANCELLED
 }
 
 /// Every booking, every status change, every webhook payload we accepted.

@@ -12,6 +12,13 @@ const sizeOptionSchema = z.object({
 	widthMm: z.number().positive(),
 	priceRm: z.number().min(0),
 	/**
+	 * What one of these weighs, typed on the design row. Optional because most
+	 * carcasses have never been weighed, and a delivery row leaves weight blank
+	 * rather than guess — parcel partners price by the kilogram. Placed before
+	 * `meshDesignId` so a built size and a parsed one serialise identically.
+	 */
+	weightKg: z.number().positive().optional(),
+	/**
 	 * The design this rung is drawn from, if one has been published for it.
 	 *
 	 * The planner fetches `/api/cabinet-mesh/<id>` and draws the model the
@@ -139,6 +146,9 @@ const ratesSchema = z.object({
 	endPanelBaseRm: z.number().min(0).optional(),
 	endPanelWallRm: z.number().min(0).optional(),
 	endPanelTallRm: z.number().min(0).optional(),
+	/** One flat delivery charge added to an order at checkout. Optional like
+	 * the rest. */
+	deliveryFlatRm: z.number().min(0).optional(),
 });
 export type Rates = z.infer<typeof ratesSchema>;
 
