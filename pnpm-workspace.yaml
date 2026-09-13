@@ -1,9 +1,11 @@
 allowBuilds:
   '@prisma/engines': true
   esbuild: true
+  msgpackr-extract: set this to true or false
   prisma: true
   sharp: false
   unrs-resolver: false
+  workerd: set this to true or false
 
 overrides:
   deepmerge-ts: '>=8.0.0'
