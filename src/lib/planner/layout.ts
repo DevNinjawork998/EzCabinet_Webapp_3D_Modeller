@@ -14,7 +14,7 @@ import {
 	WALL_HANG_LIMITS,
 } from "./catalogue";
 import type { PlannerCatalogue } from "./catalogueSchema";
-import { exposedSides } from "./exposure";
+import { type ExposedSides, exposedSides } from "./exposure";
 import { standOf } from "./parts";
 
 /**
@@ -563,6 +563,38 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 					? floorHeightMmOf(position, layout)
 					: null,
 		};
+	}
+
+	/**
+	 * Put a cabinet a typed distance off whatever is beside it — the gap
+	 * `offsetsOf` reports, so the figure a customer reads on a dimension line is
+	 * the figure they type back into it. A panel showing the distance to the far
+	 * wall while the scene shows the distance to the neighbour is two numbers for
+	 * one position, and neither can be checked against the other.
+	 *
+	 * A gap wider than the room there is capped at it, so the cabinet stops
+	 * flush against the far neighbour or wall. `moveModule` alone would not
+	 * stop it: it only checks where the cabinet lands, so a target clear of
+	 * everything beyond that neighbour would hop the cabinet over it.
+	 */
+	function setGap(
+		layout: PlannerLayout,
+		id: string,
+		side: "left" | "right",
+		gapMm: number,
+	): PlannerLayout {
+		if (!Number.isFinite(gapMm) || gapMm < 0) return layout;
+		const found = find(layout, id);
+		const offsets = offsetsOf(layout, id);
+		if (!found || !offsets) return layout;
+
+		const spread = spreadOf(found.placed);
+		const gap = Math.min(gapMm, offsets.leftMm + offsets.rightMm);
+		const xMm =
+			side === "left"
+				? offsets.leftAnchorMm + gap + spread
+				: offsets.rightAnchorMm - gap - found.placed.widthMm - spread;
+		return moveModule(layout, id, Math.round(xMm));
 	}
 
 	/**
@@ -1433,6 +1465,49 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 	}
 
 	/**
+	 * Which sides of every cabinet nothing covers — the one answer the price and
+	 * the scene both read, so a panel drawn is a panel charged.
+	 *
+	 * A side is covered by anything touching it that also shares its height,
+	 * whichever row that thing lives in. Judging each row alone got a tall unit
+	 * wrong in both directions: a wall unit hung flush against one was charged
+	 * a panel for a side buried in it, while a base lifted to 1200mm counted as
+	 * covered by the base on the floor below it. A tall unit's own side beside a
+	 * shorter cabinet counts as covered — EzCabinet's call, 2026-09-13.
+	 *
+	 * "Touching" is anything closer than one board. A gap too narrow to take a
+	 * panel shows no drilled side, and two panels charged for a 2mm gap is a
+	 * price the customer would rightly query.
+	 */
+	function exposureOf(layout: PlannerLayout): Map<string, ExposedSides> {
+		const walls = {
+			wallWidthMm: layout.wallWidthMm,
+			enclosed: layout.wallToWall,
+		};
+		const touchingMm = constructionOf(catalogue).panelThicknessMm;
+		const all = allPositions(layout);
+		const heightSpan = (position: Positioned) => {
+			const bottomMm = floorHeightMmOf(position, layout);
+			return { bottomMm, topMm: bottomMm + position.family.heightMm };
+		};
+
+		const exposure = new Map<string, ExposedSides>();
+		for (const self of all) {
+			const own = heightSpan(self);
+			const beside = all.filter((other) => {
+				if (other === self) return true;
+				const span = heightSpan(other);
+				return span.bottomMm < own.topMm && own.bottomMm < span.topMm;
+			});
+			exposure.set(
+				self.placed.id,
+				exposedSides(beside, beside.indexOf(self), walls, touchingMm),
+			);
+		}
+		return exposure;
+	}
+
+	/**
 	 * Every cabinet side that has to be clad.
 	 *
 	 * A carcass side is drilled with system holes and shows its fixings, so any
@@ -1442,21 +1517,17 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 	 *
 	 * Interior sides count. A cabinet standing beside a gap mid-run has a visible
 	 * drilled side exactly like one at the end of the row — the same rule reaches
-	 * both, which is why this asks `exposedSides` rather than looking at the ends.
+	 * both, which is why this asks `exposureOf` rather than looking at the ends.
 	 */
 	function endPanels(layout: PlannerLayout): EndPanel[] {
-		const walls = {
-			wallWidthMm: layout.wallWidthMm,
-			enclosed: layout.wallToWall,
-		};
+		const exposure = exposureOf(layout);
 		const panels: EndPanel[] = [];
 
 		for (const row of ["floor", "wall"] as const) {
-			const positions = positionsOf(layout, row);
-			for (const [index, position] of positions.entries()) {
-				const exposed = exposedSides(positions, index, walls);
+			for (const position of positionsOf(layout, row)) {
+				const exposed = exposure.get(position.placed.id);
 				for (const side of ["left", "right"] as const) {
-					if (!exposed[side]) continue;
+					if (!exposed?.[side]) continue;
 					panels.push({
 						row,
 						moduleId: position.placed.id,
@@ -1923,6 +1994,7 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 		occupiedSpans,
 		freeSpans,
 		offsetsOf,
+		setGap,
 		moveModule,
 		dropModule,
 		dragModule,
@@ -1938,6 +2010,7 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 		setWallToWall,
 		setBaseSkirting,
 		hangingHeightMmOf,
+		exposureOf,
 		endPanels,
 		skirtingSpans,
 		floorHeightMmOf,

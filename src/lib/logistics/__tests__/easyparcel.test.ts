@@ -369,7 +369,7 @@ describe("submitBody", () => {
 
 	it("sends the workshop as sender and the customer as receiver", () => {
 		const s = body().shipment[0];
-		expect(s.sender.name).toBe("Infinite Cabinet");
+		expect(s.sender.name).toBe("EzCabinet");
 		expect(s.receiver.name).toBe("Siti");
 		expect(s.receiver.phone_number_country_code).toBe("MY");
 		// E.164 without the +60: EasyParcel takes the country code separately.

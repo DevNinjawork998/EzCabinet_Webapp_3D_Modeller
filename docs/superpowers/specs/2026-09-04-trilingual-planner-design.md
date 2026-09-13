@@ -7,7 +7,7 @@
 
 Serve the public planner in English, Simplified Chinese and Bahasa Malaysia,
 each on its own indexable URL, without adding a dependency or a burden on
-Infinite Cabinet.
+EzCabinet.
 
 ## Scope
 

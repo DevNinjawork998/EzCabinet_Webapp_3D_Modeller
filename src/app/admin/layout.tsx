@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-	title: "Infinite Cabinet · Admin",
+	title: "EzCabinet · Admin",
 	description: "Internal catalogue, design and site-content admin.",
 };
 

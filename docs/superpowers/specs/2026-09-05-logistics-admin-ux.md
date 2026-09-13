@@ -1,7 +1,7 @@
 # Deliveries screen — UX spec
 
 **Surface:** `/admin/logistics` (`LogisticsManager.tsx`, `/api/admin/deliveries*`)
-**Audience:** three internal admins at Infinite Cabinet, on a laptop, booking a
+**Audience:** three internal admins at EzCabinet, on a laptop, booking a
 lorry while a customer waits on the phone.
 
 ## What went wrong in testing
@@ -36,7 +36,7 @@ does not say it, or says it and gives them nothing to do about it.
    exists and nothing renders it.
 
 4. **The pickup pin is never checked.** The panel warns only about the site.
-   The default pickup is `WORKSHOP_ADDRESS` — "Infinite Cabinet Sdn Bhd, Klang
+   The default pickup is `WORKSHOP_ADDRESS` — "EzCabinet Sdn Bhd, Klang
    Valley, Selangor" — which is a placeholder that does not geocode to a
    point. So every job has an unlocated pickup, Lalamove needs both stops as
    coordinates, and the screen says nothing.

@@ -3,7 +3,7 @@ import { orderRef } from "./ref";
 /**
  * How a customer pays for an order.
  *
- * Infinite Cabinet will take payment through a Malaysian gateway, not chosen
+ * EzCabinet will take payment through a Malaysian gateway, not chosen
  * yet. Until then every order is `manual`: the confirmation page shows bank
  * transfer details and an admin marks the order paid when the money lands.
  *
@@ -13,10 +13,10 @@ import { orderRef } from "./ref";
  */
 export const PAYMENT_PROVIDER = "manual";
 
-/** PLACEHOLDER — Infinite Cabinet's real account. See CLAUDE.md Open questions. */
+/** PLACEHOLDER — EzCabinet's real account. See CLAUDE.md Open questions. */
 export const BANK_TRANSFER = {
 	bank: "Bank to be confirmed",
-	accountName: "Infinite Cabinet Sdn Bhd",
+	accountName: "EzCabinet Sdn Bhd",
 	accountNumber: "To be confirmed",
 };
 

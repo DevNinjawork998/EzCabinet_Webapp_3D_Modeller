@@ -370,12 +370,12 @@ Expected: FAIL — cannot resolve `../en`.
  */
 export const en = {
 	meta: {
-		title: "Infinite Cabinet · Design your kitchen in 3D",
+		title: "EzCabinet · Design your kitchen in 3D",
 		description:
-			"Drop real Infinite Cabinet units onto a model of your own room, see it from every angle, and get an instant price. No showroom visit required.",
+			"Drop real EzCabinet units onto a model of your own room, see it from every angle, and get an instant price. No showroom visit required.",
 	},
 	common: {
-		brand: "Infinite Cabinet",
+		brand: "EzCabinet",
 		back: "Back",
 		next: "Next",
 		close: "Close",
@@ -396,12 +396,12 @@ import type { Dictionary } from "./en";
  * a missing key is a compile error rather than a blank on a customer's screen. */
 export const zh: Dictionary = {
 	meta: {
-		title: "Infinite Cabinet · 三维设计您的厨房",
+		title: "EzCabinet · 三维设计您的厨房",
 		description:
-			"将真实的 Infinite Cabinet 橱柜放入您自己房间的模型中，从各个角度查看，并即时获得报价。无需前往展厅。",
+			"将真实的 EzCabinet 橱柜放入您自己房间的模型中，从各个角度查看，并即时获得报价。无需前往展厅。",
 	},
 	common: {
-		brand: "Infinite Cabinet",
+		brand: "EzCabinet",
 		back: "返回",
 		next: "下一步",
 		close: "关闭",
@@ -417,12 +417,12 @@ import type { Dictionary } from "./en";
 /** Bahasa Malaysia. Typed against `Dictionary` for the same reason as `zh`. */
 export const ms: Dictionary = {
 	meta: {
-		title: "Infinite Cabinet · Reka dapur anda dalam 3D",
+		title: "EzCabinet · Reka dapur anda dalam 3D",
 		description:
-			"Letakkan unit Infinite Cabinet sebenar ke dalam model bilik anda sendiri, lihat dari setiap sudut, dan dapatkan harga serta-merta. Tidak perlu ke bilik pameran.",
+			"Letakkan unit EzCabinet sebenar ke dalam model bilik anda sendiri, lihat dari setiap sudut, dan dapatkan harga serta-merta. Tidak perlu ke bilik pameran.",
 	},
 	common: {
-		brand: "Infinite Cabinet",
+		brand: "EzCabinet",
 		back: "Kembali",
 		next: "Seterusnya",
 		close: "Tutup",
@@ -1081,7 +1081,7 @@ git commit -m "feat(i18n): language switcher that preserves the current path"
 
 ### Task 10: The client review list
 
-The deliverable that closes the loop with Infinite Cabinet.
+The deliverable that closes the loop with EzCabinet.
 
 **Files:**
 - Create: `docs/translation-review.md`
@@ -1101,7 +1101,7 @@ Each entry: the key, the English, the 中文, the BM, and a one-line note on wha
 
 ```bash
 git add docs/translation-review.md
-git commit -m "docs: strings for Infinite Cabinet to review"
+git commit -m "docs: strings for EzCabinet to review"
 ```
 
 ---

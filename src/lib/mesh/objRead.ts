@@ -1,5 +1,5 @@
 /**
- * Reads a Wavefront OBJ export of one of Infinite Cabinet's designs into
+ * Reads a Wavefront OBJ export of one of EzCabinet's designs into
  * named, axis-aligned boxes.
  *
  * This replaced an `openskp` reader: a `.skp` is a SketchUp-proprietary

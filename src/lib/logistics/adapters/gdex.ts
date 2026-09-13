@@ -53,7 +53,7 @@ export class GdexNotDeliverable extends Error {
 /** Malaysia. GDEX takes ISO-3166 alpha-3, not the alpha-2 everything else uses. */
 export const COUNTRY = "MYS";
 
-/** Documents are paper. Anything Infinite Cabinet ships is not. */
+/** Documents are paper. Anything EzCabinet ships is not. */
 export const PARCEL_TYPE = "Parcel";
 
 /** GDEX caps a consignment at fifteen pieces. */
@@ -81,7 +81,7 @@ export const TRANSPORTATION: Record<VehicleClass, string> = {
  * parcel, which means a wide flat door panel can quote low here and invoice
  * high — the same gap `easyparcel.ts` carries and names.
  *
- * ponytail: actual weight only. Add a volumetric max once Infinite Cabinet
+ * ponytail: actual weight only. Add a volumetric max once EzCabinet
  * confirms GDEX's contracted divisor; guessing it over-quotes and loses jobs.
  *
  * Refuses rather than defaults. The catalogue carries no weights, so most jobs

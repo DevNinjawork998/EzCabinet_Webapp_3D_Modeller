@@ -96,6 +96,23 @@ describe("exposedSides", () => {
 	});
 });
 
+describe("a wider touching tolerance", () => {
+	it("counts a gap narrower than the tolerance as touching", () => {
+		const row = floorRow([
+			{ familyId: "base-cabinet", xMm: 0 },
+			{ familyId: "base-cabinet", xMm: 2400 },
+		]);
+		const gapped = [
+			row[0],
+			{ ...row[1], xMm: row[0].xMm + row[0].widthMm + 10 },
+		];
+
+		expect(exposedSides(gapped, 0).right).toBe(true);
+		expect(exposedSides(gapped, 0, undefined, 16).right).toBe(false);
+		expect(exposedSides(gapped, 1, undefined, 16).left).toBe(false);
+	});
+});
+
 describe("walls bury a side the way a neighbour does", () => {
 	const enclosed = { wallWidthMm: WALL_MM, enclosed: true };
 	const open = { wallWidthMm: WALL_MM, enclosed: false };

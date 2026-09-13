@@ -1,4 +1,5 @@
 import { Html, Line } from "@react-three/drei";
+import { type SyntheticEvent, useState } from "react";
 import type {
 	Offsets,
 	PlannerEngine,
@@ -6,10 +7,15 @@ import type {
 	Positioned,
 } from "@/lib/planner/layout";
 import { cabinetBoundsMm } from "@/lib/planner/measure";
+import { useCopy } from "./CopyContext";
+import { GapInput } from "./GapInput";
 
 const m = (mm: number) => mm / 1000;
 
 const LINE_COLOR = "#1f5138";
+
+const CHIP =
+	"whitespace-nowrap rounded-[6px] border border-[#1f5138] bg-white/95 px-1.5 py-0.5 font-semibold text-[#1f5138] text-[11px] leading-none tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.16)]";
 
 /** How far in front of the cabinet's face the dimension line floats, so it
  * reads as a line drawn over the room rather than one buried in a carcass. */
@@ -21,10 +27,14 @@ const TICK_MM = 180;
 /**
  * Where the selected cabinet sits, drawn on the scene.
  *
- * Not the measuring tool: nothing is picked and nothing is clicked. Selecting
- * a cabinet is the whole gesture, and what comes back is its **position** —
- * the clear gap to each side, and how high it hangs if it is a wall unit.
- * `offsetsOf` decides the numbers; this only draws them.
+ * Not the measuring tool: nothing is picked. Selecting a cabinet is the whole
+ * gesture, and what comes back is its **position** — the clear gap to each
+ * side, and how high it hangs if it is a wall unit. `offsetsOf` decides the
+ * numbers; this draws them.
+ *
+ * Each figure is also where it is changed: tap "835 mm", type 500, and the
+ * cabinet slides until that gap is 500. The number a customer reads and the
+ * number they type are the same number, measured to the same thing.
  *
  * The gaps run to whatever is actually in the way — a neighbour's edge, or the
  * wall — because that is what the customer can move into. A number measured
@@ -43,12 +53,16 @@ export function PositionDimensions({
 	offsets,
 	layout,
 	engine,
+	onLayoutChange,
 }: {
 	position: Positioned;
 	offsets: Offsets;
 	layout: PlannerLayout;
 	engine: PlannerEngine;
+	onLayoutChange: (next: PlannerLayout) => void;
 }) {
+	const t = useCopy();
+	const id = position.placed.id;
 	const box = cabinetBoundsMm(position, layout, engine);
 
 	/** Wall millimetres are measured from the left wall; the scene centres the
@@ -69,6 +83,10 @@ export function PositionDimensions({
 					atMm={alongY}
 					zMm={zMm}
 					valueMm={offsets.leftMm}
+					label={t.planner.selection.editGap}
+					onCommit={(mm) =>
+						onLayoutChange(engine.setGap(layout, id, "left", mm))
+					}
 				/>
 			)}
 
@@ -79,6 +97,10 @@ export function PositionDimensions({
 					atMm={alongY}
 					zMm={zMm}
 					valueMm={offsets.rightMm}
+					label={t.planner.selection.editGap}
+					onCommit={(mm) =>
+						onLayoutChange(engine.setGap(layout, id, "right", mm))
+					}
 				/>
 			)}
 
@@ -90,6 +112,14 @@ export function PositionDimensions({
 					atMm={box.minX}
 					zMm={zMm}
 					valueMm={offsets.floorMm}
+					label={t.planner.selection.editGap}
+					// Ceiling mode lines the tops up and `floorHeightMmOf` overrules any
+					// stored height, so an edit there would change nothing on screen.
+					onCommit={
+						layout.wallToCeiling
+							? undefined
+							: (mm) => onLayoutChange(engine.setHangAt(layout, id, mm))
+					}
 				/>
 			)}
 		</>
@@ -110,6 +140,8 @@ function Dimension({
 	zMm,
 	valueMm,
 	vertical = false,
+	label,
+	onCommit,
 }: {
 	fromMm: number;
 	toMm: number;
@@ -117,6 +149,9 @@ function Dimension({
 	zMm: number;
 	valueMm: number;
 	vertical?: boolean;
+	label?: string;
+	/** Present when the figure can be typed over. */
+	onCommit?: (mm: number) => void;
 }) {
 	const z = m(zMm);
 	const point = (alongMm: number): [number, number, number] =>
@@ -148,12 +183,63 @@ function Dimension({
 				position={point((fromMm + toMm) / 2)}
 				center
 				zIndexRange={[4, 0]}
-				pointerEvents="none"
+				pointerEvents={onCommit ? "auto" : "none"}
 			>
-				<span className="whitespace-nowrap rounded-[6px] border border-[#1f5138] bg-white/95 px-1.5 py-0.5 font-semibold text-[#1f5138] text-[11px] leading-none tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.16)]">
-					{Math.round(valueMm)} mm
-				</span>
+				{onCommit ? (
+					<EditableFigure valueMm={valueMm} label={label} onCommit={onCommit} />
+				) : (
+					<span className={CHIP}>{Math.round(valueMm)} mm</span>
+				)}
 			</Html>
 		</>
+	);
+}
+
+/** The overlay sits inside the element the scene listens on, so a tap here
+ * would otherwise land as a click on empty floor — deselecting the very
+ * cabinet being edited — or start a drag. */
+const keepFromScene = (e: SyntheticEvent) => e.stopPropagation();
+
+function EditableFigure({
+	valueMm,
+	label,
+	onCommit,
+}: {
+	valueMm: number;
+	label?: string;
+	onCommit: (mm: number) => void;
+}) {
+	const [editing, setEditing] = useState(false);
+
+	if (editing) {
+		return (
+			<GapInput
+				valueMm={valueMm}
+				onCommit={onCommit}
+				onDone={() => setEditing(false)}
+				aria-label={label}
+				autoFocus
+				onFocus={(e) => e.currentTarget.select()}
+				onPointerDown={keepFromScene}
+				onClick={keepFromScene}
+				className={`${CHIP} w-[64px] text-right outline-none ring-2 ring-[#1f5138]/30`}
+			/>
+		);
+	}
+
+	return (
+		<button
+			type="button"
+			aria-label={label}
+			title={label}
+			onPointerDown={keepFromScene}
+			onClick={(e) => {
+				keepFromScene(e);
+				setEditing(true);
+			}}
+			className={`${CHIP} cursor-text underline decoration-dotted underline-offset-2 hover:bg-[#e7efe9]`}
+		>
+			{Math.round(valueMm)} mm
+		</button>
 	);
 }

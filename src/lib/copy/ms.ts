@@ -3,12 +3,12 @@ import type { Dictionary } from "./en";
 /** Bahasa Malaysia. Typed against `Dictionary` for the same reason as `zh`. */
 export const ms: Dictionary = {
 	meta: {
-		title: "Infinite Cabinet · Reka dapur anda dalam 3D",
+		title: "EzCabinet · Reka dapur anda dalam 3D",
 		description:
-			"Letakkan unit Infinite Cabinet sebenar ke dalam model bilik anda sendiri, lihat dari setiap sudut, dan dapatkan harga serta-merta. Tidak perlu ke bilik pameran.",
+			"Letakkan unit EzCabinet sebenar ke dalam model bilik anda sendiri, lihat dari setiap sudut, dan dapatkan harga serta-merta. Tidak perlu ke bilik pameran.",
 	},
 	common: {
-		brand: "Infinite Cabinet",
+		brand: "EzCabinet",
 		back: "Kembali",
 		next: "Seterusnya",
 		close: "Tutup",
@@ -31,10 +31,10 @@ export const ms: Dictionary = {
 			titleBeforeAccent: "Reka dapur anda",
 			titleAccent: "dalam 3D",
 			subtitle:
-				"Letakkan unit Infinite Cabinet sebenar ke dalam bilik anda sendiri, lihat harga berubah semasa anda reka, dan hantarkan pelan itu terus kepada kami.",
+				"Letakkan unit EzCabinet sebenar ke dalam bilik anda sendiri, lihat harga berubah semasa anda reka, dan hantarkan pelan itu terus kepada kami.",
 			cta: "Mula reka bentuk",
 			howItWorks: "Cara ia berfungsi",
-			alt: "Dapur Infinite Cabinet yang telah siap",
+			alt: "Dapur EzCabinet yang telah siap",
 		},
 		facts: {
 			cabinetsFromLabel: "Kabinet dari",
@@ -52,7 +52,7 @@ export const ms: Dictionary = {
 				"Pilih dapur, ruang tamu, bilik tidur atau anjung, dan tetapkan dimensi dinding sebenar anda.",
 			step2Title: "Susun kabinet, mengikut skala sebenar",
 			step2Detail:
-				"Susun unit Infinite Cabinet sebenar dalam 3D dan tukar kemasan sehingga kelihatan tepat.",
+				"Susun unit EzCabinet sebenar dalam 3D dan tukar kemasan sehingga kelihatan tepat.",
 			step3Title: "Dapatkan sebut harga serta-merta",
 			step3Detail:
 				"Lihat harga secara langsung semasa anda menyusun, kemudian hantar pelan anda terus kepada pasukan kami.",
@@ -60,10 +60,10 @@ export const ms: Dictionary = {
 		gallery: {
 			heading: "Terokai mengikut bilik",
 			subtitle:
-				"Setiap bilik bermula daripada saiz kabinet Infinite Cabinet sebenar dan susun atur yang sedia ada pada dinding anda.",
+				"Setiap bilik bermula daripada saiz kabinet EzCabinet sebenar dan susun atur yang sedia ada pada dinding anda.",
 			roomAlt: "kabinet {room}",
 			roomSubtitle: {
-				kitchen: "Saiz kabinet Infinite Cabinet sebenar",
+				kitchen: "Saiz kabinet EzCabinet sebenar",
 				living: "Rak TV & unit paparan",
 				bedroom: "Almari pakaian",
 				foyer: "Kabinet kasut & bangku",
@@ -102,7 +102,7 @@ export const ms: Dictionary = {
 			faq: "Soalan lazim",
 			tutorials: "Tutorial",
 			contactHeading: "Hubungi kami",
-			email: "hello@infinitecabinet.com",
+			email: "hello@ezcabinet.com",
 			privacy: "Privasi",
 			adminSignIn: "Log masuk admin",
 			copyright: "© 2026 {brand}. Hak cipta terpelihara.",
@@ -159,10 +159,10 @@ export const ms: Dictionary = {
 		start: {
 			heading: "Bilik apa yang anda ingin rancang?",
 			subtitle:
-				"Pilih satu untuk bermula pada dinding kosong dengan saiz Infinite Cabinet sebenar.",
+				"Pilih satu untuk bermula pada dinding kosong dengan saiz EzCabinet sebenar.",
 			roomIconAlt: "Ikon {room}",
 			roomSubtitle: {
-				kitchen: "Saiz Infinite Cabinet sebenar",
+				kitchen: "Saiz EzCabinet sebenar",
 				living: "Rak TV & unit paparan",
 				bedroom: "Almari pakaian",
 				foyer: "Kabinet kasut & bangku",
@@ -269,7 +269,9 @@ export const ms: Dictionary = {
 			moveMeta: "anak panah + mm",
 			replaceHeading: "Ganti dengan",
 			positionHeading: "Kedudukan",
-			fromLeftWall: "Dari dinding kiri",
+			gapLeft: "Jarak kiri",
+			gapRight: "Jarak kanan",
+			editGap: "Ubah jarak",
 			widthHint:
 				"Kabinet sebelah kekal di tempatnya — saiz yang tidak muat dikelabukan. {name} ada {n} lebar.",
 			moveHintFloor:
@@ -333,7 +335,7 @@ export const ms: Dictionary = {
 			estimatedTotal: "Jumlah anggaran",
 			estimateBadge: "ANGGARAN",
 			placeholderNote:
-				"Kadar sementara — bukan sebut harga sehingga disahkan oleh Infinite Cabinet.",
+				"Kadar sementara — bukan sebut harga sehingga disahkan oleh EzCabinet.",
 			cta: "Dapatkan sebut harga untuk reka bentuk ini",
 			lines: {
 				carcasses: "Badan kabinet",
@@ -362,7 +364,7 @@ export const ms: Dictionary = {
 		backToEditing: "Kembali menyunting",
 		savedHeading: "Disimpan — untuk demo sahaja",
 		savedBody:
-			"Ciri penangkapan bakal pelanggan belum disambungkan kepada Infinite Cabinet lagi (itu fasa kemudian projek ini). Tiada apa-apa dihantar.",
+			"Ciri penangkapan bakal pelanggan belum disambungkan kepada EzCabinet lagi (itu fasa kemudian projek ini). Tiada apa-apa dihantar.",
 		heading: "Pesan {room} ini",
 		description:
 			"Buat pesanan, kemudian bayar melalui pindahan bank. Pereka bentuk akan mengesahkan ukuran anda di tapak sebelum apa-apa dibina.",
@@ -397,7 +399,7 @@ export const ms: Dictionary = {
 		eyebrow: "Belajar",
 		heading: "Tutorial DIY",
 		subtitle:
-			"Video langkah demi langkah untuk membina dan memasang unit Infinite Cabinet sendiri, daripada badan kabinet flat-pack pertama sehingga memasang susunan penuh.",
+			"Video langkah demi langkah untuk membina dan memasang unit EzCabinet sendiri, daripada badan kabinet flat-pack pertama sehingga memasang susunan penuh.",
 		allTypes: "Semua jenis",
 		allLevels: "Semua tahap",
 		emptyNoTutorials:
@@ -517,9 +519,9 @@ export const ms: Dictionary = {
 	privacy: {
 		title: "Notis privasi",
 		draft:
-			"Draf — menunggu semakan Infinite Cabinet Sdn Bhd sebelum berkuat kuasa.",
+			"Draf — menunggu semakan EzCabinet Sdn Bhd sebelum berkuat kuasa.",
 		intro:
-			"Notis ini menerangkan apa yang direkod oleh perancang Infinite Cabinet apabila anda menggunakannya, dan sebabnya.",
+			"Notis ini menerangkan apa yang direkod oleh perancang EzCabinet apabila anda menggunakannya, dan sebabnya.",
 		purposeHeading: "Tujuan",
 		purpose:
 			"Untuk mengenal pasti bahagian perancang yang mengelirukan atau rosak, dan membaikinya.",

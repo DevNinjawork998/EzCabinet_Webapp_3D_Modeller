@@ -179,7 +179,7 @@ export function orderBody(
 			quotationId,
 			sender: {
 				stopId: senderStopId,
-				name: "Infinite Cabinet",
+				name: "EzCabinet",
 				// The workshop's own number. Emphatically not the customer's: this
 				// is the contact a driver rings from the loading bay, and pointing
 				// it at the customer means they get called to explain where their

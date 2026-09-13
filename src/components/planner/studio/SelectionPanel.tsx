@@ -4,10 +4,12 @@ import { fill } from "@/lib/copy/fill";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
 import type {
 	HingeSide,
+	Offsets,
 	PlannerLayout,
 	Positioned,
 } from "@/lib/planner/layout";
 import { useCopy } from "../CopyContext";
+import { GapInput } from "../GapInput";
 import { chip, verbBtn } from "./chrome";
 
 /**
@@ -32,7 +34,8 @@ export function SelectionPanel({
 	priceLabel,
 	onWidthAction,
 	onReplaceAction,
-	onOffsetAction,
+	offsets,
+	onGapAction,
 	onSwapAction,
 	canSwap,
 	onHangAtAction,
@@ -63,7 +66,9 @@ export function SelectionPanel({
 	priceLabel: string;
 	onWidthAction: (widthMm: number) => void;
 	onReplaceAction: (familyId: string) => void;
-	onOffsetAction: (xMm: number) => void;
+	/** The clear gap each side, as `offsetsOf` measures it. */
+	offsets: Offsets | null;
+	onGapAction: (side: "left" | "right", mm: number) => void;
 	onSwapAction: (direction: 1 | -1) => void;
 	/** Any cabinet — the row it belongs to has a height and this one may sit
 	 * off it, on the floor as readily as on the wall. */
@@ -261,21 +266,35 @@ export function SelectionPanel({
 						</button>
 					</div>
 
-					<div className="flex items-center justify-between gap-2">
-						<label htmlFor="offsetmm" className="text-[12px] text-neutral-500">
-							{t.planner.selection.fromLeftWall}
-						</label>
-						<span className="flex items-center gap-1">
-							<input
-								id="offsetmm"
-								type="number"
-								value={Math.round(selected.xMm)}
-								onChange={(e) => onOffsetAction(Number(e.target.value))}
-								className="w-[70px] rounded-[7px] border border-neutral-300 px-2 py-1.5 text-right text-[12px]"
-							/>
-							<span className="text-[11px] text-[#8a857c]">mm</span>
-						</span>
-					</div>
+					{/* The same two gaps the dimension lines draw, measured to the same
+					    neighbour or wall. A "from left wall" figure measured past the
+					    neighbour read 1990 beside a line reading 1410 — two numbers
+					    for one position, and the customer could not match them. */}
+					{offsets &&
+						(["left", "right"] as const).map((side) => (
+							<div
+								key={side}
+								className="flex items-center justify-between gap-2"
+							>
+								<label
+									htmlFor={`gap-${side}`}
+									className="text-[12px] text-neutral-500"
+								>
+									{side === "left"
+										? t.planner.selection.gapLeft
+										: t.planner.selection.gapRight}
+								</label>
+								<span className="flex items-center gap-1">
+									<GapInput
+										id={`gap-${side}`}
+										valueMm={side === "left" ? offsets.leftMm : offsets.rightMm}
+										onCommit={(mm) => onGapAction(side, mm)}
+										className="w-[70px] rounded-[7px] border border-neutral-300 px-2 py-1.5 text-right text-[12px]"
+									/>
+									<span className="text-[11px] text-[#8a857c]">mm</span>
+								</span>
+							</div>
+						))}
 					<div className="flex items-center justify-between gap-2">
 						<label htmlFor="hangatmm" className="text-[12px] text-neutral-500">
 							{isWall

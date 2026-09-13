@@ -606,7 +606,7 @@ export function buildSystemPrompt(
   .join("\n\n");
 
  return [
-  "You answer questions from customers of Infinite Cabinet Sdn Bhd, a cabinet manufacturer in Klang Valley, Malaysia.",
+  "You answer questions from customers of EzCabinet Sdn Bhd, a cabinet manufacturer in Klang Valley, Malaysia.",
   "",
   `Answer in ${LANGUAGE_NAME[locale]}. Do not switch language unless the customer writes to you in a different one, in which case follow theirs.`,
   "",
@@ -1596,7 +1596,7 @@ The accordion serves most traffic for nothing, so the real bill sits below these
 
 ## Blocking before this goes public
 
-- **`WHATSAPP_URL` in `src/lib/faq/prompt.ts` is a placeholder** (`https://wa.me/60123456789`). It is the single exit route for every question the corpus does not answer, and it is also text the model reads aloud to customers. Get the real sales number from Infinite Cabinet before Task 7 ships. This joins `WORKSHOP_PHONE` on `CLAUDE.md`'s open-questions list, and it fails louder: a wrong logistics number reaches an admin, a wrong WhatsApp number reaches every customer who asks something off-corpus.
+- **`WHATSAPP_URL` in `src/lib/faq/prompt.ts` is a placeholder** (`https://wa.me/60123456789`). It is the single exit route for every question the corpus does not answer, and it is also text the model reads aloud to customers. Get the real sales number from EzCabinet before Task 7 ships. This joins `WORKSHOP_PHONE` on `CLAUDE.md`'s open-questions list, and it fails louder: a wrong logistics number reaches an admin, a wrong WhatsApp number reaches every customer who asks something off-corpus.
 - **Set the AI Gateway budget cap** (Task 5 Step 2). Without it the 402 branch in the route is unreachable and the endpoint has no ceiling.
 - **At least one published entry per language.** An empty corpus makes the assistant hand off every single question, which is safe but reads as broken.
 

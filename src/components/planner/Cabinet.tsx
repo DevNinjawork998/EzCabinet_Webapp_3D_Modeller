@@ -28,7 +28,12 @@ import {
 } from "@/lib/planner/parts";
 import { type BoxMm, sharedMaxRad, swingOf } from "@/lib/planner/swing";
 import { DesignedCabinet, useDesignMesh } from "./DesignedCabinet";
-import { type GrainDirection, useFrontSurface, useGrain } from "./grain";
+import {
+	type GrainDirection,
+	sheetOffsetOf,
+	useFrontSurface,
+	useGrain,
+} from "./grain";
 import { Hinge, hingeOf } from "./Hinge";
 import { Slide } from "./Slide";
 
@@ -73,6 +78,11 @@ function insetShade(hex: string): string {
 
 const EDGE_COLOR = "#3f3b36";
 const EDGE_OPACITY = 0.55;
+/** The selected cabinet's outline: the panels' accent green, in screen pixels. */
+const SELECTION_COLOR = "#1f5138";
+const SELECTION_LINE_PX = 3;
+/** Metres the outline stands off the cabinet on every axis. */
+const SELECTION_PAD = 0.006;
 
 const HANDLE_LENGTH_MM = 128;
 const HANDLE_THICKNESS_MM = 14;
@@ -271,10 +281,10 @@ export function Cabinet({
 			? "#2f7d54"
 			: "#1f5138";
 
-	// Same trick the doors use: a fraction derived from where the cabinet sits,
-	// so two end panels in one room are cut from different parts of the sheet
-	// rather than being the same photograph twice.
-	const sheetOffset = Math.abs(centreX * 1.37) % 1;
+	// Where in the decor sheet this cabinet is cut from, so two neighbours are not
+	// the same photograph twice. Off the id, not the position, or the photograph
+	// slides across the door while the cabinet is dragged.
+	const sheetOffset = sheetOffsetOf(moduleId);
 
 	// The model the drafter drew, if this rung has one published. It hangs off
 	// the size rather than the family because the client draws one export per
@@ -392,6 +402,23 @@ export function Cabinet({
 							/>
 						))}
 				</>
+			)}
+
+			{/* The selection, as a thick line round the whole cabinet. The emissive
+			    tint alone all but vanished on a light finish — a state carried by a
+			    faint colour shift is one a low-vision customer cannot see. Drawn
+			    on the wrapper so the drafted mesh and the fallback both get it,
+			    a hair oversize so it never z-fights the carcass's own edges, and
+			    unpickable so a click or a measuring snap still lands on the
+			    cabinet underneath. */}
+			{selected && (
+				<mesh position={[0, h / 2, 0]} raycast={() => null}>
+					<boxGeometry
+						args={[w + SELECTION_PAD, h + SELECTION_PAD, d + SELECTION_PAD]}
+					/>
+					<meshBasicMaterial colorWrite={false} depthWrite={false} />
+					<Edges color={SELECTION_COLOR} lineWidth={SELECTION_LINE_PX} />
+				</mesh>
 			)}
 		</group>
 	);

@@ -15,7 +15,7 @@ import {
 /**
  * The planner catalogue, rebuilt from the design library.
  *
- * **One design is one cabinet.** Infinite Cabinet draws one export per width
+ * **One design is one cabinet.** EzCabinet draws one export per width
  * and prices each one, so a design row already *is* the thing a customer
  * places: its name, its all-in price, its box, its drawn model. This replaced
  * an additive merge that folded designs into families by shape — which matched

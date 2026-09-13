@@ -667,7 +667,7 @@ git add -A && git commit -m "fix(landing): scroll choreography verification fixe
 ## Not in this plan
 
 - **The pinned "how it works" three-step sequence.** A second track, one beat per step, is the natural follow-up once the hero pattern is proven on a real device. The machinery from Tasks 1–3 already supports it: another `ScrollTrack viewports={3}` and three more `--beat-*` slices.
-- **Scrubbed video.** Apple's hero is a `<video preload="none">` scrubbed against scroll with a per-breakpoint source map and a 5-second load timeout. Worth doing when Infinite Cabinet has a door-opening render to scrub; it needs a real asset and a byte budget, not just code.
+- **Scrubbed video.** Apple's hero is a `<video preload="none">` scrubbed against scroll with a per-breakpoint source map and a 5-second load timeout. Worth doing when EzCabinet has a door-opening render to scrub; it needs a real asset and a byte budget, not just code.
 - **A WebGL hero** using the R3F stack already in the repo. The planner owns the 3D; putting a WebGL context on the LCP path of the marketing page is a decision to make deliberately, with the `no-gl` fallback pattern, not as a side effect of this work.
 
 ---
@@ -712,7 +712,7 @@ reduced-motion conditions as the JavaScript gate.
 
 - **No scroll cue.** A decorative `aria-hidden` chevron would be new geometry rather than a
   new string, so it does not violate the no-new-strings constraint. It is left out as a
-  design decision for Infinite Cabinet rather than one to make inside a motion task.
+  design decision for EzCabinet rather than one to make inside a motion task.
 - **`viewports={1.7}`** buys ~630px of desktop runway whose first 55% holds the copy still.
   That hold is intentional; the number is worth tuning on a real screen with the client.
 - **`svh` vs `innerHeight`.** The layout is sized in `svh` while `trackProgress` is fed

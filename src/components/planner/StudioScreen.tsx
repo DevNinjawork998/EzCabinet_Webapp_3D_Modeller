@@ -244,7 +244,8 @@ export function StudioScreen({
 		replaceFamily,
 		rowEndMm,
 		runExtentMm,
-		moveModule,
+		offsetsOf,
+		setGap,
 		setBaseSkirting,
 		setCeilingHeight,
 		setHangAt,
@@ -386,7 +387,9 @@ export function StudioScreen({
 	// Usually the run rather than the catalogue floor — worth naming which,
 	// because a slider that stops for no visible reason reads as broken.
 	const minWallMm = minWallWidthMm(layout);
-	const freeMm = layout.wallWidthMm - runExtentMm(layout);
+	// Whole millimetres: a dragged cabinet lands on a fractional x, and the
+	// customer measures with a tape, not a micrometer.
+	const freeMm = Math.round(layout.wallWidthMm - runExtentMm(layout));
 	const construction = constructionOf(catalogue);
 	const price = computePlannerPrice(layout, finish, catalogue);
 	// Named so the customer knows what the extra lines are for. Both are added
@@ -1001,9 +1004,10 @@ export function StudioScreen({
 										replaceFamily(prev, selected.placed.id, familyId),
 									);
 								}}
-								onOffsetAction={(xMm) =>
+								offsets={offsetsOf(layout, selected.placed.id)}
+								onGapAction={(side, mm) =>
 									setLayoutAction((prev) =>
-										moveModule(prev, selected.placed.id, xMm),
+										setGap(prev, selected.placed.id, side, mm),
 									)
 								}
 								onSwapAction={(direction) =>

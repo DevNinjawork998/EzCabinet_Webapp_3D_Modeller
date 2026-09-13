@@ -43,7 +43,7 @@ export type ClassifiedPart = {
  * Ordered — first match wins, so put the specific before the general.
  * `Drw_Front` has to beat `Front`, and `Fixed_Shelf` has to beat `Shelf`.
  *
- * Seeded from Infinite Cabinet's SketchUp → Blender export. When a second
+ * Seeded from EzCabinet's SketchUp → Blender export. When a second
  * cabinet maker arrives this becomes a per-source table and `classify` takes
  * it as a parameter; the seam is here and nowhere else.
  */

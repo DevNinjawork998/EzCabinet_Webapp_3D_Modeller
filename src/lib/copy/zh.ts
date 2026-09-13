@@ -4,12 +4,12 @@ import type { Dictionary } from "./en";
  * a missing key is a compile error rather than a blank on a customer's screen. */
 export const zh: Dictionary = {
 	meta: {
-		title: "Infinite Cabinet · 三维设计您的厨房",
+		title: "EzCabinet · 三维设计您的厨房",
 		description:
-			"将真实的 Infinite Cabinet 橱柜放入您自己房间的模型中，从各个角度查看，并即时获得报价。无需前往展厅。",
+			"将真实的 EzCabinet 橱柜放入您自己房间的模型中，从各个角度查看，并即时获得报价。无需前往展厅。",
 	},
 	common: {
-		brand: "Infinite Cabinet",
+		brand: "EzCabinet",
 		back: "返回",
 		next: "下一步",
 		close: "关闭",
@@ -32,10 +32,10 @@ export const zh: Dictionary = {
 			titleBeforeAccent: "设计您的厨房，尽在",
 			titleAccent: "3D",
 			subtitle:
-				"将真实的 Infinite Cabinet 橱柜放入您自己的房间，边搭配边看价格变化，完成后直接把方案发给我们。",
+				"将真实的 EzCabinet 橱柜放入您自己的房间，边搭配边看价格变化，完成后直接把方案发给我们。",
 			cta: "开始设计",
 			howItWorks: "运作方式",
-			alt: "一间已完工的 Infinite Cabinet 厨房",
+			alt: "一间已完工的 EzCabinet 厨房",
 		},
 		facts: {
 			cabinetsFromLabel: "橱柜起价",
@@ -52,7 +52,7 @@ export const zh: Dictionary = {
 			step1Detail: "选择厨房、客厅、卧室或玄关，输入您墙面的实际尺寸。",
 			step2Title: "按比例放入橱柜",
 			step2Detail:
-				"在 3D 场景中排列真实的 Infinite Cabinet 橱柜，随意切换板材，直到满意为止。",
+				"在 3D 场景中排列真实的 EzCabinet 橱柜，随意切换板材，直到满意为止。",
 			step3Title: "即时获取报价",
 			step3Detail:
 				"搭配的同时即可看到实时价格，完成后直接把方案发给我们的团队。",
@@ -60,10 +60,10 @@ export const zh: Dictionary = {
 		gallery: {
 			heading: "按房间浏览",
 			subtitle:
-				"每个房间都以真实的 Infinite Cabinet 尺寸和现成的布局开始设计。",
+				"每个房间都以真实的 EzCabinet 尺寸和现成的布局开始设计。",
 			roomAlt: "{room}橱柜",
 			roomSubtitle: {
-				kitchen: "真实的 Infinite Cabinet 尺寸",
+				kitchen: "真实的 EzCabinet 尺寸",
 				living: "电视柜与展示柜",
 				bedroom: "衣柜",
 				foyer: "鞋柜与长凳",
@@ -99,7 +99,7 @@ export const zh: Dictionary = {
 			faq: "常见问题",
 			tutorials: "教学视频",
 			contactHeading: "联系我们",
-			email: "hello@infinitecabinet.com",
+			email: "hello@ezcabinet.com",
 			privacy: "隐私声明",
 			adminSignIn: "管理员登录",
 			copyright: "© 2026 {brand}。版权所有。",
@@ -153,10 +153,10 @@ export const zh: Dictionary = {
 		start: {
 			heading: "您想设计哪个房间？",
 			subtitle:
-				"选择一个房间，即可在空白墙面上使用真实的 Infinite Cabinet 尺寸开始设计。",
+				"选择一个房间，即可在空白墙面上使用真实的 EzCabinet 尺寸开始设计。",
 			roomIconAlt: "{room}图标",
 			roomSubtitle: {
-				kitchen: "真实的 Infinite Cabinet 尺寸",
+				kitchen: "真实的 EzCabinet 尺寸",
 				living: "电视柜与展示柜",
 				bedroom: "衣柜",
 				foyer: "鞋柜与长凳",
@@ -253,7 +253,9 @@ export const zh: Dictionary = {
 			moveMeta: "方向键 + 毫米",
 			replaceHeading: "更换为",
 			positionHeading: "位置",
-			fromLeftWall: "距左墙",
+			gapLeft: "左侧间距",
+			gapRight: "右侧间距",
+			editGap: "修改距离",
 			widthHint:
 				"相邻柜子不会移动——放不下的尺寸会变灰。{name} 提供 {n} 种宽度。",
 			moveHintFloor: "方向键让它沿墙滑动，也可把它抬离地面。圆环可旋转它。",
@@ -313,7 +315,7 @@ export const zh: Dictionary = {
 			includedAbovePlural: "均已计入以上价格。",
 			estimatedTotal: "预估总价",
 			estimateBadge: "预估",
-			placeholderNote: "暂定价格——须经 Infinite Cabinet 确认后方为正式报价。",
+			placeholderNote: "暂定价格——须经 EzCabinet 确认后方为正式报价。",
 			cta: "为此设计索取报价",
 			lines: {
 				carcasses: "柜体",
@@ -342,7 +344,7 @@ export const zh: Dictionary = {
 		backToEditing: "返回编辑",
 		savedHeading: "已保存——仅供演示",
 		savedBody:
-			"潜在客户功能尚未与 Infinite Cabinet 系统对接（属于本项目后续阶段）。此次操作未发送任何内容。",
+			"潜在客户功能尚未与 EzCabinet 系统对接（属于本项目后续阶段）。此次操作未发送任何内容。",
 		heading: "订购这间{room}",
 		description: "下单后以银行转账付款。设计师会在制作前到场核实您的尺寸。",
 		fullName: "姓名",
@@ -374,7 +376,7 @@ export const zh: Dictionary = {
 		eyebrow: "学习",
 		heading: "DIY 教学视频",
 		subtitle:
-			"从组装第一个平板包装柜体到安装整排橱柜，一步步教您完成 Infinite Cabinet 单元的组装与安装。",
+			"从组装第一个平板包装柜体到安装整排橱柜，一步步教您完成 EzCabinet 单元的组装与安装。",
 		allTypes: "所有类型",
 		allLevels: "所有等级",
 		emptyNoTutorials: "教学视频正在拍摄中，请稍后再来查看。",
@@ -485,9 +487,9 @@ export const zh: Dictionary = {
 	},
 	privacy: {
 		title: "隐私声明",
-		draft: "草稿——须经 Infinite Cabinet Sdn Bhd 审核后方可生效。",
+		draft: "草稿——须经 EzCabinet Sdn Bhd 审核后方可生效。",
 		intro:
-			"本声明说明您使用 Infinite Cabinet 设计工具时我们会记录哪些信息，以及原因。",
+			"本声明说明您使用 EzCabinet 设计工具时我们会记录哪些信息，以及原因。",
 		purposeHeading: "目的",
 		purpose: "找出设计工具中令人困惑或出错的地方，并加以修复。",
 		collectHeading: "我们记录的内容",

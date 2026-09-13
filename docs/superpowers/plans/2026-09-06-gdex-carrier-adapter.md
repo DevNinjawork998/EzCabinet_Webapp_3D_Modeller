@@ -31,7 +31,7 @@ plan's "corrected auth contract".
 
 ## Context
 
-Infinite Cabinet needs a parcel partner. Cabinets travel by lorry (Lalamove), but hardware, samples and spare doors do not — `carriers.ts` already says exactly this in its `CarrierKind` docblock, and GDEX has sat in the carrier list as a `parcel` stub since the logistics module was built, waiting for documentation that has now arrived along with sandbox credentials.
+EzCabinet needs a parcel partner. Cabinets travel by lorry (Lalamove), but hardware, samples and spare doors do not — `carriers.ts` already says exactly this in its `CarrierKind` docblock, and GDEX has sat in the carrier list as a `parcel` stub since the logistics module was built, waiting for documentation that has now arrived along with sandbox credentials.
 
 Three things about GDEX are structurally different from Lalamove, and every design decision below falls out of them:
 
@@ -200,7 +200,7 @@ const job = (over: Partial<DeliveryJob> = {}): DeliveryJob => ({
 	pickupCity: null,
 	pickupState: null,
 	addressNotes: "Guard house, ask for block C",
-	pickupAddress: "Infinite Cabinet Sdn Bhd, Klang Valley, Selangor",
+	pickupAddress: "EzCabinet Sdn Bhd, Klang Valley, Selangor",
 	siteLat: null,
 	siteLng: null,
 	pickupLat: null,
@@ -213,8 +213,8 @@ const job = (over: Partial<DeliveryJob> = {}): DeliveryJob => ({
 });
 
 const sender = {
-	Name: "Infinite Cabinet Sdn Bhd",
-	Email: "sales@infinitecabinet.com.my",
+	Name: "EzCabinet Sdn Bhd",
+	Email: "sales@ezcabinet.com.my",
 	MobileNumber: "+60355112233",
 	Address1: "No. 19, Jalan Tandang",
 	Address2: null,
@@ -313,7 +313,7 @@ describe("consignmentBody", () => {
 	it("puts the account profile in the sender block and the customer in the consignment", () => {
 		const body = consignmentBody(job(), sender);
 
-		expect(body.Name).toBe("Infinite Cabinet Sdn Bhd");
+		expect(body.Name).toBe("EzCabinet Sdn Bhd");
 		expect(body.Postcode).toBe("46050");
 		expect(body.LocationId).toBe(33500);
 		expect(body.Consignments).toHaveLength(1);
@@ -394,7 +394,7 @@ export class GdexNotDeliverable extends Error {
 /** Malaysia. GDEX takes ISO-3166 alpha-3, not the alpha-2 everything else uses. */
 export const COUNTRY = "MYS";
 
-/** Documents are paper. Anything Infinite Cabinet ships is not. */
+/** Documents are paper. Anything EzCabinet ships is not. */
 export const PARCEL_TYPE = "Parcel";
 
 /** GDEX caps a consignment at fifteen pieces. */
@@ -1574,7 +1574,7 @@ Run in order. Steps 1–3 need no GDEX account; step 4 spends sandbox e-Wallet c
 ## Open questions — raise with the client, do not guess in code
 
 - **The public tracking URL.** GDEX returns no share link, so `trackingUrl` is null and the admin has nothing to send the customer. GDEX's website tracks by consignment number; the URL format is not in the API documentation. One answer from the client removes the `ponytail:` comment in `book`.
-- **`ShipmentValue`.** Sent as `0` with `IsInsurance: false`. The field is what enhanced liability prices on, and nothing in this app knows what a box of handles is worth. If Infinite Cabinet wants cover on parcels, this becomes a form field and `IsInsurance` becomes a choice.
+- **`ShipmentValue`.** Sent as `0` with `IsInsurance: false`. The field is what enhanced liability prices on, and nothing in this app knows what a box of handles is worth. If EzCabinet wants cover on parcels, this becomes a form field and `IsInsurance` becomes a choice.
 - **Pickup transportation.** `TRANSPORTATION` maps our four vehicle classes onto GDEX's three by size. Whether GDEX charges differently for a van versus a motorbike collection is not in the rate API, which prices only weight and lane.
 - **The sender is always the GDEX account's registered address.** If an admin edits `pickupAddress` to somewhere else, GDEX still collects from the account address, because `LocationId` cannot be derived from arbitrary text without a `GetPostcodeLocations` lookup that returns many locations per postcode with no way to choose. If collecting from a second address is a real need, that is a follow-up using `GetPostcodeLocations`.
 - **Transit time.** `etaMinutes` is null. GDEX publishes lane transit days but not through this API.

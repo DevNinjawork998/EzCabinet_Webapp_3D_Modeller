@@ -14,7 +14,7 @@ const row: DeliveryRow = {
 	customerPhone: "012345678",
 	siteAddress: "12 Jalan Setia, Shah Alam",
 	addressNotes: "Gate code 1234",
-	pickupAddress: "Infinite Cabinet Sdn Bhd, Klang Valley, Selangor",
+	pickupAddress: "EzCabinet Sdn Bhd, Klang Valley, Selangor",
 	siteLat: 3.1509,
 	siteLng: 101.5931,
 	pickupLat: null,

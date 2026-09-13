@@ -66,7 +66,7 @@ const job = (over: Partial<DeliveryJob> = {}): DeliveryJob => ({
 	pickupCity: null,
 	pickupState: null,
 	addressNotes: "Guard house, ask for block C",
-	pickupAddress: "Infinite Cabinet Sdn Bhd, Klang Valley, Selangor",
+	pickupAddress: "EzCabinet Sdn Bhd, Klang Valley, Selangor",
 	siteLat: null,
 	siteLng: null,
 	pickupLat: null,
@@ -79,8 +79,8 @@ const job = (over: Partial<DeliveryJob> = {}): DeliveryJob => ({
 });
 
 const sender = {
-	Name: "Infinite Cabinet Sdn Bhd",
-	Email: "sales@infinitecabinet.com.my",
+	Name: "EzCabinet Sdn Bhd",
+	Email: "sales@ezcabinet.com.my",
 	MobileNumber: "+60355112233",
 	Address1: "No. 19, Jalan Tandang",
 	Address2: null,
@@ -214,7 +214,7 @@ describe("consignmentBody", () => {
 	it("puts the account profile in the sender block and the customer in the consignment", () => {
 		const body = consignmentBody(job(), sender);
 
-		expect(body.Name).toBe("Infinite Cabinet Sdn Bhd");
+		expect(body.Name).toBe("EzCabinet Sdn Bhd");
 		expect(body.Postcode).toBe("46050");
 		expect(body.LocationId).toBe(33500);
 		expect(body.Consignments).toHaveLength(1);

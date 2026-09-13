@@ -108,14 +108,10 @@ export function RoomPanel({
 
 			<div className="mt-0.5 flex flex-col gap-1.5 border-[#f0efec] border-t pt-3">
 				<p className="text-[12px] text-neutral-500 leading-[17px]">
-					{/* Rounded here, not upstream: `freeMm` is a subtraction of two
-					    derived figures and arrives with a float's tail on it — the
-					    panel read "3043.156625058453 mm of wall still free". A
-					    millimetre is the smallest thing this room is specified in, so
-					    anything past the point is noise whatever the arithmetic says. */}
+					{/* `freeMm` arrives in whole millimetres; see StudioScreen. */}
 					{freeMm < 0
-						? fill(t.planner.room.fitOver, { mm: Math.round(-freeMm) })
-						: fill(t.planner.room.fitFree, { mm: Math.round(freeMm) })}
+						? fill(t.planner.room.fitOver, { mm: -freeMm })
+						: fill(t.planner.room.fitFree, { mm: freeMm })}
 				</p>
 
 				{/* The run overhanging the wall and the run being longer than the

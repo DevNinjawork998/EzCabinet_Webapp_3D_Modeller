@@ -8,12 +8,12 @@
  */
 export const en = {
 	meta: {
-		title: "Infinite Cabinet · Design your kitchen in 3D",
+		title: "EzCabinet · Design your kitchen in 3D",
 		description:
-			"Drop real Infinite Cabinet units onto a model of your own room, see it from every angle, and get an instant price. No showroom visit required.",
+			"Drop real EzCabinet units onto a model of your own room, see it from every angle, and get an instant price. No showroom visit required.",
 	},
 	common: {
-		brand: "Infinite Cabinet",
+		brand: "EzCabinet",
 		back: "Back",
 		next: "Next",
 		close: "Close",
@@ -36,10 +36,10 @@ export const en = {
 			titleBeforeAccent: "Design your kitchen",
 			titleAccent: "in 3D",
 			subtitle:
-				"Drop real Infinite Cabinet units into your own room, see the price move as you build, and send us the plan.",
+				"Drop real EzCabinet units into your own room, see the price move as you build, and send us the plan.",
 			cta: "Start planning",
 			howItWorks: "How it works",
-			alt: "A finished Infinite Cabinet kitchen",
+			alt: "A finished EzCabinet kitchen",
 		},
 		facts: {
 			cabinetsFromLabel: "Cabinets from",
@@ -57,7 +57,7 @@ export const en = {
 				"Choose kitchen, living room, bedroom or foyer, and set your real wall dimensions.",
 			step2Title: "Drop in cabinets, to scale",
 			step2Detail:
-				"Arrange real Infinite Cabinet units in 3D and swap finishes until it looks right.",
+				"Arrange real EzCabinet units in 3D and swap finishes until it looks right.",
 			step3Title: "Get an instant quote",
 			step3Detail:
 				"See a live price as you build, then send your plan straight to our team.",
@@ -65,10 +65,10 @@ export const en = {
 		gallery: {
 			heading: "Explore by room",
 			subtitle:
-				"Every room starts from real Infinite Cabinet sizes and a layout already on your wall.",
+				"Every room starts from real EzCabinet sizes and a layout already on your wall.",
 			roomAlt: "{room} cabinets",
 			roomSubtitle: {
-				kitchen: "Real Infinite Cabinet sizes",
+				kitchen: "Real EzCabinet sizes",
 				living: "TV ledge & display units",
 				bedroom: "Wardrobes",
 				foyer: "Shoe cabinets & bench",
@@ -105,7 +105,7 @@ export const en = {
 			faq: "FAQ",
 			tutorials: "Tutorials",
 			contactHeading: "Contact",
-			email: "hello@infinitecabinet.com",
+			email: "hello@ezcabinet.com",
 			privacy: "Privacy",
 			adminSignIn: "Admin sign in",
 			copyright: "© 2026 {brand}. All rights reserved.",
@@ -161,10 +161,10 @@ export const en = {
 		start: {
 			heading: "What room are you planning?",
 			subtitle:
-				"Pick one to start on an empty wall with real Infinite Cabinet sizes.",
+				"Pick one to start on an empty wall with real EzCabinet sizes.",
 			roomIconAlt: "{room} icon",
 			roomSubtitle: {
-				kitchen: "Real Infinite Cabinet sizes",
+				kitchen: "Real EzCabinet sizes",
 				living: "TV ledge & display units",
 				bedroom: "Wardrobes",
 				foyer: "Shoe cabinets & bench",
@@ -267,7 +267,9 @@ export const en = {
 			moveMeta: "arrows + mm",
 			replaceHeading: "Replace with",
 			positionHeading: "Position",
-			fromLeftWall: "From left wall",
+			gapLeft: "Gap left",
+			gapRight: "Gap right",
+			editGap: "Edit distance",
 			widthHint:
 				"Neighbours stay put — a size with no room for it is greyed out. {name} comes in {n} widths.",
 			moveHintFloor:
@@ -330,7 +332,7 @@ export const en = {
 			estimatedTotal: "Estimated total",
 			estimateBadge: "ESTIMATE",
 			placeholderNote:
-				"Placeholder rates — not a quote until Infinite Cabinet confirms.",
+				"Placeholder rates — not a quote until EzCabinet confirms.",
 			cta: "Get a quote for this design",
 			lines: {
 				carcasses: "Carcasses",
@@ -359,7 +361,7 @@ export const en = {
 		backToEditing: "Back to editing",
 		savedHeading: "Saved — for this demo only",
 		savedBody:
-			"Lead capture isn't wired to Infinite Cabinet yet (that's a later phase of this build). Nothing was sent anywhere.",
+			"Lead capture isn't wired to EzCabinet yet (that's a later phase of this build). Nothing was sent anywhere.",
 		heading: "Order this {room}",
 		description:
 			"Place the order, then pay by bank transfer. A designer confirms your measurements on site before anything is built.",
@@ -394,7 +396,7 @@ export const en = {
 		eyebrow: "Learn",
 		heading: "DIY tutorials",
 		subtitle:
-			"Step-by-step videos for building and installing Infinite Cabinet units yourself, from a first flat-pack carcass to fitting a full run.",
+			"Step-by-step videos for building and installing EzCabinet units yourself, from a first flat-pack carcass to fitting a full run.",
 		allTypes: "All types",
 		allLevels: "All levels",
 		emptyNoTutorials: "Tutorials are being filmed. Check back soon.",
@@ -523,13 +525,13 @@ export const en = {
 		reject: "Decline",
 		learnMore: "Privacy notice",
 	},
-	/** Draft wording — Infinite Cabinet's counsel approves it before production. */
+	/** Draft wording — EzCabinet's counsel approves it before production. */
 	privacy: {
 		title: "Privacy notice",
 		draft:
-			"Draft — pending review by Infinite Cabinet Sdn Bhd before it takes effect.",
+			"Draft — pending review by EzCabinet Sdn Bhd before it takes effect.",
 		intro:
-			"This notice explains what the Infinite Cabinet planner records when you use it, and why.",
+			"This notice explains what the EzCabinet planner records when you use it, and why.",
 		purposeHeading: "Why",
 		purpose: "To find where the planner is confusing or broken, and fix it.",
 		collectHeading: "What we record",

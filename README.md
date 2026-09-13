@@ -1,6 +1,6 @@
 # Cabinet planner
 
-Lead-generation cabinet planner for **Infinite Cabinet Sdn Bhd**, built by JNS Nexion Enterprise.
+Lead-generation cabinet planner for **EzCabinet Sdn Bhd**, built by JNS Nexion Enterprise.
 
 A customer picks a room, arranges cabinets against one wall in 3D, sees a price, and requests a quote. Reference product is IKEA's PAX planner — one wall, one room at a time.
 
@@ -22,7 +22,7 @@ Proof of concept.
 
 > **Prices shown are not real.** Phase 0 hasn't happened, so every figure in
 > `src/lib/planner/catalogue.ts` is a placeholder chosen to exercise the engine.
-> No quote from these numbers is valid until Infinite Cabinet confirms their rates.
+> No quote from these numbers is valid until EzCabinet confirms their rates.
 >
 > Kitchen *dimensions* are real — read out of the client's own Mozaik export by
 > `lib/skp`. Every other room's dimensions are invented.

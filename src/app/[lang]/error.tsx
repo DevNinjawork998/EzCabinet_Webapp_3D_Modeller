@@ -60,7 +60,7 @@ export default function LocaleError({
 					href={`/${locale}`}
 					className="rounded-lg border border-neutral-300 px-4 py-2 text-[13px]"
 				>
-					Infinite Cabinet
+					EzCabinet
 				</Link>
 			</div>
 		</main>

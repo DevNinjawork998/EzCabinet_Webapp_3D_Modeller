@@ -20,7 +20,7 @@ import type {
  * PROVENANCE, and it matters:
  * - **Kitchen dimensions are real.** 16mm board, 880mm base carcasses on 607mm
  *   depth, wall units 397mm deep hung at 1500mm, 2380mm tall units — all read
- *   out of Infinite Cabinet's own design export by `lib/mesh`.
+ *   out of EzCabinet's own design export by `lib/mesh`.
  * - **Living room, bedroom and foyer dimensions are invented.** Plausible, but
  *   ours. Get a design export for each from the client and `lib/mesh` turns
  *   them into real numbers in minutes.
@@ -82,7 +82,7 @@ export const RATES = {
 	endPanelWallRm: 90,
 	endPanelTallRm: 330,
 	/** PLACEHOLDER — the flat delivery charge on an order, taken from the
-	 * client's Order Confirmation design. Confirm with Infinite Cabinet. */
+	 * client's Order Confirmation design. Confirm with EzCabinet. */
 	deliveryFlatRm: 85,
 };
 /** Underside of the wall cabinets — the sample job's own hanging height. */

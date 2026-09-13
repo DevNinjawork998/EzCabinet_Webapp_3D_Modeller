@@ -56,7 +56,7 @@ export const KIND: Record<string, CarrierKind> = Object.fromEntries(
  * single string nobody has asked to change twice is a table nobody maintains.
  */
 export const WORKSHOP_ADDRESS =
-	"Infinite Cabinet Sdn Bhd, Klang Valley, Selangor";
+	"EzCabinet Sdn Bhd, Klang Valley, Selangor";
 
 /**
  * The workshop's pin, as a constant rather than something we look up.

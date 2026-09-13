@@ -348,8 +348,8 @@ export function submitBody(job: DeliveryJob, serviceId: string) {
 					value: 1,
 				})),
 				sender: {
-					name: "Infinite Cabinet",
-					company: "Infinite Cabinet Sdn Bhd",
+					name: "EzCabinet",
+					company: "EzCabinet Sdn Bhd",
 					// The workshop's own number, emphatically not the customer's:
 					// this is who a courier rings from the loading bay.
 					...phoneParts(WORKSHOP_PHONE, "workshop's"),
@@ -775,7 +775,7 @@ export const easyparcelAdapter: CarrierAdapter = {
 				cancel_list: [
 					{
 						shipment_number: carrierOrderId,
-						remark: "Cancelled by Infinite Cabinet",
+						remark: "Cancelled by EzCabinet",
 					},
 				],
 			}),

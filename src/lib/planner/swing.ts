@@ -53,7 +53,7 @@ export type SwingSpec = {
 	/**
 	 * The leaf is shaped like a lift-up flap, not a side-hung door.
 	 *
-	 * Infinite Cabinet builds side-hung doors, so a flap in an upload is more
+	 * EzCabinet builds side-hung doors, so a flap in an upload is more
 	 * likely a mis-drawn or mis-named panel than a product. Swinging it about a
 	 * vertical stile would send it sideways through the neighbouring cabinet, so
 	 * the renderer draws it shut and the admin review table shows it instead.

@@ -35,12 +35,7 @@ import {
 	WORKTOP_COLOR,
 } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
-import {
-	type ExposedSides,
-	exposedSides,
-	type SideGaps,
-	sideGapsMm,
-} from "@/lib/planner/exposure";
+import { type SideGaps, sideGapsMm } from "@/lib/planner/exposure";
 import {
 	canHangAt,
 	inRun,
@@ -709,6 +704,7 @@ function Run({
 		dropModule,
 		floorHeightMmOf,
 		overhangingIds,
+		exposureOf,
 		positionsOf,
 		setRotation,
 	} = engine;
@@ -959,12 +955,6 @@ function Run({
 		onMeasureHover(null);
 	}, [measureMode, onMeasureHover]);
 
-	// Which cabinets have an outer side on show, keyed by id.
-	//
-	// Computed per row, not across the whole run: `allPositions` concatenates
-	// floor and wall, and judging them together would have a hung wall unit
-	// cover a base unit's end panel — they are at different heights and hide
-	// nothing of each other.
 	const overhanging = useMemo(
 		() => overhangingIds(layout),
 		[layout, overhangingIds],
@@ -977,20 +967,21 @@ function Run({
 			wallWidthMm: layout.wallWidthMm,
 			enclosed: layout.wallToWall,
 		};
-		const map = new Map<string, ExposedSides>();
+		// Which sides wear a veneered end panel: the engine's answer, the same
+		// one `pricing.ts` charges from, so a panel drawn is a panel paid for.
+		const map = exposureOf(layout);
 		// The distance as well as the yes/no: an end panel only needs to know
 		// whether a side is buried, but a door needs to know how far away the
-		// neighbour is before it can decide how far to swing.
+		// neighbour is before it can decide how far to swing. Per row, as before.
 		const gaps = new Map<string, SideGaps>();
 		for (const row of ["floor", "wall"] as const) {
 			const positions = positionsOf(layout, row);
 			positions.forEach((position, i) => {
-				map.set(position.placed.id, exposedSides(positions, i, walls));
 				gaps.set(position.placed.id, sideGapsMm(positions, i, walls));
 			});
 		}
 		return { map, gaps };
-	}, [layout, positionsOf]);
+	}, [layout, positionsOf, exposureOf]);
 
 	// The group sits on the wall plane itself: everything in the run is placed
 	// by its back face from here, with a scribe gap so the carcasses do not
@@ -1805,6 +1796,7 @@ export default function PlannerScene({
 			/>
 			{positioned && offsets && (
 				<PositionDimensions
+					onLayoutChange={onLayoutChangeAction}
 					position={positioned}
 					offsets={offsets}
 					layout={layout}

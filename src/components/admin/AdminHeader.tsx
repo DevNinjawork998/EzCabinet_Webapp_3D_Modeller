@@ -24,7 +24,7 @@ const TABS = [
 ];
 
 /**
- * `trail` is where a page sits under "Infinite Cabinet /" — a delivery's own
+ * `trail` is where a page sits under "EzCabinet /" — a delivery's own
  * page reads "Deliveries / #14". Left out, the crumb just says "Admin". The
  * last entry is the current page and never a link.
  */
@@ -53,7 +53,7 @@ export function AdminHeader({
 						target="_blank"
 						className="px-1 py-1.5 text-neutral-400 hover:text-neutral-600"
 					>
-						Infinite Cabinet
+						EzCabinet
 					</Link>
 					{trail.map((crumb, i) => (
 						<span key={crumb.label} className="flex items-center gap-1.5">

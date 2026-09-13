@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { photoRepeat } from "../grain";
+import { photoRepeat, sheetOffsetOf } from "../grain";
 
 /**
  * The scan is a photograph, so its pixels are square and the two axes have to
@@ -24,6 +24,26 @@ function shown(
 			: [u * SHEET_M, v * SHEET_M * aspect];
 	return { across, along };
 }
+
+describe("sheetOffsetOf", () => {
+	// Taken from the cabinet, never from where it stands: an offset read off its
+	// position slid the photograph across the door on every frame of a drag.
+	it("is the same for a cabinet wherever it is", () => {
+		expect(sheetOffsetOf("mod-abc")).toBe(sheetOffsetOf("mod-abc"));
+	});
+
+	it("stays inside the sheet", () => {
+		for (const id of ["", "a", "mod-1", "mod-2", "V1StGXR8_Z5jdHi6B-myT"]) {
+			const offset = sheetOffsetOf(id);
+			expect(offset).toBeGreaterThanOrEqual(0);
+			expect(offset).toBeLessThan(1);
+		}
+	});
+
+	it("cuts neighbours from different parts of the sheet", () => {
+		expect(sheetOffsetOf("mod-1")).not.toBe(sheetOffsetOf("mod-2"));
+	});
+});
 
 describe("photoRepeat", () => {
 	it("shows exactly the door's own size of board, both ways", () => {

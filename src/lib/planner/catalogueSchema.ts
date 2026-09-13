@@ -23,7 +23,7 @@ const sizeOptionSchema = z.object({
 	 *
 	 * The planner fetches `/api/cabinet-mesh/<id>` and draws the model the
 	 * drafter actually made. It hangs off the *rung* rather than the family
-	 * because Infinite Cabinet draws one export per width — BC 800, BC 900,
+	 * because EzCabinet draws one export per width — BC 800, BC 900,
 	 * BC 1000 — so a ladder is a set of files, one each.
 	 *
 	 * Optional, and the planner falls back to procedural geometry without it:

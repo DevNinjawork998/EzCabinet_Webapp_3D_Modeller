@@ -2358,7 +2358,7 @@ describe("submitBody", () => {
 
 	it("sends the workshop as sender and the customer as receiver", () => {
 		const s = body().shipment[0];
-		expect(s.sender.name).toBe("Infinite Cabinet");
+		expect(s.sender.name).toBe("EzCabinet");
 		expect(s.receiver.name).toBe("Siti");
 		expect(s.receiver.phone_number_country_code).toBe("MY");
 		// E.164 without the +60: EasyParcel takes the country code separately.
@@ -2458,8 +2458,8 @@ export function submitBody(job: DeliveryJob, serviceId: string) {
 					value: 1,
 				})),
 				sender: {
-					name: "Infinite Cabinet",
-					company: "Infinite Cabinet Sdn Bhd",
+					name: "EzCabinet",
+					company: "EzCabinet Sdn Bhd",
 					// The workshop's own number, emphatically not the customer's:
 					// this is who a courier rings from the loading bay.
 					...phoneParts(WORKSHOP_PHONE, "workshop's"),
@@ -2591,7 +2591,7 @@ And the three methods, replacing the stubs:
 		// cancelled is still on its way.
 		await call("/shipment/cancel", {
 			cancel_list: [
-				{ shipment_number: carrierOrderId, remark: "Cancelled by Infinite Cabinet" },
+				{ shipment_number: carrierOrderId, remark: "Cancelled by EzCabinet" },
 			],
 		});
 	},
@@ -3106,7 +3106,7 @@ Three edits:
 
 - In the `lib/logistics/` tree in **Directory layout**, add `tokens.ts ← a partner's OAuth tokens: one row, refreshed under a lock` and change `adapters/` to `one file per partner; manual, lalamove and easyparcel are live`.
 - In **Known issues**, add: *"EasyParcel's webhooks are unsigned. Nothing in their payload identifies the sender, so the callback URL carries a secret query token and that is the entire check — see `verifyWebhook` in `adapters/easyparcel.ts`."*
-- In **Open questions**, extend the workshop-address entry: `WORKSHOP_POSTCODE`, `WORKSHOP_CITY` and `WORKSHOP_STATE` are placeholders derived from `WORKSHOP_PIN`, and EasyParcel prices the origin zone off them — a wrong postcode there is a wrong price on every parcel quote. Add: *"Does Infinite Cabinet have an EasyParcel account, and who tops up the wallet? `submit_orders` deducts at booking time and a shipment cannot be booked against an empty wallet."*
+- In **Open questions**, extend the workshop-address entry: `WORKSHOP_POSTCODE`, `WORKSHOP_CITY` and `WORKSHOP_STATE` are placeholders derived from `WORKSHOP_PIN`, and EasyParcel prices the origin zone off them — a wrong postcode there is a wrong price on every parcel quote. Add: *"Does EzCabinet have an EasyParcel account, and who tops up the wallet? `submit_orders` deducts at booking time and a shipment cannot be booked against an empty wallet."*
 
 - [ ] **Step 6: Verify and commit**
 

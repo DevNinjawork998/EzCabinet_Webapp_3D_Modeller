@@ -7,7 +7,7 @@ import { isLocale } from "@/lib/copy/locales";
 /**
  * The privacy notice the consent banner links to.
  *
- * A draft, and labelled as one on the page: Infinite Cabinet is the data
+ * A draft, and labelled as one on the page: EzCabinet is the data
  * controller under the PDPA, so the wording is theirs to approve. What it must
  * keep saying is what the code does — see `src/lib/analytics.ts`.
  */

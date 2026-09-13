@@ -57,7 +57,7 @@ export default function AdminLoginPage() {
 							</svg>
 						</span>
 						<h1 className="mt-2 font-semibold text-[19px]">
-							Infinite Cabinet · Admin
+							EzCabinet · Admin
 						</h1>
 						<p className="text-neutral-500 text-sm">
 							Sign in to manage cabinet designs and the catalogue.
@@ -99,7 +99,7 @@ export default function AdminLoginPage() {
 					</Link>
 
 					<p className="text-center text-neutral-400 text-xs">
-						Internal tool · Infinite Cabinet staff only
+						Internal tool · EzCabinet staff only
 					</p>
 				</form>
 			</div>

@@ -146,7 +146,7 @@ describe("orderBody", () => {
 		expect(body.data.quotationId).toBe("1471722666401517645");
 		expect(body.data.sender).toMatchObject({
 			stopId: "s1",
-			name: "Infinite Cabinet",
+			name: "EzCabinet",
 			// The workshop's number, not the customer's — this is the stop the
 			// driver rings when they cannot find the loading bay.
 			phone: "+60312345678",

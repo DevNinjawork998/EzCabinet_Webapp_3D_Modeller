@@ -1,8 +1,8 @@
 # Cabinet planner
 
-Public, lead-generation cabinet planner for **Infinite Cabinet Sdn Bhd** (Malaysian cabinet manufacturer). Built by JNS Nexion Enterprise.
+Public, lead-generation cabinet planner for **EzCabinet Sdn Bhd** (Malaysian cabinet manufacturer). Built by JNS Nexion Enterprise.
 
-An end customer picks a room, arranges cabinets along one wall in 3D, sees a price, and submits a quote request. Infinite Cabinet's sales team receives the lead with a rendered image attached.
+An end customer picks a room, arranges cabinets along one wall in 3D, sees a price, and submits a quote request. EzCabinet's sales team receives the lead with a rendered image attached.
 
 **This is a marketing surface, not a production tool.** It must be convincing and fast on mid-range Android in Malaysia. It does not need to be manufacturing-accurate. A human validates every design before it becomes a real order.
 
@@ -18,7 +18,7 @@ The wardrobe survives only as a seed family (`id: "wardrobe"`) in `lib/planner/c
 
 Phase 0 (catalogue + pricing spec with client) not yet complete — see Open questions. The engine, the planner UI, and the admin catalogue surface are built. `/admin/cabinet-designs` is the one catalogue screen: each uploaded design is one cabinet, filed under the rooms that offer it, and `POST /api/admin/cabinet-designs/publish` rebuilds the catalogue from the design rows (`lib/catalogue/buildCatalogue.ts`). Customers can check out: `POST /api/orders` re-validates and re-prices the design and stores an `Order` (manual bank transfer until a gateway is chosen), `/admin/orders` marks it paid, and **Create delivery** opens the logistics form pre-filled from the design (`lib/orders`). Share links are the remaining Phase 3 work.
 
-**Confirmed client requirement (resolved):** Infinite Cabinet designs in SketchUp and asked for "upload SketchUp designs so we can maintain new configurations." It is resolved the literal way: the planner **renders the model they drew** — see [3D](#3d). This reversed an earlier decision to rebuild each cabinet procedurally from extracted numbers; that section carries the measurements that changed it.
+**Confirmed client requirement (resolved):** EzCabinet designs in SketchUp and asked for "upload SketchUp designs so we can maintain new configurations." It is resolved the literal way: the planner **renders the model they drew** — see [3D](#3d). This reversed an earlier decision to rebuild each cabinet procedurally from extracted numbers; that section carries the measurements that changed it.
 
 **The file format is OBJ, not `.skp`, everywhere.** A `.skp` is a SketchUp-proprietary container that in practice needs SketchUp itself to read; the `openskp` reader was deleted in August 2026 along with `lib/skp`. The client exports the design folder as Wavefront OBJ — `.obj` + `.mtl` + textures — and uploads it zipped. `lib/mesh` reads it. Nothing in the app accepts a `.skp` any more: not catalogue import, not the cabinet-design library. If you are adding an upload that takes a design, it takes `.obj`/`.zip`.
 
@@ -47,9 +47,9 @@ Layout document (JSON)
 
 ### One design, one cabinet
 
-The customer does not drag a slider or step through a size ladder. Infinite Cabinet draws **one export per width** — BC 600, BC 800, BC 900 — and each export is its own cabinet: its own name, all-in price (door included), box and drawn model. A catalogue family is exactly one design with exactly one size, and its id is the design's id. This is deliberate:
+The customer does not drag a slider or step through a size ladder. EzCabinet draws **one export per width** — BC 600, BC 800, BC 900 — and each export is its own cabinet: its own name, all-in price (door included), box and drawn model. A catalogue family is exactly one design with exactly one size, and its id is the design's id. This is deliberate:
 
-- It matches how Infinite Cabinet manufactures — standard modules, each a SKU.
+- It matches how EzCabinet manufactures — standard modules, each a SKU.
 - It is what makes rendering the drafted model 1:1 possible: every cabinet has a real file behind it.
 - The price a customer sees is the one the admin typed, and the Phase 4 SKU list falls straight out of the layout.
 
@@ -155,7 +155,7 @@ published. "Which catalogue is live" is now a value with an owner.
 
 ## 3D
 
-**The planner draws the model the drafter drew.** Infinite Cabinet designs every
+**The planner draws the model the drafter drew.** EzCabinet designs every
 cabinet in SketchUp and exports it as OBJ. That drawing is the deliverable, and
 the software's job is to ingest it and put it in front of a customer — not to
 re-derive a cabinet somebody has already drawn.
@@ -277,7 +277,14 @@ which is why they are not defaulted to those constants in the schema. A real
 **Exposed ends wear the door finish.** `exposure.ts` answers which outer sides of
 a cabinet have no neighbour touching them, and `PlannerScene` passes it down so
 an end-of-run side renders as a veneered end panel rather than plain carcass
-board — the most camera-facing surface in the default 3/4 view.
+board — the most camera-facing surface in the default 3/4 view. Every such side
+is also a charged panel, and `exposureOf` in `layout.ts` is the one answer both
+the scene and `pricing.ts` read. A side is covered by anything within one board
+(`panelThicknessMm`) that shares its height, whichever row it is in — so a wall
+unit is buried against a tall unit, and a lifted base is not buried by the one
+below it. Two rules EzCabinet confirmed on 2026-09-13: a tall unit's side beside a shorter
+cabinet counts as covered, and `G-UEnd_(L)/(R)` is the carcass side, so panels
+are charged on top of a design's all-in price, not inside it.
 
 **The measuring tool snaps to whichever geometry is actually drawn.**
 `snapToCabinet` takes the drafted mesh's group boxes when one has loaded and
@@ -299,6 +306,7 @@ Mid-range Android is the target device.
 - `dpr={[1, 2]}`
 - No real-time shadows. One directional light, one ambient, one soft blurred plane beneath the unit
 - **One grayscale grain texture, tinted per finish via material colour.** `public/grain.png` is 512², ~54KB, generated by `pnpm generate:grain`, and every surface in the scene shares it. Do not ship a separate 2K PBR set per finish — eight finishes of 2K maps will destroy load time on mobile data
+- **The floor is a second greyscale tile, `public/floor.png`**, drawn by the same script: SPC planks (1220 × 180mm, staggered joints, micro-bevel) tinted oak in `Room.tsx`. A generated woodgrain is allowed there and only there — the floor is room context, not a board anyone is sold
 - **A finish can override that with a real decor photo.** The `finish:<id>` site-image slot feeds both the landing swatch and the 3D door, so uploading one supplier decor scan makes the strip and the cabinet show the same board. The photo becomes the front's `map` with the material colour set to white; the grain tile stays on as the roughness map. Absent an upload, the generated grain tinted by `finish.hex` is the fallback — see `components/planner/grain.ts`.
 - **Decor scans are the supplier's IP.** Board suppliers (Max World and the like) publish decor images for their own catalogue; they are production print masters, not stock photography. Get written permission before putting one on a public page — for a fabricator that buys the board this is normally just a request to the rep
 - **The geometry is not the problem; the textures are.** Measured on the client's own export: a whole wall run is 176 KB of binary geometry, one cabinet ~25 KB (~13 KB gzipped). One decor scan is 178 KB. Budget accordingly — the reflex to cut triangles is aimed at the wrong thing here.
@@ -360,7 +368,7 @@ PostHog **Cloud EU**, installed from the Vercel Marketplace, so we can see where
 
 - **One module:** `lib/analytics.ts` — `track`, `captureError`, consent. `posthog-js` is imported on idle, never on the LCP path. `<Analytics>` mounts in `app/[lang]/layout.tsx` only; **admin is not tracked**.
 - **Through our origin:** `next.config.ts` rewrites `/api/ph/*` to the EU hosts, so ad blockers do not hide drop-offs. `/api/` already bypasses the locale redirect and the admin gate. The region is hardcoded there and in `analytics.ts` because PostHog fixes it at install.
-- **Consent (PDPA s.129):** cookieless until the visitor accepts (`opt_out_capturing_by_default` + `cookieless_mode: "on_reject"` — drop the first and "pending" sets cookies). Accepting enables cookies and the error-triggered replay. `/[lang]/privacy` is a **draft** for Infinite Cabinet's counsel.
+- **Consent (PDPA s.129):** cookieless until the visitor accepts (`opt_out_capturing_by_default` + `cookieless_mode: "on_reject"` — drop the first and "pending" sets cookies). Accepting enables cookies and the error-triggered replay. `/[lang]/privacy` is a **draft** for EzCabinet's counsel.
 - **Never send form fields.** No `identify()` with phone or email, nothing a customer types in any event payload. Replay masks inputs.
 - **Journey events** are a typed union in `analytics.ts`, fired from existing handlers — one per customer decision, never per pointer move. `quote_submitted` fires after `POST /api/orders` answers 201 — a placed order, not a button press.
 - **Breakage:** `error.tsx`, `global-error.tsx`, WebGL context loss in `PlannerScene`, and mesh-load failures in `DesignedCabinet` (the procedural fallback hides them on screen).
@@ -401,7 +409,7 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
 
 ## Open questions — resolve before trusting pricing.ts
 
-- **How does Infinite Cabinet actually price cabinets?** The engine models it **per design, all-in** — each uploaded design carries its own price with its door included, door styles add a per-width surcharge, worktop by the running foot. A customer cannot take a door off to pay less. Confirm that matches their price list.
+- **How does EzCabinet actually price cabinets?** The engine models it **per design, all-in** — each uploaded design carries its own price with its door included, door styles add a per-width surcharge, worktop by the running foot. A customer cannot take a door off to pay less. Confirm that matches their price list.
 - **Does the public tool show a firm price or an indicative range?** Sales teams often resist public exact pricing. This is a business decision and it changes the UI.
 - **Their real module range** — which widths exist for each cabinet — which is now simply which designs they upload.
 - **Their real module standard** for living room, bedroom, and foyer. Only the kitchen dimensions come from a real design export; the rest are invented.
@@ -412,7 +420,7 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
   Their answer decides whether a single door's drawn name can seed its swing.
 - **Design-intake cadence.** How often do new exports arrive, and will the panel naming (`G-UEnd_(L)`, `G-Door(R)`, …) stay stable? Extraction depends on it, so a change in their drawing habits is a change to `lib/mesh`.
 - **The workshop's real street address and phone.** `WORKSHOP_ADDRESS` is
-  `"Infinite Cabinet Sdn Bhd, Klang Valley, Selangor"`, which does not geocode
+  `"EzCabinet Sdn Bhd, Klang Valley, Selangor"`, which does not geocode
   to a pin, so Lalamove cannot price a pickup from it — every delivery would be
   quoted from wherever that phrase happens to resolve to. `WORKSHOP_PHONE` is a
   placeholder, and it is the number a Lalamove driver rings from the loading bay.
@@ -420,12 +428,12 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
   derived from `WORKSHOP_PIN`, and EasyParcel prices the origin zone off them —
   a wrong postcode there is a wrong price on every parcel quote.
 - Does Prisma Postgres offer an ap-southeast region? If not, quote submission eats a transpacific round trip.
-- Does Infinite Cabinet have an EasyParcel account, and who tops up the wallet? `submit_orders` deducts at booking time and a shipment cannot be booked against an empty wallet.
+- Does EzCabinet have an EasyParcel account, and who tops up the wallet? `submit_orders` deducts at booking time and a shipment cannot be booked against an empty wallet.
 - **Which Malaysian payment gateway?** Orders take payment by manual bank transfer until one is chosen (Billplz, Curlec, senangPay, iPay88, …). `BANK_TRANSFER` in `lib/orders/payment.ts` is a placeholder account, and the confirmation page shows it to customers — fill it in before checkout goes live.
 - **The delivery fee.** `RATES.deliveryFlatRm` is `85`, the figure from the client's Order Confirmation design; set the real one in the catalogue settings. It is flat — one fee whatever the load or the distance.
 - **What happens when a paid design changes at re-measure?** The customer pays full price up front; there is no refund or top-up flow, so a re-measure that changes the cabinets is handled outside the app today.
 - **Weights.** Parcel partners price by the kilogram. A design row's optional weight pre-fills its delivery rows; every design without one leaves the admin typing it per delivery.
-- **The privacy notice at `/[lang]/privacy` is a draft.** Infinite Cabinet is the PDPA data controller: their counsel approves the wording, and the PostHog DPA should be signed in their legal name. Ask too whether behavioural analytics counts as "systematic monitoring" under the DPO guideline.
+- **The privacy notice at `/[lang]/privacy` is a draft.** EzCabinet is the PDPA data controller: their counsel approves the wording, and the PostHog DPA should be signed in their legal name. Ask too whether behavioural analytics counts as "systematic monitoring" under the DPO guideline.
 
 ## Conventions
 

@@ -1,7 +1,40 @@
 "use client";
 
-import { Grid } from "@react-three/drei";
+import { useMemo } from "react";
+import {
+	RepeatWrapping,
+	SRGBColorSpace,
+	type Texture,
+	TextureLoader,
+} from "three";
 import { WALL_GAP_MM } from "@/lib/planner/catalogue";
+
+/**
+ * The SPC plank tile `pnpm generate:grain` draws to `public/floor.png`: two
+ * 1220mm planks long by six 180mm planks wide. Change both together.
+ */
+const FLOOR_TILE_M = { x: 2.44, z: 1.08 };
+
+/** Light natural oak, multiplied onto the greyscale tile. Matte, as SPC's UV
+ * coat is. */
+const FLOOR_COLOR = "#e3cba8";
+
+/** Lazy for the same reason as `grainSource` in `grain.ts`: no `Image` on the
+ * server. */
+let floorSource: Texture | null = null;
+
+function floorTexture(): Texture {
+	if (!floorSource) {
+		floorSource = new TextureLoader().load("/floor.png");
+		floorSource.wrapS = RepeatWrapping;
+		floorSource.wrapT = RepeatWrapping;
+		floorSource.colorSpace = SRGBColorSpace;
+		// The floor is seen at a grazing angle; without this the planks smear
+		// into a blur a metre from the wall. three clamps it to the GPU's max.
+		floorSource.anisotropy = 8;
+	}
+	return floorSource;
+}
 
 /**
  * The scribe gap, in metres, held off **every** wall and not only the back one.
@@ -48,26 +81,30 @@ export function Room({
 	/** Return walls at both ends of the run. */
 	sideWalls?: boolean;
 }) {
+	const floorWidth = width + SCRIBE * 2;
+	const floorMap = useMemo(() => {
+		const map = floorTexture().clone();
+		map.repeat.set(floorWidth / FLOOR_TILE_M.x, depth / FLOOR_TILE_M.z);
+		// A fitter starts at the wall, so a whole plank row meets it and the cut
+		// row is at the open front, not the other way round.
+		map.offset.set(0, Math.ceil(map.repeat.y) - map.repeat.y);
+		map.needsUpdate = true;
+		return map;
+	}, [floorWidth, depth]);
+
 	return (
 		<group>
 			{/* Floor and back wall run the extra scribe each side, so the corner
-			    where they meet the side walls stays closed. */}
+			    where they meet the side walls stays closed. Planks run along the
+			    wall, the way SPC is laid parallel to the longest one. */}
 			<mesh rotation={[-Math.PI / 2, 0, 0]}>
-				<planeGeometry args={[width + SCRIBE * 2, depth]} />
-				<meshStandardMaterial color="#6f7377" roughness={0.9} />
+				<planeGeometry args={[floorWidth, depth]} />
+				<meshStandardMaterial
+					map={floorMap}
+					color={FLOOR_COLOR}
+					roughness={0.7}
+				/>
 			</mesh>
-			<Grid
-				position={[0, 0.003, 0]}
-				args={[width, depth]}
-				cellSize={0.3}
-				cellThickness={0.8}
-				cellColor="#9aa0a6"
-				sectionSize={1.2}
-				sectionThickness={1.1}
-				sectionColor="#aab0b6"
-				fadeDistance={100}
-				fadeStrength={0}
-			/>
 
 			<mesh position={[0, height / 2, -depth / 2]}>
 				<planeGeometry args={[width + SCRIBE * 2, height]} />

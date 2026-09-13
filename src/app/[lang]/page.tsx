@@ -676,7 +676,7 @@ export default async function Home({
 						</p>
 						<div className="flex flex-col gap-2.5">
 							<a
-								href="mailto:hello@infinitecabinet.com"
+								href="mailto:hello@ezcabinet.com"
 								className="text-[13px] text-neutral-300 transition-colors hover:text-white"
 							>
 								{t.landing.footer.email}

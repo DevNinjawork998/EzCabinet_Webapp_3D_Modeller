@@ -218,26 +218,113 @@ function greyscalePng(pixels, size) {
 	]);
 }
 
+// ------------------------------------------------------------------ floor --
+
+/**
+ * The room's SPC floor, as one seamless greyscale tile tinted by the material
+ * colour in `Room.tsx`.
+ *
+ * The floor is room context, not a board EzCabinet sells, so a generated
+ * woodgrain is fine here in a way it is not on a front — see `grain.ts`.
+ *
+ * Laid to a common Malaysian SPC spec: 1220 × 180mm click-lock planks, staggered
+ * end joints, a micro-bevel on every edge. The tile is two plank lengths by six
+ * plank widths — 2440 × 1080mm — so neighbouring tiles do not repeat the same
+ * board end to end. `FLOOR_TILE_MM` in `Room.tsx` must match.
+ */
+const PLANK_ROWS = 6;
+const PLANKS_PER_ROW = 2;
+
+/**
+ * Where each row's end joint falls, in plank lengths. Hand-picked so no two
+ * neighbouring rows — including the last against the first, across the tile
+ * seam — have joints closer than 0.3 of a plank (~370mm); fitters keep at least
+ * 200mm between them.
+ */
+const JOINTS = [0, 0.55, 0.25, 0.8, 0.4, 0.7];
+
+/** The bevel's dark line, in pixels, and how dark it goes. */
+const BEVEL_PX = 1.1;
+const BEVEL_DEPTH = 0.3;
+
+/** How far one board's tone may sit from the next. */
+const PLANK_TONE = 0.08;
+
+/** Grain streaks inside a board: faint, because SPC is a printed decor. */
+const STREAK_DEPTH = 0.12;
+const PLANK_FIBRE_DEPTH = 0.08;
+
+/** Noise that never needs to wrap: grain is computed per board. */
+const UNWRAPPED = 1 << 20;
+
+function floor(u, v) {
+	const rowF = v * PLANK_ROWS;
+	const row = Math.floor(rowF);
+	const t = rowF - row;
+
+	const along = u * PLANKS_PER_ROW - JOINTS[row];
+	const wrapped = ((along % PLANKS_PER_ROW) + PLANKS_PER_ROW) % PLANKS_PER_ROW;
+	const plank = Math.floor(wrapped);
+	const s = wrapped - plank;
+
+	// Each board is its own piece: its own tone, its own grain.
+	const id = row * PLANKS_PER_ROW + plank;
+	const tone = hash(id, 7) * PLANK_TONE;
+	const ox = hash(id, 11) * 1000;
+	const oy = hash(id, 13) * 1000;
+
+	// Streaks run along the board: fast across it, slow along it.
+	const warp = fbm(t * 4 + ox, s * 6 + oy, 3, UNWRAPPED, 0.25) - 0.5;
+	const band = t * 7 + warp * 1.4;
+	const bt = band - Math.floor(band);
+	const line = Math.exp(-((Math.min(bt, 1 - bt) / 0.14) ** 2));
+	const fibre = fbm(t * 40 + ox, s * 60 + oy, 2, UNWRAPPED, 0.05) - 0.5;
+
+	// Distance to the nearest board edge, in pixels, for the bevel.
+	const rowPx = SIZE / PLANK_ROWS;
+	const plankPx = SIZE / PLANKS_PER_ROW;
+	const edgePx = Math.min(
+		Math.min(t, 1 - t) * rowPx,
+		Math.min(s, 1 - s) * plankPx,
+	);
+	const bevel = Math.exp(-((edgePx / BEVEL_PX) ** 2));
+
+	const darkness =
+		tone +
+		line * STREAK_DEPTH +
+		(0.5 - fibre) * PLANK_FIBRE_DEPTH +
+		bevel * BEVEL_DEPTH;
+	return Math.max(0, Math.min(1, darkness));
+}
+
 // ------------------------------------------------------------------- main --
 
-const pixels = new Uint8Array(SIZE * SIZE);
-for (let y = 0; y < SIZE; y++) {
-	for (let x = 0; x < SIZE; x++) {
-		const value = 1 - grain(x / SIZE, y / SIZE) * (1 - DARKEST);
-		pixels[y * SIZE + x] = Math.max(0, Math.min(255, Math.round(value * 255)));
+function writeTile(name, shade) {
+	const pixels = new Uint8Array(SIZE * SIZE);
+	for (let y = 0; y < SIZE; y++) {
+		for (let x = 0; x < SIZE; x++) {
+			const value = shade(x, y);
+			pixels[y * SIZE + x] = Math.max(
+				0,
+				Math.min(255, Math.round(value * 255)),
+			);
+		}
 	}
+
+	const png = greyscalePng(pixels, SIZE);
+	writeFileSync(new URL(`../public/${name}`, import.meta.url), png);
+
+	let min = 255;
+	let max = 0;
+	for (const v of pixels) {
+		if (v < min) min = v;
+		if (v > max) max = v;
+	}
+	console.log(
+		`${name} — ${SIZE}x${SIZE} greyscale, ${(png.length / 1024).toFixed(1)} KB, values ${min}-${max}`,
+	);
 }
 
-const png = greyscalePng(pixels, SIZE);
-const out = new URL("../public/grain.png", import.meta.url);
-writeFileSync(out, png);
-
-let min = 255;
-let max = 0;
-for (const v of pixels) {
-	if (v < min) min = v;
-	if (v > max) max = v;
-}
-console.log(
-	`grain.png — ${SIZE}x${SIZE} greyscale, ${(png.length / 1024).toFixed(1)} KB, values ${min}-${max}`,
-);
+writeTile("grain.png", (x, y) => 1 - grain(x / SIZE, y / SIZE) * (1 - DARKEST));
+// Sampled at pixel centres, so a bevel on the tile edge lands on both sides.
+writeTile("floor.png", (x, y) => 1 - floor((x + 0.5) / SIZE, (y + 0.5) / SIZE));

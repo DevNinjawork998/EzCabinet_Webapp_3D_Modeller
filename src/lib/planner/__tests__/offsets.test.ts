@@ -90,3 +90,73 @@ describe("offsetsOf", () => {
 		expect(engine.offsetsOf(emptyLayout(4000), "nope")).toBeNull();
 	});
 });
+
+describe("setGap", () => {
+	it("puts a lone cabinet the typed distance off the left wall", () => {
+		const layout = withFloor({ familyId: "base-cabinet", xMm: 1000 });
+		const id = firstId(layout, "floor");
+
+		const moved = engine.setGap(layout, id, "left", 500);
+
+		expect(engine.offsetsOf(moved, id)?.leftMm).toBe(500);
+	});
+
+	it("puts it the typed distance off the right wall", () => {
+		const layout = withFloor({ familyId: "base-cabinet", xMm: 1000 });
+		const id = firstId(layout, "floor");
+
+		const moved = engine.setGap(layout, id, "right", 300);
+
+		expect(engine.offsetsOf(moved, id)?.rightMm).toBe(300);
+	});
+
+	it("measures from the neighbour, the gap the dimension line shows", () => {
+		const layout = withFloor(
+			{ familyId: "base-cabinet", xMm: 0 },
+			{ familyId: "base-cabinet", xMm: 1500 },
+		);
+		const [left, right] = [...layout.floor].sort((a, b) => a.xMm - b.xMm);
+
+		const moved = engine.setGap(layout, right.id, "left", 200);
+		const placed = moved.floor.find((p) => p.id === right.id);
+
+		expect(engine.offsetsOf(moved, right.id)?.leftMm).toBe(200);
+		expect(placed?.xMm).toBe(left.xMm + left.widthMm + 200);
+	});
+
+	it("stops flush against a neighbour rather than passing through it", () => {
+		const layout = withFloor(
+			{ familyId: "base-cabinet", xMm: 0 },
+			{ familyId: "base-cabinet", xMm: 1500 },
+		);
+		const [, right] = [...layout.floor].sort((a, b) => a.xMm - b.xMm);
+
+		const moved = engine.setGap(layout, right.id, "right", 99_999);
+
+		expect(engine.offsetsOf(moved, right.id)?.leftMm).toBe(0);
+	});
+
+	it("never hops a cabinet over its neighbour onto clear wall beyond it", () => {
+		// A mistyped 3500 for 350: the target lands clear of everything past the
+		// far neighbour, which is exactly where `moveModule` alone lets it go.
+		let layout = emptyLayout(8000);
+		for (const xMm of [0, 1500, 3000]) {
+			layout = engine.addModule(layout, "base-cabinet", xMm);
+		}
+		const [, middle, far] = [...layout.floor].sort((a, b) => a.xMm - b.xMm);
+
+		const moved = engine.setGap(layout, middle.id, "left", 3500);
+		const placed = moved.floor.find((p) => p.id === middle.id);
+
+		expect(placed?.xMm).toBe(far.xMm - middle.widthMm);
+		expect(engine.offsetsOf(moved, middle.id)?.rightMm).toBe(0);
+	});
+
+	it("ignores a figure that is not a distance", () => {
+		const layout = withFloor({ familyId: "base-cabinet", xMm: 1000 });
+		const id = firstId(layout, "floor");
+
+		expect(engine.setGap(layout, id, "left", -5)).toBe(layout);
+		expect(engine.setGap(layout, id, "left", Number.NaN)).toBe(layout);
+	});
+});

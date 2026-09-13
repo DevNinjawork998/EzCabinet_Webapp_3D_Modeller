@@ -25,7 +25,7 @@
 
 Two of the open questions in `CLAUDE.md` become blocking here, and neither is answerable from code:
 
-1. **Does Infinite Cabinet's EasyParcel account have OnDemand enabled, and is the wallet funded?** OnDemand submit deducts at booking time exactly as `submit_orders` does. Tasks 1–3 are safe to build without an answer; Task 4 onward cannot be verified against the live API without one.
+1. **Does EzCabinet's EasyParcel account have OnDemand enabled, and is the wallet funded?** OnDemand submit deducts at booking time exactly as `submit_orders` does. Tasks 1–3 are safe to build without an answer; Task 4 onward cannot be verified against the live API without one.
 2. **`WORKSHOP_PIN` is real but `WORKSHOP_PHONE` is a placeholder.** OnDemand's `waypoint[].shipment_info.phone_number` is required and is the number the driver rings from the loading bay. Booking with a placeholder produces a real driver calling a wrong number.
 
 Tasks 1–3 and 7's `measure.ts` half are pure and testable against fixtures today. Do not run Task 4–6 against production credentials until (1) is answered.
@@ -545,7 +545,7 @@ function job(over: Partial<DeliveryJob> = {}): DeliveryJob {
     customerPhone: "0123456789",
     siteAddress: "1 Jalan Test",
     addressNotes: null,
-    pickupAddress: "Infinite Cabinet Sdn Bhd",
+    pickupAddress: "EzCabinet Sdn Bhd",
     siteLat: 3.0678442,
     siteLng: 101.6247002,
     pickupLat: 2.9848868,
@@ -1187,7 +1187,7 @@ describe("ondemandSubmitBody", () => {
 
   it("rings the workshop from the loading bay, not the customer", () => {
     const body = ondemandSubmitBody(job(), "EP-CS09", "q1");
-    expect(body.waypoint[0].shipment_info.name).toBe("Infinite Cabinet");
+    expect(body.waypoint[0].shipment_info.name).toBe("EzCabinet");
     expect(body.waypoint[1].shipment_info.name).toBe("Tan");
     expect(body.waypoint[1].shipment_info.phone_number).toBe("123456789");
     expect(body.waypoint[1].shipment_info.phone_number_country_code).toBe("MY");
@@ -1357,7 +1357,7 @@ export function ondemandSubmitBody(
         remark: `Delivery ${job.number}`,
         item,
         shipment_info: {
-          name: "Infinite Cabinet",
+          name: "EzCabinet",
           // The workshop's own number, emphatically not the customer's: this is
           // who a driver rings from the loading bay.
           ...phoneParts(WORKSHOP_PHONE, "workshop's"),

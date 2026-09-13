@@ -480,6 +480,30 @@ export function CatalogueSettings({
 							})
 						}
 					/>
+					{(
+						[
+							["endPanelBaseRm", "End panel RM, base unit"],
+							["endPanelWallRm", "End panel RM, wall unit"],
+							["endPanelTallRm", "End panel RM, tall unit"],
+							["skirtingRmPerFt", "Skirting RM per running foot"],
+							["ceilingTrimRmPerFt", "Ceiling trim RM per running foot"],
+						] as const
+					).map(([key, label]) => (
+						<Num
+							key={key}
+							label={label}
+							value={ratesOf(draft)[key]}
+							onChange={(v) =>
+								edit((n) => {
+									n.rates = {
+										worktopRmPerFt: ratesOf(n).worktopRmPerFt,
+										...n.rates,
+										[key]: v,
+									};
+								})
+							}
+						/>
+					))}
 				</div>
 			</SectionCard>
 

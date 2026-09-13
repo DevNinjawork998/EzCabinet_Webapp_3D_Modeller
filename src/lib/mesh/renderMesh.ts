@@ -20,7 +20,7 @@ import {
  * The drafted cabinet, ready to draw.
  *
  * This is the change of direction the whole planner turns on: the customer sees
- * the model Infinite Cabinet's drafter actually drew, not a box rebuilt from a
+ * the model EzCabinet's drafter actually drew, not a box rebuilt from a
  * count of shelves. The drawing already exists — re-deriving it from eleven
  * numbers was both more work and less faithful, and it is why a Häfele Axilo 48
  * leveller was rendering as a plain grey cylinder.

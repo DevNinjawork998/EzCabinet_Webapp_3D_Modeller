@@ -25,7 +25,7 @@ export const SWATCH_ZOOM = `${Math.round((PHOTO_SHEET_MM / SWATCH_WIDTH_MM) * 10
  *
  * A finish looks like real board only when the surface *is* real board, so
  * where we have the supplier's decor scan the planner uses it in place of the
- * generated grain. These are the boards Infinite Cabinet actually buys, which
+ * generated grain. These are the boards EzCabinet actually buys, which
  * is what makes the planner's swatch worth trusting.
  *
  * This is only the default. An admin upload to the `finish:<id>` site-image

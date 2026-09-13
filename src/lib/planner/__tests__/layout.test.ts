@@ -932,6 +932,49 @@ describe("endPanels", () => {
 		const tall = addModule(layout, "tall-cabinet", 1000, "t1", 600);
 		expect(endPanels(tall).every((p) => p.kind === "tall")).toBe(true);
 	});
+
+	const sidesOf = (l: PlannerLayout, id: string) =>
+		endPanels(l)
+			.filter((p) => p.moduleId === id)
+			.map((p) => p.side);
+
+	// A tall unit lives in the floor row but stands as high as the wall row, so
+	// the rows cannot be judged apart: the wall unit's side is buried in it.
+	it("clads no wall-unit side hung flush against a tall unit", () => {
+		let run = addModule(layout, "tall-cabinet", 0, "t1", 600);
+		run = addModule(run, "wall-cabinet", 600, "w1", 600);
+
+		expect(sidesOf(run, "w1")).toEqual(["right"]);
+		expect(sidesOf(run, "t1")).toEqual(["left"]);
+	});
+
+	// EzCabinet's rule (2026-09-13): the strip of a tall side still
+	// showing above a base beside it is not clad.
+	it("clads neither touching side of a tall unit and a base", () => {
+		let run = addModule(layout, "tall-cabinet", 0, "t1", 600);
+		run = addModule(run, "base-cabinet", 600, "b1", 900);
+
+		expect(sidesOf(run, "t1")).toEqual(["left"]);
+		expect(sidesOf(run, "b1")).toEqual(["right"]);
+	});
+
+	it("clads both facing sides once a base is lifted clear of its neighbour", () => {
+		let run = addModule(layout, "base-cabinet", 0, "b1", 900);
+		run = addModule(run, "base-cabinet", 900, "b2", 900);
+		expect(endPanels(run)).toHaveLength(2);
+
+		const lifted = setHangAt(run, "b2", 1200);
+		expect(lifted.floor.find((p) => p.id === "b2")?.hangAtMm).toBe(1200);
+		expect(endPanels(lifted)).toHaveLength(4);
+	});
+
+	it("treats a gap narrower than one board as touching", () => {
+		let run = addModule(layout, "base-cabinet", 0, "b1", 900);
+		run = addModule(run, "base-cabinet", 2000, "b2", 900);
+
+		expect(endPanels(moveModule(run, "b2", 910))).toHaveLength(2);
+		expect(endPanels(moveModule(run, "b2", 920))).toHaveLength(4);
+	});
 });
 
 describe("sizing a placed cabinet", () => {

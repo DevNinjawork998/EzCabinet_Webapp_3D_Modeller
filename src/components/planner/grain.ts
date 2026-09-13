@@ -19,7 +19,7 @@ import { PHOTO_SHEET_MM } from "@/lib/planner/finishTextures";
  * multiplying the finish colour, which drew woodgrain onto every finish in the
  * catalogue — including the three that are paint (`dulux-tapestry-beige`,
  * `color-soft-gray`, `color-knoxville-green`, whose ids say so). A generated
- * grain pattern is not a material Infinite Cabinet sells: the admin decides
+ * grain pattern is not a material EzCabinet sells: the admin decides
  * what is on offer, and a customer must never be shown a board that does not
  * exist. So figure now comes only from a real supplier scan, in
  * `useFrontSurface`, and this tile only ever varies how the light catches.
@@ -186,6 +186,23 @@ export function useGrain(
 }
 
 /**
+ * Where in the decor sheet a cabinet's fronts are cut from, 0-1.
+ *
+ * Hashed from the cabinet's id, never its position. It used to be read off
+ * where the cabinet stood, which is not stable at all: a drag moves it every
+ * frame, so the photograph slid across the door as it went. The board is cut
+ * once; moving the cabinet does not re-cut it.
+ */
+export function sheetOffsetOf(id: string): number {
+	// FNV-1a: a spread of values from ids that differ by one character.
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < id.length; i++) {
+		hash = Math.imul(hash ^ id.charCodeAt(i), 0x01000193);
+	}
+	return (hash >>> 0) / 0x1_0000_0000;
+}
+
+/**
  * The material for a cabinet front.
  *
  * When the client has uploaded a decor photo for this finish, that photograph
@@ -207,8 +224,7 @@ export function useFrontSurface(
 	height: number,
 	finishHex: string,
 	/** Stable per-door value, 0-1, deciding where in the sheet this one is cut
-	 * from. Its position along the wall does fine — neighbours differ, and it
-	 * stays put when the layout re-renders. */
+	 * from — see `sheetOffsetOf`. */
 	offset = 0,
 ) {
 	const figure = useGrain(direction, width, height);

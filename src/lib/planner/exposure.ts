@@ -50,6 +50,9 @@ export function exposedSides(
 	index: number,
 	/** Omit when the run's ends stand in open space, which is the default. */
 	walls?: EndWalls,
+	/** How close counts as touching. The engine passes one board's thickness:
+	 * a gap too narrow to take a panel shows no drilled side anyone can see. */
+	touchingMm = TOUCHING_MM,
 ): ExposedSides {
 	const self = positions[index];
 	if (!self) return FULLY_EXPOSED;
@@ -65,16 +68,16 @@ export function exposedSides(
 		if (i === index) continue;
 		const other = positions[i];
 		const otherEnd = other.xMm + other.widthMm;
-		if (Math.abs(otherEnd - self.xMm) <= TOUCHING_MM) left = false;
-		if (Math.abs(other.xMm - selfEnd) <= TOUCHING_MM) right = false;
+		if (Math.abs(otherEnd - self.xMm) <= touchingMm) left = false;
+		if (Math.abs(other.xMm - selfEnd) <= touchingMm) right = false;
 	}
 
 	// A wall buries a side exactly as a neighbour does, and the same tolerance
 	// decides it: these are the run's own end coordinates, so "touching" here
 	// means the same thing it means between two cabinets.
 	if (walls?.enclosed) {
-		if (Math.abs(self.xMm) <= TOUCHING_MM) left = false;
-		if (Math.abs(walls.wallWidthMm - selfEnd) <= TOUCHING_MM) right = false;
+		if (Math.abs(self.xMm) <= touchingMm) left = false;
+		if (Math.abs(walls.wallWidthMm - selfEnd) <= touchingMm) right = false;
 	}
 
 	return { left, right };
