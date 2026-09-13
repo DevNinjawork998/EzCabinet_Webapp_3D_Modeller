@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Libre_Caslon_Display } from "next/font/google";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { Analytics } from "@/components/Analytics";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { getDictionary } from "@/lib/copy/dictionary";
 import { htmlLang, isLocale, LOCALES } from "@/lib/copy/locales";
@@ -79,6 +80,7 @@ export default async function RootLayout({
 					<LanguageSwitcher current={lang} label={dict.common.language} />
 				</Suspense>
 				{children}
+				<Analytics copy={dict.consent} lang={lang} />
 			</body>
 		</html>
 	);

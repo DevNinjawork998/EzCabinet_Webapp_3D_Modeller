@@ -12,11 +12,11 @@ Reference product: IKEA's PAX planner. Not the full IKEA room planner — one ro
 
 The first build was a **wardrobe** configurator: a five-step stepper that split one opening into bays, at `/viewer`, on an engine in `lib/wardrobe`. It was superseded by the room planner in August 2026 and deleted (commit `5b2f0e7`). If you find a doc, comment, or branch referring to `/viewer`, `lib/wardrobe`, `components/configurator`, bays, or the `WARDROBE` product — that is the old design. Do not rebuild it. `git show 5b2f0e7^` has it if you need to read it.
 
-The wardrobe survives only as one **family** in the planner catalogue (`id: "wardrobe"`), a plain box with no interior fit-out.
+The wardrobe survives only as a seed family (`id: "wardrobe"`) in `lib/planner/catalogue.ts`, which tests use as a fixture.
 
 ## Status
 
-Phase 0 (catalogue + pricing spec with client) not yet complete — see Open questions. The engine, the planner UI, and the admin catalogue surface are built. A design uploaded to the library now reaches the planner: `POST /api/admin/cabinet-designs/[id]/publish` merges it into a DRAFT catalogue version, which an admin publishes. Lead capture is the remaining Phase 3 work.
+Phase 0 (catalogue + pricing spec with client) not yet complete — see Open questions. The engine, the planner UI, and the admin catalogue surface are built. `/admin/cabinet-designs` is the one catalogue screen: each uploaded design is one cabinet, filed under the rooms that offer it, and `POST /api/admin/cabinet-designs/publish` rebuilds the catalogue from the design rows (`lib/catalogue/buildCatalogue.ts`). Lead capture is the remaining Phase 3 work.
 
 **Confirmed client requirement (resolved):** Infinite Cabinet designs in SketchUp and asked for "upload SketchUp designs so we can maintain new configurations." It is resolved the literal way: the planner **renders the model they drew** — see [3D](#3d). This reversed an earlier decision to rebuild each cabinet procedurally from extracted numbers; that section carries the measurements that changed it.
 
@@ -33,7 +33,7 @@ The dependency list is `package.json`. The two that need saying:
 
 ### The core rule: the layout document is the single source of truth
 
-A design is a set of cabinets placed in rows against one wall. Each placed cabinet references a **family** (what it is) and a **size** (how wide, priced on its own rung). Everything else — 3D geometry, price, quote, and eventually the cutting list — is **derived** from that JSON. Nothing is stored twice.
+A design is a set of cabinets placed in rows against one wall. Each placed cabinet references a **family** — one uploaded design — and its width. Everything else — 3D geometry, price, quote, and eventually the cutting list — is **derived** from that JSON. Nothing is stored twice.
 
 ```
 Layout document (JSON)
@@ -45,27 +45,30 @@ Layout document (JSON)
   cabinet meshes (fetched)  ·  price (server)  ·  share link  ·  SKU list (Phase 4)
 ```
 
-### Dimensions are stepped, not continuous
+### One design, one cabinet
 
-The customer does not drag a free slider. Each family carries a **size ladder** — a fixed set of widths, each with its own price. This is deliberate and load-bearing:
+The customer does not drag a slider or step through a size ladder. Infinite Cabinet draws **one export per width** — BC 600, BC 800, BC 900 — and each export is its own cabinet: its own name, all-in price (door included), box and drawn model. A catalogue family is exactly one design with exactly one size, and its id is the design's id. This is deliberate:
 
-- It matches how Infinite Cabinet actually manufactures — standard module sizes, not arbitrary cuts.
-- It keeps pricing and the eventual BOM tractable — a finite grid of validated combinations, not a continuous space.
-- It is what makes rendering the drafted model possible at all: the client draws one export per width, so every rung has a real file behind it.
+- It matches how Infinite Cabinet manufactures — standard modules, each a SKU.
+- It is what makes rendering the drafted model 1:1 possible: every cabinet has a real file behind it.
+- The price a customer sees is the one the admin typed, and the Phase 4 SKU list falls straight out of the layout.
 
-Ladders live in the catalogue. `layout.ts` places and collides against them; the UI presents them as discrete choices (stepper / segmented control), never a raw slider.
+An earlier design grouped the widths into one family with a ladder, matched by shape. On the client's first uploads it folded BC 600 / 800 / 900 into the seed's invented `base-cabinet`, kept that family's invented prices and box, and no screen could tell which cabinet was real. Do not bring the ladder back.
+
+`familySchema.sizes` is still an array and `layout.ts` still places against it, so a multi-width family (the seed, older published versions) still works; the resize control only shows when a family has more than one size. The add-cabinet menu groups cabinets by the design library's category.
 
 ### Directory layout
 
 ```text
 src/
   lib/planner/           ← PURE TypeScript. No React, no three.js imports.
-    layout.ts            ← placement, collision, snapping, starter layouts
+    layout.ts            ← placement, collision, snapping
     parts.ts             ← every box a cabinet is drawn from, as numbers
     exposure.ts          ← which outer sides of a cabinet nothing sits against
   lib/catalogue/         ← DB-backed catalogue: read path, versions, diffs, blob
     versions.ts          ← createDraftVersion, the one place a DRAFT is numbered
-    publishDesigns.ts    ← designs → one merge, one draft (single and batch)
+    convertDesign.ts     ← one upload → fit-out + render mesh on the row
+    buildCatalogue.ts    ← design rows → the catalogue, rebuilt on every publish
     siteImages.ts        ← homepage/finish photo slots, derived from the catalogue
   lib/logistics/         ← delivery jobs and the logistics partners that move them
     carriers.ts          ← the partner vocabulary; isomorphic, no secrets
@@ -86,15 +89,14 @@ src/
     roles.ts             ← what each panel is: naming table, geometric fallback
     strategies.ts        ← flat panels → cabinets, three strategies best-first
     extract.ts           ← cabinets → CatalogueDraft (no money, ever)
-    read.ts              ← the whole run-intake path in one call
+    read.ts              ← whole-run intake; no caller since /admin/import went
     measureDesign.ts     ← one file = one cabinet, for the design library
     renderMesh.ts        ← OBJ → grouped binary geometry the planner draws
-    mergeIntoCatalogue.ts ← confirmed draft folded into the live catalogue
   components/planner/    ← R3F scene and the planner screens
     DesignedCabinet.tsx  ← draws the drafted mesh; Cabinet.tsx is the fallback
   components/admin/      ← admin chrome, DesignViewer
-  app/admin/             ← catalogue editor, cabinet designs, import, site
-                           content, tutorials
+  app/admin/             ← cabinet designs (the whole catalogue), logistics,
+                           site content, tutorials
   app/api/               ← admin + catalogue + site-image endpoints
 ```
 
@@ -108,9 +110,10 @@ If a change to `lib/planner` requires importing React or three.js, the change is
 
 ### The catalogue is a parameter, never a global
 
-`catalogue.ts` holds the **seed**: the data this repo ships, the disaster-recovery
-copy, and the fallbacks (`CONSTRUCTION`, `RATES`) that fill in whatever a
-published catalogue omits. `PLANNER_CATALOGUE` is frozen. Nothing swaps it.
+`catalogue.ts` holds the **seed**: the settings a fresh database starts with
+(door styles, finishes, rooms), the invented families tests use as fixtures, and
+the fallbacks (`CONSTRUCTION`, `RATES`) that fill in whatever a published
+catalogue omits. The seed publishes no cabinets. `PLANNER_CATALOGUE` is frozen. Nothing swaps it.
 
 The live catalogue comes from the published `CatalogueVersion` and is passed
 explicitly to the three things that consume it:
@@ -142,7 +145,7 @@ published. "Which catalogue is live" is now a value with an owner.
 - **`schemaVersion` on every stored document.** Public share links must survive schema changes. A customer's WhatsApp link rendering wrong is a lost sale.
 - **Zod is the single source of truth for types.** Define the schema once, infer TS types from it, validate every API payload. Malformed input on a public endpoint is guaranteed.
 - **Sizes are validated against the family's ladder.** Reject off-ladder widths server-side.
-- **The catalogue lives in the database, seeded from the repo.** `lib/planner/catalogue.ts` is the seed and the disaster-recovery copy; the live values come from the published `CatalogueVersion`. Ship catalogue changes as their own commit so price history stays greppable.
+- **The catalogue lives in the database.** Cabinets and their prices are `CabinetDesign` rows, rebuilt into a `CatalogueVersion` on every publish — the version table is the price history. The disaster-recovery copy for cabinets is Postgres plus the design files in Blob; `lib/planner/catalogue.ts` seeds only settings. Ship seed changes as their own commit.
 
 ## 3D
 
@@ -160,7 +163,7 @@ survive contact with the numbers:
 | The old objection | What is actually true |
 | --- | --- |
 | "Heavy web geometry that fights the mobile budget" | The client's whole wall run is **8,058 verts / 13,896 triangles**. As binary that is **176 KB** — about what *one* of their decor photos costs (`Rhone Oak.jpg` is 178 KB). One cabinet is ~25 KB, ~13 KB gzipped. The old figure was measuring OBJ *text*, which is ASCII floats at ~6× the binary. |
-| "A baked mesh cannot resize to the size ladder" | True, and irrelevant: the ladder was never continuous. The customer picks from a fixed set of widths, and the client already draws **one export per width** — BC 800, BC 900, BC 1000. The ladder *is* the set of files. |
+| "A baked mesh cannot resize to the size ladder" | True, and irrelevant: a cabinet never resizes. The client draws **one export per width** — BC 800, BC 900, BC 1000 — and each is its own cabinet. |
 | "No parameters, so it can never produce a price or a BOM" | Price and BOM come from the layout document and the catalogue row. Geometry never fed them and still does not. The mesh is purely visual. |
 
 ### What is drawn from a file, and what is not
@@ -171,7 +174,7 @@ survive contact with the numbers:
 | Room shell — floor, walls, ceiling | procedural. No file describes the customer's room |
 | Worktop spanning a run | procedural. It crosses cabinets, so no single export has it |
 | Finish, door style | **our** materials, painted per classified mesh group |
-| Price | the catalogue row |
+| Price | the design row, all-in; door styles add a surcharge |
 
 ### Classified at intake, not at runtime
 
@@ -230,15 +233,13 @@ planner proved it. One rung of thirty had a design, the kitchen starter layout
 happened to place none of them, so every cabinet on screen was fallback and the
 generic leg read as a broken feature rather than a missing file.
 
-So `/admin/catalogue` badges every rung — the design and its triangle count, or
-"no design · drawn procedurally", with a per-family count in the subtitle — and
-`/admin/cabinet-designs` shows what each design actually converted to. A rung
-pointing at a design row that no longer exists gets its own louder state, since
-nothing else would ever surface that.
+So `/admin/cabinet-designs` shows, on every design row, what it converted to —
+its triangle count, or "no mesh — drawn procedurally" — and whether it is live,
+edited but unpublished, or leaving at the next publish.
 
-**Undrafted rungs stay sellable.** Hiding them would make 1:1 a guarantee rather
-than a maybe, and it is the right end state — but only once coverage is high.
-Today it would leave the planner with one placeable cabinet.
+**A design whose file would not convert stays sellable**, drawn procedurally.
+Refusing it would make 1:1 a guarantee rather than a maybe; the admin row says
+which ones are procedural instead.
 
 ### `parts.ts`, and what it is still for
 
@@ -260,13 +261,12 @@ The leg dimensions matter more than they look. On the client's own file the feet
 are **2,248 of 2,344 triangles — 96%** of the model; the carcass is 60, the door
 24, the shelf 12. They are the one place a fallback visibly differs from the
 drawing, which is exactly what got noticed first. `geometryOf` measures them
-(57mm across, 17mm in) rather than guessing (50 and 35), so a family that
-learned geometry from *any* design improves every undrafted rung on its ladder.
+(57mm across, 17mm in) rather than guessing (50 and 35), so a design whose mesh
+failed still falls back with the right feet.
 
 Zero in either field means "not recorded" and `parts.ts` keeps its constants —
 which is why they are not defaulted to those constants in the schema. A real
-50mm foot and an unrecorded one have to stay distinguishable, because the merge
-decides whether to learn a field by whether it has ever been set.
+50mm foot and an unrecorded one have to stay distinguishable.
 
 **Exposed ends wear the door finish.** `exposure.ts` answers which outer sides of
 a cabinet have no neighbour touching them, and `PlannerScene` passes it down so
@@ -283,7 +283,7 @@ and a null there is correct rather than a race, since no mesh means procedural
 boxes are what is on screen.
 
 Onboarding a new design is a **data-entry task, not a 3D-modeling task**: name
-it, price it, push it. That is what lets one person maintain the catalogue.
+it, price it, publish it. That is what lets one person maintain the catalogue.
 
 ### Mobile performance rules
 
@@ -322,10 +322,10 @@ Test: if you could delete it and rebuild it from a `git clone`, it belongs in th
 
 ## UX flow
 
-Three screens, each with a sensible default so an impatient user lands on something that looks good in 3D. Blank canvases kill conversion.
+Three screens. Rooms open on an **empty wall**: there is no invented starter run to price, and one assembled from whatever designs exist would look random. Blank canvases still cost conversion, which is what the preset designs below are for.
 
-1. **Start** — pick a room; it opens on that room's starter layout
-2. **Studio** — drag cabinets in, resize, choose doors and finish, measure
+1. **Start** — pick a room; a room with no designs yet is shown as coming soon and cannot be picked
+2. **Studio** — drag cabinets in from a menu grouped by category, choose door style and finish, measure. A placed cabinet always wears a door style — its price includes the door
 3. **Quote** — price breakdown + request quote
 
 **No login to configure.** The email/WhatsApp gate sits at **"save & share"**, not at entry — by then the customer has sunk time into a design and will trade a phone number to keep it.
@@ -345,6 +345,18 @@ Ship 8–10 **preset designs** as their own indexable routes ("2.4m 3-door kitch
 `/tutorials` is a public DIY video library; `/admin/tutorials` uploads to Mux with `@mux/upchunk` (direct-to-Mux, so the video never passes through a function) and polls `[id]/status` until the asset is ready. `lib/mux.ts` is `server-only` — those are write credentials for the video account and must never reach a customer's bundle.
 
 This is the one place the app streams something it did not generate. It is a separate surface from the planner and shares nothing with it.
+
+### Telemetry
+
+PostHog **Cloud EU**, installed from the Vercel Marketplace, so we can see where customers drop out of the funnel and what broke in their browser. Vercel Web Analytics was rejected for this: anonymous aggregate counts, no per-visitor journeys, no replay, no alerts.
+
+- **One module:** `lib/analytics.ts` — `track`, `captureError`, consent. `posthog-js` is imported on idle, never on the LCP path. `<Analytics>` mounts in `app/[lang]/layout.tsx` only; **admin is not tracked**.
+- **Through our origin:** `next.config.ts` rewrites `/api/ph/*` to the EU hosts, so ad blockers do not hide drop-offs. `/api/` already bypasses the locale redirect and the admin gate. The region is hardcoded there and in `analytics.ts` because PostHog fixes it at install.
+- **Consent (PDPA s.129):** cookieless until the visitor accepts (`opt_out_capturing_by_default` + `cookieless_mode: "on_reject"` — drop the first and "pending" sets cookies). Accepting enables cookies and the error-triggered replay. `/[lang]/privacy` is a **draft** for Infinite Cabinet's counsel.
+- **Never send form fields.** No `identify()` with phone or email, nothing a customer types in any event payload. Replay masks inputs.
+- **Journey events** are a typed union in `analytics.ts`, fired from existing handlers — one per customer decision, never per pointer move. `quote_submitted` is a button press until Phase 3 lead capture exists; move it server-side then.
+- **Breakage:** `error.tsx`, `global-error.tsx`, WebGL context loss in `PlannerScene`, and mesh-load failures in `DesignedCabinet` (the procedural fallback hides them on screen).
+- **Alerts → Slack:** PostHog error-tracking alerts (new/reopened issue, spike) and a funnel insight alert; server 5xx via the Vercel rule in `docs/ops/vercel-5xx-alert.json`.
 
 ## Auth
 
@@ -375,15 +387,15 @@ Separate Postgres database from Factory Tracker.
 Recorded rather than fixed. Do not paper over them; fix them deliberately.
 
 1. **Drafter naming is load-bearing now.** `roles.ts` classifies mesh groups from the drafter's own names, and that classification decides which triangles take the customer's finish and which disappear on the doors-hidden toggle. A renamed group used to cost an inferred shelf count; it now costs the finish picker on that cabinet. The review table shows the classification before publish and the fallback is one material across the whole mesh, but this belongs in the Phase 0 conversation about drafting conventions.
-2. **A junk `Testing123` family, 1000–1000mm, is still in the live catalogue.** Left behind by `lib/catalogue/cabinetDesignToFamily.ts` (deleted in `84f4cb7`), which mapped a design straight to a family with a single-rung ladder; the design row it came from was deleted long ago. Harmless but visible — remove it in a catalogue-only commit.
+2. **Until the first publish after the one-design-one-cabinet change, the live catalogue is the old one** — seed families with invented prices, and the junk `Testing123` among them. The first publish from `/admin/cabinet-designs` rebuilds it from design rows and removes them all. Set the base door style's surcharge to RM 0 before that publish, or every cabinet is charged its door twice.
 3. **EasyParcel's webhooks are unsigned.** Nothing in their payload identifies the sender, so the callback URL carries a secret query token and that is the entire check — see `verifyWebhook` in `adapters/easyparcel.ts`.
 4. **`pnpm easyparcel:ping` is the only thing that checks EasyParcel's real API shape**; CI runs against recorded fixtures and cannot see a renamed field. Run it before a release that touches `lib/logistics`, or wire it to a scheduled workflow with the credentials as repository secrets. It is deliberately not in PR CI: it needs secrets in the runner, it fails on EasyParcel's downtime rather than on our bugs, and a partner outage must not block an unrelated merge.
 
 ## Open questions — resolve before trusting pricing.ts
 
-- **How does Infinite Cabinet actually price cabinets?** The engine currently models it **per unit** — each carcass size is its own priced line, each door priced by the width it covers, worktop by the running foot. Confirm that matches their price list.
+- **How does Infinite Cabinet actually price cabinets?** The engine models it **per design, all-in** — each uploaded design carries its own price with its door included, door styles add a per-width surcharge, worktop by the running foot. A customer cannot take a door off to pay less. Confirm that matches their price list.
 - **Does the public tool show a firm price or an indicative range?** Sales teams often resist public exact pricing. This is a business decision and it changes the UI.
-- **The real size ladders** per family — widths, heights, depths — from their standard modules.
+- **Their real module range** — which widths exist for each cabinet — which is now simply which designs they upload.
 - **Their real module standard** for living room, bedroom, and foyer. Only the kitchen dimensions come from a real design export; the rest are invented.
 - **What does `Door_L_` mean?** The left-hand leaf of a pair, or a door hinged
   on its left stile? `hingeSideFromName` reads the token, but only trusts it for
@@ -401,6 +413,7 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
   a wrong postcode there is a wrong price on every parcel quote.
 - Does Prisma Postgres offer an ap-southeast region? If not, quote submission eats a transpacific round trip.
 - Does Infinite Cabinet have an EasyParcel account, and who tops up the wallet? `submit_orders` deducts at booking time and a shipment cannot be booked against an empty wallet.
+- **The privacy notice at `/[lang]/privacy` is a draft.** Infinite Cabinet is the PDPA data controller: their counsel approves the wording, and the PostHog DPA should be signed in their legal name. Ask too whether behavioural analytics counts as "systematic monitoring" under the DPO guideline.
 
 ## Conventions
 

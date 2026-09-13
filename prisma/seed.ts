@@ -8,18 +8,25 @@ import { PLANNER_CATALOGUE } from "@/lib/planner/catalogue";
 import { plannerCatalogueSchema } from "@/lib/planner/catalogueSchema";
 
 /**
- * Seeds the planner catalogue as version 1, PUBLISHED, sourced from the
- * constants that still live in the repo — so a freshly seeded DB behaves
- * byte-identically to the pre-DB catalogue. This is also the
- * disaster-recovery seed: if the DB is ever lost, this reproduces exactly
- * what shipped in this commit.
+ * Seeds the planner catalogue as version 1, PUBLISHED: the settings a catalogue
+ * needs before any design exists — door styles, finishes, rooms, rates — and no
+ * cabinets. Cabinets come from the design library and are rebuilt into the
+ * catalogue on every publish, so a fresh DB opens every room as coming soon
+ * rather than on the repo's invented families.
  *
  * Idempotent: safe to re-run against a DB that already has these rows.
  */
 async function main() {
 	const seededBy = "seed";
 
-	const plannerData = plannerCatalogueSchema.parse(PLANNER_CATALOGUE);
+	const plannerData = plannerCatalogueSchema.parse({
+		...PLANNER_CATALOGUE,
+		families: [],
+		roomTypes: PLANNER_CATALOGUE.roomTypes.map((room) => ({
+			...room,
+			familyIds: [],
+		})),
+	});
 	await prisma.catalogueVersion.upsert({
 		where: { product_version: { product: "PLANNER", version: 1 } },
 		update: {},
@@ -28,7 +35,7 @@ async function main() {
 			version: 1,
 			status: "PUBLISHED",
 			data: plannerData,
-			note: "Seeded from lib/planner/catalogue.ts",
+			note: "Seeded from lib/planner/catalogue.ts — settings only, no cabinets",
 			createdBy: seededBy,
 			publishedBy: seededBy,
 			publishedAt: new Date(),

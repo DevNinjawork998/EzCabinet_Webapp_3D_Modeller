@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { convertDesign } from "@/lib/catalogue/convertDesign";
 import { prisma } from "@/lib/catalogue/db";
 import {
 	deleteMeshFile,
 	fetchMeshFile,
 	sha256Hex,
 } from "@/lib/catalogue/meshBlob";
-import { getPublishedPlannerCatalogue } from "@/lib/catalogue/store";
+import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
 
 export const runtime = "nodejs";
 
@@ -22,7 +23,7 @@ const createSchema = z.object({
 		"DRAWER_BASE",
 		"FRIDGE_HOUSING",
 	]),
-	room: z.enum(["KITCHEN", "LIVING_ROOM", "BEDROOM", "FOYER"]),
+	rooms: z.array(z.enum(["KITCHEN", "LIVING_ROOM", "BEDROOM", "FOYER"])).min(1),
 	widthMm: z.number().int().positive(),
 	heightMm: z.number().int().positive(),
 	depthMm: z.number().int().positive(),
@@ -35,28 +36,30 @@ const createSchema = z.object({
 });
 
 /**
- * The library, plus the family ids the published catalogue actually carries.
+ * The library, plus the catalogue customers see today.
  *
- * The second half is what lets the page say something true about each design.
- * `status` (PUBLISHED/ARCHIVED) only filters this table — it has never
- * controlled anything a customer sees, despite once being labelled "visible to
- * customers". Where a design really is depends on whether its `familyId` is in
- * the live catalogue, and that answer lives in a different table entirely.
+ * The page rebuilds the catalogue from these rows itself to count what is not
+ * live yet, so it needs the published document to compare against — read
+ * uncached, because it is usually asked right after a publish.
  */
 export async function GET() {
-	const [designs, catalogue] = await Promise.all([
+	const [designs, published] = await Promise.all([
 		prisma.cabinetDesign.findMany({ orderBy: { updatedAt: "desc" } }),
-		getPublishedPlannerCatalogue(),
+		readPublishedPlannerCatalogue(),
 	]);
 	return NextResponse.json({
 		designs,
-		plannerFamilyIds: catalogue.data.families.map((f) => f.id),
+		published: { version: published.version, data: published.data },
 	});
 }
 
-/** Uploads store metadata only. Geometry is parsed when a design is pushed
- * into the planner (`[id]/publish`), not on the way in — the library holds
- * designs that may never become catalogue entries. */
+/**
+ * Saves a design and converts its file in the same request.
+ *
+ * Converting here rather than at publish means a file that is not one cabinet
+ * is refused while the admin is still looking at it, instead of surfacing later
+ * as a publish failure nobody connects to the upload.
+ */
 export async function POST(request: Request) {
 	const body = await request.json();
 	const parsed = createSchema.safeParse(body);
@@ -100,5 +103,20 @@ export async function POST(request: Request) {
 		},
 	});
 
-	return NextResponse.json({ design: created });
+	const converted = await convertDesign(created);
+	if ("error" in converted) {
+		// A refused file is not a design. Keeping the row would leave a cabinet
+		// in the library that the next publish puts in front of customers.
+		await prisma.cabinetDesign.delete({ where: { id: created.id } });
+		await deleteMeshFile(blobPathname);
+		return NextResponse.json(
+			{ error: converted.error, message: converted.message },
+			{ status: converted.status },
+		);
+	}
+
+	const design = await prisma.cabinetDesign.findUnique({
+		where: { id: created.id },
+	});
+	return NextResponse.json({ design, meshNote: converted.meshNote });
 }

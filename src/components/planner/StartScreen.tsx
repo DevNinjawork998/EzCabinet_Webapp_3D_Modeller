@@ -1,18 +1,8 @@
 import { fill } from "@/lib/copy/fill";
-import { htmlLang } from "@/lib/copy/locales";
 import type { RoomTypeId } from "@/lib/planner/catalogue";
-import { computePlannerPrice } from "@/lib/planner/pricing";
-import { useCatalogue, useEngine } from "./CatalogueContext";
-import { useCopy, useLocale } from "./CopyContext";
+import { useCatalogue } from "./CatalogueContext";
+import { useCopy } from "./CopyContext";
 import { AdminLink, PlannerHeader } from "./PlannerHeader";
-
-/**
- * The two real starting points the engine has for a wall: its shipped
- * preset, or nothing. The redesign this screen is drawn from also offered an
- * "L-shape corner" — the planner is a single-wall run only (see CLAUDE.md),
- * so that option is left out rather than faked.
- */
-export type StartPreset = "starter" | "blank";
 
 const ROOM_ICON_PATHS: Record<RoomTypeId, React.ReactNode> = {
 	kitchen: (
@@ -133,34 +123,26 @@ const ROOM_ICON_PATHS: Record<RoomTypeId, React.ReactNode> = {
 	),
 };
 
+/**
+ * Pick a room, then plan it on its empty wall.
+ *
+ * A room no design is filed under yet is shown but cannot be picked: listing
+ * only the rooms that are ready would hide that the others are coming, and
+ * letting one open would drop the customer on a wall with nothing to add.
+ */
 export function StartScreen({
 	roomId,
 	onPickRoom,
-	preset,
-	onPickPreset,
 	onStart,
 }: {
 	roomId: RoomTypeId;
 	onPickRoom: (id: RoomTypeId) => void;
-	preset: StartPreset;
-	onPickPreset: (preset: StartPreset) => void;
 	onStart: () => void;
 }) {
 	const t = useCopy();
-	const locale = useLocale();
 	const catalogue = useCatalogue();
-	const { starterFor } = useEngine();
-	const room =
-		catalogue.roomTypes.find((r) => r.id === roomId) ?? catalogue.roomTypes[0];
-	const starter = starterFor(roomId);
-	const starterPrice = computePlannerPrice(starter, "strata-noir", catalogue);
-	const formatRm = (amount: number, opts?: Intl.NumberFormatOptions) =>
-		new Intl.NumberFormat(htmlLang(locale), {
-			style: "currency",
-			currency: "MYR",
-			currencyDisplay: "narrowSymbol",
-			...opts,
-		}).format(amount);
+	const plannable = (id: RoomTypeId) =>
+		(catalogue.roomTypes.find((r) => r.id === id)?.familyIds.length ?? 0) > 0;
 	const ROOM_SUBTITLE: Record<RoomTypeId, string> = {
 		kitchen: t.planner.start.roomSubtitle.kitchen,
 		living: t.planner.start.roomSubtitle.living,
@@ -195,15 +177,17 @@ export function StartScreen({
 				<div className="grid w-full max-w-3xl grid-cols-2 gap-4 sm:grid-cols-4">
 					{catalogue.roomTypes.map((option) => {
 						const active = option.id === roomId;
+						const ready = option.familyIds.length > 0;
 						return (
 							<button
 								key={option.id}
 								type="button"
+								disabled={!ready}
 								onClick={() => onPickRoom(option.id)}
-								className={`rounded-xl border-2 p-4 text-center transition ${
-									active
+								className={`rounded-xl border-2 p-4 text-center transition disabled:cursor-not-allowed disabled:opacity-50 ${
+									active && ready
 										? "border-neutral-900"
-										: "border-neutral-200 hover:border-neutral-400"
+										: "border-neutral-200 enabled:hover:border-neutral-400"
 								}`}
 							>
 								<div className="flex h-[72px] items-center justify-center">
@@ -225,83 +209,18 @@ export function StartScreen({
 								</div>
 								<p className="mt-2.5 font-semibold text-sm">{option.label}</p>
 								<p className="mt-0.5 text-neutral-500 text-xs">
-									{ROOM_SUBTITLE[option.id]}
+									{ready ? ROOM_SUBTITLE[option.id] : t.common.comingSoon}
 								</p>
 							</button>
 						);
 					})}
 				</div>
 
-				<div className="w-full max-w-3xl">
-					<p className="mb-2.5 font-medium text-neutral-600 text-sm">
-						{fill(t.planner.start.thenLayout, {
-							width: (room.defaultWallWidthMm / 1000).toFixed(1),
-						})}
-					</p>
-					<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-						<button
-							type="button"
-							onClick={() => onPickPreset("starter")}
-							className={`overflow-hidden rounded-lg border-2 text-left transition ${
-								preset === "starter"
-									? "border-neutral-900"
-									: "border-neutral-200 hover:border-neutral-400"
-							}`}
-						>
-							<div className="flex h-[100px] items-end gap-0.5 bg-[#f4f2ee] p-2.5">
-								{starter.floor.slice(0, 6).map((placed, i) => (
-									<span
-										key={placed.id}
-										className="bg-[#c9c2b5]"
-										style={{
-											flex: 1,
-											height: `${45 + ((i * 13) % 45)}%`,
-										}}
-									/>
-								))}
-							</div>
-							<div className="px-3 py-2.5">
-								<p className="font-medium text-sm">{t.planner.start.fullRun}</p>
-								<p className="mt-0.5 text-neutral-500 text-xs">
-									{fill(t.planner.start.unitsFromPrice, {
-										count: starter.floor.length + starter.wall.length,
-										price: formatRm(starterPrice.totalRm, {
-											maximumFractionDigits: 0,
-										}),
-									})}
-								</p>
-							</div>
-						</button>
-						<button
-							type="button"
-							onClick={() => onPickPreset("blank")}
-							className={`overflow-hidden rounded-lg border-2 text-left transition ${
-								preset === "blank"
-									? "border-neutral-900"
-									: "border-neutral-200 hover:border-neutral-400"
-							}`}
-						>
-							<div className="flex h-[100px] items-center justify-center bg-[#f4f2ee]">
-								<span className="text-neutral-400 text-xs">
-									{t.planner.start.startBlank}
-								</span>
-							</div>
-							<div className="px-3 py-2.5">
-								<p className="font-medium text-sm">
-									{t.planner.start.blankWall}
-								</p>
-								<p className="mt-0.5 text-neutral-500 text-xs">
-									{t.planner.start.buildItYourself}
-								</p>
-							</div>
-						</button>
-					</div>
-				</div>
-
 				<button
 					type="button"
 					onClick={onStart}
-					className="rounded-lg bg-neutral-900 px-7 py-3 font-medium text-sm text-white transition hover:bg-neutral-800"
+					disabled={!plannable(roomId)}
+					className="rounded-lg bg-neutral-900 px-7 py-3 font-medium text-sm text-white transition hover:bg-neutral-800 disabled:opacity-40"
 				>
 					{t.planner.start.cta}
 				</button>

@@ -35,20 +35,18 @@ is one flat namespace of boxes with no units and no up-axis. So:
 
 Finish names do not survive the export: materials come through as `7#752#-1`
 pointing at re-encoded texture copies. The real names survive only as the texture
-filenames in the folder, so the confirm step asks a human to name and colour
-each one. Do not try to auto-map them.
+filenames in the folder. Finishes are set by hand in the admin; do not try to
+auto-map them.
 
-## Two intake paths, one merge
+## One intake path: upload converts, publish rebuilds
 
-A whole-wall export and a single-cabinet file are different problems, so there
-are two front doors into the same merge.
-
-| | `/admin/import` | `/admin/cabinet-designs` |
-| --- | --- | --- |
-| File | a run of cabinets | one product |
-| Reader | `mesh/read.ts` → `strategies.ts` groups it | `mesh/measureDesign.ts` |
-| Size | per cabinet, found between end panels | the whole file's bounding box |
-| Then | confirm table → `mergeIntoCatalogue` | `POST [id]/publish` → `mergeIntoCatalogue` |
+**A design file is one cabinet.** `/admin/cabinet-designs` uploads it and
+`POST /api/admin/cabinet-designs` calls `lib/catalogue/convertDesign.ts` in the
+same request: `measureDesign` reads the fit-out and `renderMesh` writes the
+drawable mesh, both onto the row (`geometry`, `meshPathname`). A file that is not
+one cabinet — far wider than its row, or taller than any room — is refused and
+the row is not kept. The bytes are re-fetched from Blob; trust comes from the
+file, never from what a client claims about it.
 
 `measureDesign` deliberately skips the run-grouping. Over a lone cabinet
 `byEndPanels` measures the opening *between* the end panels, so an 800 carcass
@@ -57,42 +55,17 @@ the invoice, which is the bounding box. `coalesceParts` unions the records an
 exporter split a panel into (safe here because it is one cabinet; across a run it
 would merge neighbours).
 
-Both ends land in `mergeIntoCatalogue` and both **create a DRAFT and stop**.
-Publishing stays one deliberate act at `/admin/catalogue`, because that document
-prices real kitchens and a bad parse must never reach a customer unreviewed. The
-publish route re-fetches the bytes from Blob and re-parses them — trust comes
-from the file, never from what a client claims about it.
+**Publishing merges nothing.** `lib/catalogue/buildCatalogue.ts` rebuilds the
+catalogue's families from every active design row — one design, one family, one
+size, and the family id *is* the design id — and carries door styles, finishes,
+rates and room walls over from the published version. Name, all-in price, box
+and rooms come from the row the admin typed; only the fit-out and the mesh come
+from the file.
 
-`CabinetDesign.familyId` records which family a design merged into.
-`SizeOption.meshDesignId` records which design a *rung* is drawn from — one per
-width, because that is how the client draws them.
-
-**Several files, one draft.** `publishDesigns` takes an array, so BC 600 / BC
-800 / BC 900 become three rungs of one ladder in a single DRAFT rather than
-three stacked drafts each based on the last. `/admin/cabinet-designs` takes
-several files at once for the same reason; only SKU and price are per file,
-because only SKU and price genuinely differ between widths of the same cabinet.
-A file that will not parse fails on its own row and the rest of the batch still
-lands.
-
-## Imports are additive
-
-`mergeIntoCatalogue` can create a family and it can add a rung to an existing
-family's size ladder. **It cannot delete a family, remove a rung, or overwrite a
-`priceRm` that already has a value.** An earlier version replaced the family list
-wholesale, which meant the second import silently destroyed everything the first
-one had contributed and the client had priced. A cabinet matching an existing
-family's shape and fit-out — within 20mm, since 607 and 600 are the same carcass
-read with and without its door — extends that family's ladder at RM 0 rather
-than forking a duplicate.
-
-`meshDesignId` is the one exception, and deliberately: a price is a decision a
-human made and an import must never touch it, but a mesh id is derived cache and
-re-publishing a design after fixing its file has to replace the stale one.
-
-**`geometry` is additive one level deeper.** A family with none takes the
-design's wholesale; a family that has one keeps every field that has a value and
-fills only the ones that never did. That is not a nicety — when `legDiameterMm`
-and `legInsetMm` were added, `base-cabinet` already carried a `geometry` learned
-before they existed, so the old all-or-nothing rule would have left it guessing
-a 50mm foot forever with no re-upload able to correct it.
+This replaced `mergeIntoCatalogue` and the whole-run `/admin/import` (deleted
+September 2026), which matched designs into existing families by shape within
+20mm. On the first real uploads it folded BC 600 / 800 / 900 into the seed's
+invented `base-cabinet`, kept that family's invented prices and 607×880 box
+over the ones typed at upload, and left no screen showing which cabinet was
+real. `read.ts` and the run strategies in `strategies.ts` are left over from that
+import with no caller in the app; remove them once that is certain.

@@ -12,7 +12,9 @@ import {
 	plannerEngine,
 	setDoor,
 } from "../layout";
+import { furnished } from "./furnished";
 
+const engine = plannerEngine(PLANNER_CATALOGUE);
 const {
 	addModule,
 	removeModule,
@@ -23,8 +25,7 @@ const {
 	setWallToWall,
 	setWallWidth,
 	setWidth,
-	starterFor,
-} = plannerEngine(PLANNER_CATALOGUE);
+} = engine;
 
 import {
 	ceilingTrimFt,
@@ -78,8 +79,16 @@ describe("per-unit pricing", () => {
 		expect(price(narrower).totalRm).toBeLessThan(before);
 	});
 
-	it("charges nothing for a door until one is chosen", () => {
-		const bare = price(run());
+	it("charges nothing for a cabinet whose door was taken off", () => {
+		// A placed cabinet arrives wearing the base style now; a layout saved
+		// before that, or one with its fronts removed, still prices with none.
+		const doored = run();
+		const bare = price(
+			[...doored.floor, ...doored.wall].reduce(
+				(layout, placed) => setDoor(layout, placed.id, null),
+				doored,
+			),
+		);
 		expect(bare.cabinets.every((line) => line.doorRm === 0)).toBe(true);
 		const doors = bare.categories.find((line) => line.id === "doors");
 		expect(doors?.amountRm).toBe(0);
@@ -144,7 +153,7 @@ describe("worktop", () => {
 	});
 
 	it("is nothing in a room whose products have no worktop", () => {
-		const bedroom = starterFor("bedroom");
+		const bedroom = furnished(engine, "bedroom");
 		expect(worktopFt(bedroom, PLANNER_CATALOGUE)).toBe(0);
 	});
 
@@ -266,9 +275,9 @@ describe("catalogue is a real parameter, not just an import default", () => {
 });
 
 describe("every room prices", () => {
-	it("gives each room's starter a believable, non-zero total", () => {
+	it("gives a furnished run in each room a believable, non-zero total", () => {
 		for (const room of PLANNER_CATALOGUE.roomTypes) {
-			const result = price(starterFor(room.id));
+			const result = price(furnished(engine, room.id));
 			expect(result.totalRm).toBeGreaterThan(0);
 			// A single wall of cabinetry should not read as a car.
 			expect(result.totalRm).toBeLessThan(30000);

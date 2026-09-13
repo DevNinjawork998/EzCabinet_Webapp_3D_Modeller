@@ -1,0 +1,5 @@
+{
+	"name": "Planner server 5xx anomalies",
+	"alertTypes": [{ "type": "error_anomaly", "filter": "statusGroup eq '5xx'" }],
+	"projectId": "projectId in ('prj_VSW1GYQfIENGgyovB0FX3OUhNq0h')"
+}

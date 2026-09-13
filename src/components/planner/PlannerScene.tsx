@@ -23,6 +23,7 @@ import {
 	Vector2,
 	Vector3,
 } from "three";
+import { captureError } from "@/lib/analytics";
 import { clampPanTarget, type RoomBoundsMm } from "@/lib/planner/camera";
 import {
 	CEILING_TRIM_MM,
@@ -1756,6 +1757,13 @@ export default function PlannerScene({
 			// Without this, dragging a cabinet scrolls the page on Android.
 			style={{ touchAction: "none" }}
 			onPointerMissed={() => onSelectAction(null, false)}
+			// The mid-range-Android failure mode: the GPU drops the context and the
+			// scene goes blank without throwing, so nothing else would report it.
+			onCreated={({ gl }) =>
+				gl.domElement.addEventListener("webglcontextlost", () =>
+					captureError(new Error("webgl context lost")),
+				)
+			}
 		>
 			<color attach="background" args={["#f4f2ee"]} />
 			{/* Was 1.5 + 2.0, which clipped every mid-tone: Rhone Oak rendered

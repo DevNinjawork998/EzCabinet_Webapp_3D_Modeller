@@ -13,6 +13,7 @@ export const ms: Dictionary = {
 		next: "Seterusnya",
 		close: "Tutup",
 		language: "Bahasa",
+		comingSoon: "Akan datang",
 	},
 	landing: {
 		nav: {
@@ -36,7 +37,7 @@ export const ms: Dictionary = {
 			alt: "Dapur Infinite Cabinet yang telah siap",
 		},
 		facts: {
-			starterKitchenLabel: "Set dapur permulaan",
+			cabinetsFromLabel: "Kabinet dari",
 			typicalDeliveryValue: "4-6 minggu",
 			typicalDeliveryLabel: "Tempoh penghantaran biasa",
 			warrantyValue: "5 tahun",
@@ -102,6 +103,7 @@ export const ms: Dictionary = {
 			tutorials: "Tutorial",
 			contactHeading: "Hubungi kami",
 			email: "hello@infinitecabinet.com",
+			privacy: "Privasi",
 			adminSignIn: "Log masuk admin",
 			copyright: "© 2026 {brand}. Hak cipta terpelihara.",
 		},
@@ -157,7 +159,7 @@ export const ms: Dictionary = {
 		start: {
 			heading: "Bilik apa yang anda ingin rancang?",
 			subtitle:
-				"Pilih satu untuk bermula dengan saiz Infinite Cabinet sebenar dan susun atur yang sudah sedia di dinding anda.",
+				"Pilih satu untuk bermula pada dinding kosong dengan saiz Infinite Cabinet sebenar.",
 			roomIconAlt: "Ikon {room}",
 			roomSubtitle: {
 				kitchen: "Saiz Infinite Cabinet sebenar",
@@ -165,13 +167,6 @@ export const ms: Dictionary = {
 				bedroom: "Almari pakaian",
 				foyer: "Kabinet kasut & bangku",
 			},
-			thenLayout:
-				"Kemudian, susun atur permulaan untuk dinding sepanjang {width} m",
-			fullRun: "Susunan penuh",
-			unitsFromPrice: "{count} unit · dari {price}",
-			startBlank: "Mula kosong",
-			blankWall: "Dinding kosong",
-			buildItYourself: "Bina sendiri",
 			cta: "Mula merancang",
 		},
 		room: {
@@ -232,6 +227,14 @@ export const ms: Dictionary = {
 			heading: "Tambah kabinet",
 			subtitle: "Seret ke dinding. Saiz dan pintu boleh dipilih kemudian.",
 			sizeRange: "{min}–{max}mm · dari {price}",
+			widthPrice: "Lebar {width}mm · {price}",
+			categories: {
+				BASE_CABINET: "Kabinet bawah",
+				WALL_CABINET: "Kabinet dinding",
+				TALL_CABINET: "Kabinet tinggi",
+				DRAWER_BASE: "Kabinet laci",
+				FRIDGE_HOUSING: "Kabinet peti sejuk",
+			},
 		},
 		canvas: {
 			selectHint:
@@ -284,7 +287,6 @@ export const ms: Dictionary = {
 			width: "Lebar",
 			noRoom: "tiada ruang",
 			front: "Pintu",
-			noDoor: "Tiada pintu",
 			swing: "Bukaan",
 			closeDoor: "Tutup pintu",
 			openDoor: "Buka pintu",
@@ -454,5 +456,38 @@ export const ms: Dictionary = {
 			CANCELLED: "Dibatalkan",
 			FAILED: "Gagal",
 		},
+	},
+	consent: {
+		title: "Bantu kami menambah baik perancang",
+		body: "Benarkan kami merekod cara anda menggunakan perancang dan sebarang ralat, diproses oleh PostHog di EU (di luar Malaysia). Apa-apa yang anda taip tidak disertakan. Jika anda menolak, kami hanya mengira lawatan, tanpa kuki.",
+		accept: "Benarkan",
+		reject: "Tolak",
+		learnMore: "Notis privasi",
+	},
+	privacy: {
+		title: "Notis privasi",
+		draft:
+			"Draf — menunggu semakan Infinite Cabinet Sdn Bhd sebelum berkuat kuasa.",
+		intro:
+			"Notis ini menerangkan apa yang direkod oleh perancang Infinite Cabinet apabila anda menggunakannya, dan sebabnya.",
+		purposeHeading: "Tujuan",
+		purpose:
+			"Untuk mengenal pasti bahagian perancang yang mengelirukan atau rosak, dan membaikinya.",
+		collectHeading: "Apa yang kami rekod",
+		collect:
+			"Skrin yang anda buka, pilihan reka bentuk anda (bilik, kabinet, saiz, kemasan, pintu), anggaran harga, jenis peranti dan pelayar, serta ralat teknikal yang berlaku dalam perancang. Jika anda benarkan, kami juga menyimpan rakaman ringkas halaman — dengan semua yang anda taip disembunyikan — apabila ralat berlaku, supaya kami dapat melihat puncanya.",
+		notCollectHeading: "Apa yang kami tidak pernah rekod",
+		notCollect:
+			"Nama, nombor telefon, e-mel atau alamat daripada borang sebut harga tidak dihantar kepada penyedia analitik kami. Kami tidak menyimpan alamat IP anda dalam analitik.",
+		whereHeading: "Siapa yang memprosesnya, dan di mana",
+		where:
+			"Data penggunaan diproses oleh PostHog Inc. pada pelayan di Kesatuan Eropah (Frankfurt), di bawah perjanjian pemprosesan data. Ini bermakna data dipindahkan ke luar Malaysia. Laman web ini sendiri dihoskan oleh Vercel.",
+		choiceHeading: "Pilihan anda",
+		choice:
+			"Jika anda menolak, kami hanya mengira lawatan tanpa kuki atau storan tempatan, dengan pengecam yang ditetapkan semula setiap hari, dan tiada rakaman dibuat. Anda boleh menukar pilihan pada bila-bila masa dengan memadam data laman ini dalam pelayar anda.",
+		contactHeading: "Hubungi kami",
+		contact:
+			"Pertanyaan, atau permintaan untuk mengakses atau membetulkan data anda: {email}",
+		back: "Kembali ke laman utama",
 	},
 };

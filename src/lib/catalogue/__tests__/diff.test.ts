@@ -19,7 +19,7 @@ describe("summariseCatalogueChanges", () => {
 		next.families[0].sizes[0].priceRm += 50;
 
 		expect(summariseCatalogueChanges(PLANNER_CATALOGUE, next)).toEqual([
-			"1 carcass price changed",
+			"1 cabinet price changed",
 		]);
 	});
 
@@ -29,7 +29,7 @@ describe("summariseCatalogueChanges", () => {
 		next.families[0].sizes[1].priceRm += 10;
 
 		expect(summariseCatalogueChanges(PLANNER_CATALOGUE, next)).toEqual([
-			"2 carcass prices changed",
+			"2 cabinet prices changed",
 		]);
 	});
 
@@ -43,8 +43,8 @@ describe("summariseCatalogueChanges", () => {
 		});
 
 		const lines = summariseCatalogueChanges(PLANNER_CATALOGUE, next);
-		expect(lines).toContain("Family added: Test cabinet");
-		expect(lines).toContain(`Family removed: ${removed?.label}`);
+		expect(lines).toContain("Cabinet added: Test cabinet");
+		expect(lines).toContain(`Cabinet removed: ${removed?.label}`);
 	});
 
 	it("flags a dimension change separately from a price change", () => {

@@ -14,6 +14,7 @@ export const zh: Dictionary = {
 		next: "下一步",
 		close: "关闭",
 		language: "语言",
+		comingSoon: "即将推出",
 	},
 	landing: {
 		nav: {
@@ -37,7 +38,7 @@ export const zh: Dictionary = {
 			alt: "一间已完工的 Infinite Cabinet 厨房",
 		},
 		facts: {
-			starterKitchenLabel: "入门厨房套组",
+			cabinetsFromLabel: "橱柜起价",
 			typicalDeliveryValue: "4 至 6 周",
 			typicalDeliveryLabel: "平均交货时间",
 			warrantyValue: "5 年",
@@ -99,6 +100,7 @@ export const zh: Dictionary = {
 			tutorials: "教学视频",
 			contactHeading: "联系我们",
 			email: "hello@infinitecabinet.com",
+			privacy: "隐私声明",
 			adminSignIn: "管理员登录",
 			copyright: "© 2026 {brand}。版权所有。",
 		},
@@ -151,7 +153,7 @@ export const zh: Dictionary = {
 		start: {
 			heading: "您想设计哪个房间？",
 			subtitle:
-				"选择一个房间，即可从真实的 Infinite Cabinet 尺寸和已铺好的墙面布局开始。",
+				"选择一个房间，即可在空白墙面上使用真实的 Infinite Cabinet 尺寸开始设计。",
 			roomIconAlt: "{room}图标",
 			roomSubtitle: {
 				kitchen: "真实的 Infinite Cabinet 尺寸",
@@ -159,12 +161,6 @@ export const zh: Dictionary = {
 				bedroom: "衣柜",
 				foyer: "鞋柜与长凳",
 			},
-			thenLayout: "接着，为 {width} 米长的墙面提供起始布局",
-			fullRun: "整排布局",
-			unitsFromPrice: "{count} 个单元 · 起价 {price}",
-			startBlank: "从空白开始",
-			blankWall: "空白墙面",
-			buildItYourself: "自行搭建",
 			cta: "开始设计",
 		},
 		room: {
@@ -217,6 +213,14 @@ export const zh: Dictionary = {
 			heading: "添加橱柜",
 			subtitle: "拖曳到墙面上。稍后再选择尺寸与门板。",
 			sizeRange: "{min}–{max} 毫米 · 起价 {price}",
+			widthPrice: "{width} 毫米 · {price}",
+			categories: {
+				BASE_CABINET: "地柜",
+				WALL_CABINET: "吊柜",
+				TALL_CABINET: "高柜",
+				DRAWER_BASE: "抽屉地柜",
+				FRIDGE_HOUSING: "冰箱柜",
+			},
 		},
 		canvas: {
 			selectHint: "点击柜子即可选中 · 右键查看操作",
@@ -264,7 +268,6 @@ export const zh: Dictionary = {
 			width: "宽度",
 			noRoom: "空间不足",
 			front: "门板",
-			noDoor: "不装门板",
 			swing: "开门方向",
 			closeDoor: "关闭柜门",
 			openDoor: "打开柜门",
@@ -427,5 +430,35 @@ export const zh: Dictionary = {
 			CANCELLED: "已取消",
 			FAILED: "配送失败",
 		},
+	},
+	consent: {
+		title: "帮助我们改进设计工具",
+		body: "允许我们记录您使用设计工具的方式及出现的错误，数据由位于欧盟（马来西亚境外）的 PostHog 处理。您输入的任何内容都不会被记录。若您拒绝，我们只会在不使用 Cookie 的情况下统计访问次数。",
+		accept: "允许",
+		reject: "拒绝",
+		learnMore: "隐私声明",
+	},
+	privacy: {
+		title: "隐私声明",
+		draft: "草稿——须经 Infinite Cabinet Sdn Bhd 审核后方可生效。",
+		intro:
+			"本声明说明您使用 Infinite Cabinet 设计工具时我们会记录哪些信息，以及原因。",
+		purposeHeading: "目的",
+		purpose: "找出设计工具中令人困惑或出错的地方，并加以修复。",
+		collectHeading: "我们记录的内容",
+		collect:
+			"您打开的页面、您所做的设计选择（房间、橱柜、尺寸、饰面、门板）、预估价格、设备和浏览器类型，以及设计工具出现的技术错误。若您同意，当发生错误时我们还会保留一段简短的页面录像（您输入的所有内容均会被隐藏），以便了解问题所在。",
+		notCollectHeading: "我们绝不记录的内容",
+		notCollect:
+			"报价表单中的姓名、电话号码、电子邮箱或地址不会发送给我们的分析服务提供商。分析数据中不会保留您的 IP 地址。",
+		whereHeading: "由谁处理，在哪里处理",
+		where:
+			"使用数据由 PostHog Inc. 根据数据处理协议，在欧盟（法兰克福）的服务器上处理。这意味着数据会被传输至马来西亚境外。网站本身由 Vercel 托管。",
+		choiceHeading: "您的选择",
+		choice:
+			"若您拒绝，我们只会在不使用 Cookie 或本地存储的情况下统计访问次数，所用标识每天重置，也不会进行任何录像。您可随时在浏览器中清除本网站的数据以更改选择。",
+		contactHeading: "联系我们",
+		contact: "如有疑问，或要求查阅或更正您的数据，请联系：{email}",
+		back: "返回主页",
 	},
 };

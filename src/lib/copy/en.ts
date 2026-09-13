@@ -18,6 +18,7 @@ export const en = {
 		next: "Next",
 		close: "Close",
 		language: "Language",
+		comingSoon: "Coming soon",
 	},
 	landing: {
 		nav: {
@@ -41,7 +42,7 @@ export const en = {
 			alt: "A finished Infinite Cabinet kitchen",
 		},
 		facts: {
-			starterKitchenLabel: "Starter kitchen run",
+			cabinetsFromLabel: "Cabinets from",
 			typicalDeliveryValue: "4-6 weeks",
 			typicalDeliveryLabel: "Typical delivery",
 			warrantyValue: "5 years",
@@ -105,6 +106,7 @@ export const en = {
 			tutorials: "Tutorials",
 			contactHeading: "Contact",
 			email: "hello@infinitecabinet.com",
+			privacy: "Privacy",
 			adminSignIn: "Admin sign in",
 			copyright: "© 2026 {brand}. All rights reserved.",
 		},
@@ -159,7 +161,7 @@ export const en = {
 		start: {
 			heading: "What room are you planning?",
 			subtitle:
-				"Pick one to start from real Infinite Cabinet sizes and a layout already on your wall.",
+				"Pick one to start on an empty wall with real Infinite Cabinet sizes.",
 			roomIconAlt: "{room} icon",
 			roomSubtitle: {
 				kitchen: "Real Infinite Cabinet sizes",
@@ -167,12 +169,6 @@ export const en = {
 				bedroom: "Wardrobes",
 				foyer: "Shoe cabinets & bench",
 			},
-			thenLayout: "Then, a starting layout for a {width} m wall",
-			fullRun: "Full run",
-			unitsFromPrice: "{count} units · from {price}",
-			startBlank: "Start blank",
-			blankWall: "Blank wall",
-			buildItYourself: "Build it yourself",
 			cta: "Start planning",
 		},
 		room: {
@@ -230,6 +226,14 @@ export const en = {
 			heading: "Add cabinets",
 			subtitle: "Drag onto the wall. Size and front come after.",
 			sizeRange: "{min}–{max}mm · from {price}",
+			widthPrice: "{width}mm · {price}",
+			categories: {
+				BASE_CABINET: "Base cabinets",
+				WALL_CABINET: "Wall cabinets",
+				TALL_CABINET: "Tall cabinets",
+				DRAWER_BASE: "Drawer bases",
+				FRIDGE_HOUSING: "Fridge housings",
+			},
 		},
 		canvas: {
 			selectHint: "Click a cabinet to select it · right-click for its actions",
@@ -280,7 +284,6 @@ export const en = {
 			width: "Width",
 			noRoom: "no room",
 			front: "Front",
-			noDoor: "No door",
 			swing: "Swing",
 			closeDoor: "Close door",
 			openDoor: "Open door",
@@ -457,6 +460,42 @@ export const en = {
 			CANCELLED: "Cancelled",
 			FAILED: "Failed",
 		},
+	},
+	/**
+	 * The analytics consent banner. PDPA s.129: the transfer outside Malaysia
+	 * is named in the banner itself, not only behind the link.
+	 */
+	consent: {
+		title: "Help us improve the planner",
+		body: "Allow us to record how you use the planner and any errors, processed by PostHog in the EU (outside Malaysia). Nothing you type is included. If you decline, we only count visits, without cookies.",
+		accept: "Allow",
+		reject: "Decline",
+		learnMore: "Privacy notice",
+	},
+	/** Draft wording — Infinite Cabinet's counsel approves it before production. */
+	privacy: {
+		title: "Privacy notice",
+		draft:
+			"Draft — pending review by Infinite Cabinet Sdn Bhd before it takes effect.",
+		intro:
+			"This notice explains what the Infinite Cabinet planner records when you use it, and why.",
+		purposeHeading: "Why",
+		purpose: "To find where the planner is confusing or broken, and fix it.",
+		collectHeading: "What we record",
+		collect:
+			"Which screens you open, the design choices you make (room, cabinets, sizes, finish, doors), the estimated price, the type of device and browser, and technical errors the planner hits. If you allow it, we also keep a short recording of the page — with everything you type hidden — when an error happens, so we can see what went wrong.",
+		notCollectHeading: "What we never record",
+		notCollect:
+			"Your name, phone number, email or address from the quote form are not sent to our analytics provider. We do not keep your IP address in analytics.",
+		whereHeading: "Who processes it, and where",
+		where:
+			"Usage data is processed by PostHog Inc. on servers in the European Union (Frankfurt), under a data processing agreement. This means the data is transferred outside Malaysia. The website itself is hosted by Vercel.",
+		choiceHeading: "Your choice",
+		choice:
+			"If you decline, we only count visits without cookies or local storage, with an identifier that resets daily, and no recordings are made. You can change your choice at any time by clearing this site's data in your browser.",
+		contactHeading: "Contact",
+		contact: "Questions, or requests to access or correct your data: {email}",
+		back: "Back to home",
 	},
 } as const;
 

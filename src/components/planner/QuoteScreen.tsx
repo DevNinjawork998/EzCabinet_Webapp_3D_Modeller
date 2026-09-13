@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRef, useState } from "react";
+import { track } from "@/lib/analytics";
 import { fill } from "@/lib/copy/fill";
 import { htmlLang } from "@/lib/copy/locales";
 import type { FinishId, RoomTypeId } from "@/lib/planner/catalogue";
@@ -131,6 +132,13 @@ export function QuoteScreen({
 						className="flex max-w-[420px] flex-col gap-3"
 						onSubmit={(e) => {
 							e.preventDefault();
+							// Counts only. The form's fields are personal data and never
+							// go to analytics — see src/lib/analytics.ts.
+							track("quote_submitted", {
+								room: roomId,
+								cabinets: placed.length,
+								totalRm: Math.round(price.totalRm),
+							});
 							setSubmitted(true);
 						}}
 					>

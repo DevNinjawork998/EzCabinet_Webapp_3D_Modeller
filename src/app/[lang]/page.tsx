@@ -17,8 +17,6 @@ import {
 	DEFAULT_FINISH_TEXTURES,
 	SWATCH_ZOOM,
 } from "@/lib/planner/finishTextures";
-import { plannerEngine } from "@/lib/planner/layout";
-import { computePlannerPrice } from "@/lib/planner/pricing";
 import { HERO_POSTER_FRAME, heroFrameSrc } from "@/lib/scroll/sequence";
 
 /**
@@ -145,15 +143,17 @@ export default async function Home({
 		prisma.siteImage.findMany(),
 		getDictionary(lang),
 	]);
-	const engine = plannerEngine(catalogue);
 	const photo = new Map(
 		siteImages.map((i) => [i.key, siteImageSrc(i.key, i.updatedAt)]),
 	);
 
-	const kitchenPrice = computePlannerPrice(
-		engine.starterFor("kitchen"),
-		catalogue.finishes[0].id,
-		catalogue,
+	// The cheapest cabinet a customer can place. Rooms open on an empty wall
+	// now, so there is no starter run to price; this is the one figure true for
+	// every visitor whatever they go on to build. Infinity when nothing is live.
+	const fromRm = Math.min(
+		...catalogue.families.flatMap((family) =>
+			family.sizes.map((size) => size.priceRm),
+		),
 	);
 
 	/**
@@ -162,10 +162,14 @@ export default async function Home({
 	 * the one thing their sales team would have to walk back on a call.
 	 */
 	const FACTS = [
-		{
-			value: `RM ${rm(kitchenPrice.totalRm)}`,
-			label: t.landing.facts.starterKitchenLabel,
-		},
+		...(Number.isFinite(fromRm)
+			? [
+					{
+						value: `RM ${rm(fromRm)}`,
+						label: t.landing.facts.cabinetsFromLabel,
+					},
+				]
+			: []),
 		{
 			value: t.landing.facts.typicalDeliveryValue,
 			label: t.landing.facts.typicalDeliveryLabel,
@@ -509,7 +513,9 @@ export default async function Home({
 										{room.label}
 									</p>
 									<p className="mt-0.5 text-[12px] text-white/75">
-										{roomSubtitles(t)[room.id]}
+										{room.familyIds.length === 0
+											? t.common.comingSoon
+											: roomSubtitles(t)[room.id]}
 									</p>
 								</div>
 							</Link>
@@ -675,6 +681,12 @@ export default async function Home({
 							>
 								{t.landing.footer.email}
 							</a>
+							<Link
+								href={`/${lang}/privacy`}
+								className="text-[13px] text-neutral-300 transition-colors hover:text-white"
+							>
+								{t.landing.footer.privacy}
+							</Link>
 							<Link
 								href="/admin/login"
 								className="text-[13px] text-neutral-500 transition-colors hover:text-neutral-300"

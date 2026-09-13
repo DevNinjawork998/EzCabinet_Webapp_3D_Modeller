@@ -62,11 +62,14 @@ export function RoomPanel({
 					<button
 						key={option.id}
 						type="button"
+						// A room with no cabinets yet has nothing to plan with.
+						disabled={option.familyIds.length === 0}
 						onClick={() => onChangeRoomAction(option.id)}
 						aria-pressed={option.id === roomId}
-						className={chip(option.id === roomId)}
+						className={`${chip(option.id === roomId)} disabled:cursor-not-allowed disabled:text-neutral-300`}
 					>
 						{option.label}
+						{option.familyIds.length === 0 && ` · ${t.common.comingSoon}`}
 					</button>
 				))}
 			</div>

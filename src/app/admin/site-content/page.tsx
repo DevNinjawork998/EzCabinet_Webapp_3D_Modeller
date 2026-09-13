@@ -80,10 +80,10 @@ export default async function SiteContentPage() {
 						    in the editor, which is the one place a whole catalogue is
 						    reviewed before it goes live. */}
 						<a
-							href="/admin/catalogue?tab=finishes"
+							href="/admin/cabinet-designs?tab=finishes"
 							className="font-medium text-[#2b6cb0] underline"
 						>
-							Rename or remove one in Catalogue
+							Rename or remove one in Cabinet designs
 						</a>
 					</p>
 					<div className="grid grid-cols-3 gap-3.5 sm:grid-cols-6">

@@ -7,33 +7,28 @@ import {
 } from "@/components/planner/CatalogueContext";
 import { CopyProvider } from "@/components/planner/CopyContext";
 import { QuoteScreen } from "@/components/planner/QuoteScreen";
-import {
-	type StartPreset,
-	StartScreen,
-} from "@/components/planner/StartScreen";
+import { StartScreen } from "@/components/planner/StartScreen";
 import { StudioScreen } from "@/components/planner/StudioScreen";
+import { track } from "@/lib/analytics";
 import type { Dictionary } from "@/lib/copy/en";
 import type { Locale } from "@/lib/copy/locales";
 import type { FinishId, RoomTypeId } from "@/lib/planner/catalogue";
-import { roomTypeIn } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
-import {
-	emptyLayout,
-	type PlannerLayout,
-	plannerEngine,
-} from "@/lib/planner/layout";
+import { emptyLayout, type PlannerLayout } from "@/lib/planner/layout";
+import { computePlannerPrice } from "@/lib/planner/pricing";
 
 type Screen = "start" | "studio" | "quote";
 
-/** Every room starts from its own preset, and keeps its own work. */
+/** Every room opens on its empty wall, and keeps its own work. */
 const initialRooms = (
 	catalogue: PlannerCatalogue,
-): Record<RoomTypeId, PlannerLayout> => {
-	const engine = plannerEngine(catalogue);
-	return Object.fromEntries(
-		catalogue.roomTypes.map((room) => [room.id, engine.starterFor(room.id)]),
+): Record<RoomTypeId, PlannerLayout> =>
+	Object.fromEntries(
+		catalogue.roomTypes.map((room) => [
+			room.id,
+			emptyLayout(room.defaultWallWidthMm),
+		]),
 	) as Record<RoomTypeId, PlannerLayout>;
-};
 
 export function PlannerApp({
 	initialRoomId,
@@ -81,11 +76,15 @@ function PlannerScreens({
 	 * cabinet show the same board. */
 	finishTextures: Record<string, string>;
 }) {
-	const { duplicateModule, removeModules } = useEngine();
+	const { allPositions, duplicateModule, removeModules } = useEngine();
 
 	const [screen, setScreen] = useState<Screen>("start");
+	// One effect rather than an event at each of the five `setScreen` calls —
+	// the funnel's step boundaries, including the initial start screen.
+	useEffect(() => {
+		track("screen_viewed", { screen });
+	}, [screen]);
 	const [roomId, setRoomId] = useState<RoomTypeId>(initialRoomId);
-	const [preset, setPreset] = useState<StartPreset>("starter");
 	// One layout per room, so switching to the foyer and back does not throw
 	// away the kitchen the customer just arranged.
 	const [rooms, setRooms] = useState<Record<RoomTypeId, PlannerLayout>>(() =>
@@ -135,6 +134,7 @@ function PlannerScreens({
 			if (e.key !== "Delete" && e.key !== "Backspace") return;
 			if (selectedIds.length === 0) return;
 			e.preventDefault();
+			track("cabinet_removed", { count: selectedIds.length, via: "keyboard" });
 			removeSelected();
 		};
 		window.addEventListener("keydown", onKeyDown);
@@ -145,18 +145,12 @@ function PlannerScreens({
 		return (
 			<StartScreen
 				roomId={roomId}
-				onPickRoom={setRoomId}
-				preset={preset}
-				onPickPreset={setPreset}
+				onPickRoom={(id) => {
+					track("room_picked", { room: id, from: "start" });
+					setRoomId(id);
+				}}
 				onStart={() => {
-					if (preset === "blank") {
-						setRooms((prev) => ({
-							...prev,
-							[roomId]: emptyLayout(
-								roomTypeIn(catalogue, roomId).defaultWallWidthMm,
-							),
-						}));
-					}
+					track("planner_started", { room: roomId });
 					setSelectedIds([]);
 					setScreen("studio");
 				}}
@@ -181,17 +175,31 @@ function PlannerScreens({
 		<StudioScreen
 			roomId={roomId}
 			onChangeRoomAction={(id) => {
+				track("room_picked", { room: id, from: "studio" });
 				setRoomId(id);
 				setSelectedIds([]);
 			}}
 			layout={layout}
 			setLayoutAction={setLayout}
 			finish={finish}
-			setFinishAction={setFinish}
+			setFinishAction={(id) => {
+				track("finish_changed", { finish: id });
+				setFinish(id);
+			}}
 			finishTextures={finishTextures}
 			selectedIds={selectedIds}
 			setSelectedIdsAction={setSelectedIds}
-			onGoToQuoteAction={() => setScreen("quote")}
+			onGoToQuoteAction={() => {
+				track("quote_viewed", {
+					room: roomId,
+					cabinets: allPositions(layout).length,
+					wallMm: layout.wallWidthMm,
+					totalRm: Math.round(
+						computePlannerPrice(layout, finish, catalogue).totalRm,
+					),
+				});
+				setScreen("quote");
+			}}
 			onBackToStartAction={() => setScreen("start")}
 		/>
 	);

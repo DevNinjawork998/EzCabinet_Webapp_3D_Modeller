@@ -79,9 +79,10 @@ enum CabinetDesignStatus {
   ARCHIVED
 }
 
-/// A single named, priced cabinet design uploaded as one `.skp` file. Flat
-/// reference catalog, independent of CatalogueVersion — not wired into
-/// wardrobe/planner pricing or the viewer.
+/// One cabinet a customer can place: one uploaded OBJ export, its name, its
+/// all-in price and the rooms it is offered in. The planner catalogue's
+/// families are rebuilt from these rows on every publish
+/// (`lib/catalogue/buildCatalogue.ts`), so a family id is a design id.
 model CabinetDesign {
   id           String              @id @default(cuid())
   name         String
@@ -91,7 +92,8 @@ model CabinetDesign {
   sizeBytes    Int
   sha256       String              @unique
   category     CabinetCategory
-  room         CabinetRoom
+  /// Every room this cabinet is offered in. Non-empty is enforced by the API.
+  rooms        CabinetRoom[]
   widthMm      Int
   heightMm     Int
   depthMm      Int
@@ -101,12 +103,10 @@ model CabinetDesign {
   tags         String?
   finishes     String[]
   status       CabinetDesignStatus @default(PUBLISHED)
-  /// The planner family this design was pushed into, once it has been.
-  /// Null means the design is library-only and no customer can see it.
-  /// Not a relation: families live inside a CatalogueVersion's JSON, not in a
-  /// table, so this is a soft reference the publish route writes and the
-  /// delete guard reads.
-  familyId     String?
+  /// What the file holds — shelves, door leaves, drawers, legs — read when the
+  /// design is converted. The procedural fallback draws from it. Null means the
+  /// file has not been converted yet (or was refused).
+  geometry     Json?
   /// The derived render mesh: the drafted geometry, classified by role and
   /// converted to binary at publish time. This is what the planner draws — the
   /// customer sees the model the drafter made, not a box rebuilt from counts.
@@ -125,7 +125,6 @@ model CabinetDesign {
   updatedAt    DateTime            @updatedAt
 
   @@index([status])
-  @@index([familyId])
 }
 
 /// One marketing photo, keyed by the homepage slot it fills (`hero`,

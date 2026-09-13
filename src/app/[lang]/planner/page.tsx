@@ -24,14 +24,15 @@ export default async function PlannerPage({
 		getDictionary(lang),
 	]);
 
-	// Validated against the catalogue that is actually about to be rendered,
-	// not the bundled seed: a publish that adds or drops a room changes what
-	// `?room=` may say.
-	const initialRoomId: RoomTypeId = catalogue.roomTypes.some(
-		(r) => r.id === room,
-	)
-		? (room as RoomTypeId)
-		: "kitchen";
+	// Validated against the catalogue that is actually about to be rendered: a
+	// room with no cabinets yet is coming soon and cannot be planned, so a link
+	// to one — or no link at all — opens the first room that can.
+	const plannable = catalogue.roomTypes.filter((r) => r.familyIds.length > 0);
+	const initialRoomId: RoomTypeId = (
+		plannable.find((r) => r.id === room) ??
+		plannable[0] ??
+		catalogue.roomTypes[0]
+	).id;
 
 	// The photo an admin uploaded for each finish, if any. The same slot already
 	// feeds the landing page's swatch, so one upload makes the strip and the 3D

@@ -22,10 +22,12 @@ import {
 	WALL_LIMITS,
 } from "../layout";
 import { standOf } from "../parts";
+import { furnished as furnishedRun } from "./furnished";
 
 /** The seed is the right catalogue for engine tests: they assert placement
  * rules, not a publish. Destructured so the assertions below read exactly as
  * they did when these were module functions. */
+const engine = plannerEngine(PLANNER_CATALOGUE);
 const {
 	addModule,
 	closeGaps,
@@ -61,10 +63,9 @@ const {
 	setWallWidth,
 	setWidth,
 	skirtingSpans,
-	starterFor,
 	swapWithNeighbour,
 	widthOptionsFor,
-} = plannerEngine(PLANNER_CATALOGUE);
+} = engine;
 
 const WALL_MM = 4000;
 
@@ -635,7 +636,7 @@ describe("ceiling height", () => {
 	});
 
 	it("leaves the run alone — a lower ceiling never moves a cabinet", () => {
-		const furnished = starterFor("kitchen");
+		const furnished = furnishedRun(engine, "kitchen");
 		const lower = setCeilingHeight(furnished, 2400);
 		expect(lower.floor).toEqual(furnished.floor);
 		expect(lower.wall).toEqual(furnished.wall);
@@ -742,7 +743,7 @@ describe("wallToCeiling", () => {
 	});
 
 	it("moves no cabinet sideways — this is a vertical change only", () => {
-		const furnished = starterFor("kitchen");
+		const furnished = furnishedRun(engine, "kitchen");
 		const flushed = setWallToCeiling(furnished, true);
 		expect(flushed.floor).toEqual(furnished.floor);
 		expect(flushed.wall).toEqual(furnished.wall);
@@ -1017,8 +1018,8 @@ describe("doors", () => {
 	const one = () =>
 		addModule(emptyLayout(WALL_MM), "base-cabinet", 0, "a", 600);
 
-	it("arrives as a bare carcass", () => {
-		expect(one().floor[0].doorStyleId).toBeNull();
+	it("arrives wearing the base door style, since its price includes a door", () => {
+		expect(one().floor[0].doorStyleId).toBe(PLANNER_CATALOGUE.doorStyles[0].id);
 	});
 
 	it("takes a door and gives it back", () => {
@@ -1061,22 +1062,10 @@ describe("doors", () => {
 });
 
 describe("rooms", () => {
-	it("opens every room on a run that fits its wall", () => {
-		for (const room of PLANNER_CATALOGUE.roomTypes) {
-			const layout = starterFor(room.id);
-			expect(layout.floor.length + layout.wall.length).toBeGreaterThan(0);
-			expect(overhangMm(layout)).toBe(0);
-			expectNoOverlaps(layout);
-		}
-	});
-
-	it("only offers families the room actually sells", () => {
+	it("only offers families the catalogue carries", () => {
 		for (const room of PLANNER_CATALOGUE.roomTypes) {
 			for (const familyId of room.familyIds) {
 				expect(familyIn(PLANNER_CATALOGUE, familyId)).toBeDefined();
-			}
-			for (const item of room.starter) {
-				expect(room.familyIds).toContain(item.familyId);
 			}
 		}
 	});
@@ -1133,18 +1122,6 @@ describe("the engine is bound to the catalogue it was given", () => {
 		expect(
 			engine.addModule(emptyLayout(4000), "base-cabinet", 0).floor,
 		).toHaveLength(0);
-	});
-
-	it("builds a starter from the catalogue's own room, not the seed's", () => {
-		const short = {
-			...PLANNER_CATALOGUE,
-			roomTypes: PLANNER_CATALOGUE.roomTypes.map((r) =>
-				r.id === "kitchen"
-					? { ...r, starter: [{ familyId: "base-cabinet", widthMm: 600 }] }
-					: r,
-			),
-		};
-		expect(plannerEngine(short).starterFor("kitchen").floor).toHaveLength(1);
 	});
 
 	it("two engines over two catalogues do not see each other", () => {
@@ -1464,7 +1441,7 @@ describe("setRotation", () => {
 	// and `rowEndMm` let `setWallWidth` pull the wall in through it.
 	it("keeps every cabinet clear of every other, whatever follows a turn", () => {
 		for (const room of ["kitchen", "living", "bedroom", "foyer"] as const) {
-			const base = starterFor(room);
+			const base = furnishedRun(engine, room);
 			for (const row of ["floor", "wall"] as const) {
 				for (const target of positionsOf(base, row)) {
 					for (const deg of [15, 45, 90, 135, 210, 315]) {
