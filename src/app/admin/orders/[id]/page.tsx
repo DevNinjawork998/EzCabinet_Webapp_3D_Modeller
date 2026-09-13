@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { prisma } from "@/lib/catalogue/db";
-import { getPublishedPlannerCatalogue } from "@/lib/catalogue/store";
+import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
 import { orderRef } from "@/lib/orders/ref";
 import { summaryLines } from "@/lib/orders/summary";
 import { OrderDetail } from "./OrderDetail";
@@ -22,7 +22,7 @@ export default async function OrderAdminPage({
 				},
 			},
 		}),
-		getPublishedPlannerCatalogue(),
+		readPublishedPlannerCatalogue(),
 	]);
 	if (!order) notFound();
 

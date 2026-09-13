@@ -38,6 +38,7 @@ export function LogisticsManager({
 	geocodingConfigured,
 	geocodingFault,
 	easyparcel,
+	prefill = null,
 }: {
 	initial: DeliveryRow[];
 	workshopAddress: string;
@@ -45,10 +46,12 @@ export function LogisticsManager({
 	/** Why the geocoder is not answering, in Google's own words. Null when it is. */
 	geocodingFault: string | null;
 	easyparcel: { appConfigured: boolean; connected: boolean };
+	/** A paid order's job, built on the server — opens the form already filled. */
+	prefill?: FormState | null;
 }) {
 	const router = useRouter();
 	const [rows, setRows] = useState<DeliveryRow[]>(initial);
-	const [form, setForm] = useState<FormState | null>(null);
+	const [form, setForm] = useState<FormState | null>(prefill);
 	const [error, setError] = useState<string | null>(null);
 	// Read after mount, not during render: both come from a redirect's query
 	// string — the OAuth callback, or a job page's "Edit job" — and
@@ -302,6 +305,13 @@ function DeliveryForm({
 					Editing <span className="text-neutral-900">{state.customerName}</span>
 					. Saving re-checks the address, so a corrected line gets a fresh map
 					pin.
+				</p>
+			)}
+			{state.id === null && state.orderId !== null && (
+				<p className="rounded-lg bg-[#f2f7f4] px-3 py-2 text-[#1f5138] text-[13px]">
+					Filled in from a paid order: one row per cabinet at its designed size.
+					Check the rows, add weights where they are blank, and add worktops or
+					panels by hand.
 				</p>
 			)}
 			<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

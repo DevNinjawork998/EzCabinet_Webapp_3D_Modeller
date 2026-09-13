@@ -16,7 +16,7 @@ The wardrobe survives only as a seed family (`id: "wardrobe"`) in `lib/planner/c
 
 ## Status
 
-Phase 0 (catalogue + pricing spec with client) not yet complete — see Open questions. The engine, the planner UI, and the admin catalogue surface are built. `/admin/cabinet-designs` is the one catalogue screen: each uploaded design is one cabinet, filed under the rooms that offer it, and `POST /api/admin/cabinet-designs/publish` rebuilds the catalogue from the design rows (`lib/catalogue/buildCatalogue.ts`). Lead capture is the remaining Phase 3 work.
+Phase 0 (catalogue + pricing spec with client) not yet complete — see Open questions. The engine, the planner UI, and the admin catalogue surface are built. `/admin/cabinet-designs` is the one catalogue screen: each uploaded design is one cabinet, filed under the rooms that offer it, and `POST /api/admin/cabinet-designs/publish` rebuilds the catalogue from the design rows (`lib/catalogue/buildCatalogue.ts`). Customers can check out: `POST /api/orders` re-validates and re-prices the design and stores an `Order` (manual bank transfer until a gateway is chosen), `/admin/orders` marks it paid, and **Create delivery** opens the logistics form pre-filled from the design (`lib/orders`). Share links are the remaining Phase 3 work.
 
 **Confirmed client requirement (resolved):** Infinite Cabinet designs in SketchUp and asked for "upload SketchUp designs so we can maintain new configurations." It is resolved the literal way: the planner **renders the model they drew** — see [3D](#3d). This reversed an earlier decision to rebuild each cabinet procedurally from extracted numbers; that section carries the measurements that changed it.
 
@@ -82,6 +82,12 @@ src/
     registry.ts          ← which partners we can reach right now
     tokens.ts            ← a partner's OAuth tokens: one row, refreshed under a lock
     adapters/            ← one file per partner; manual, lalamove and easyparcel are live
+  lib/orders/            ← checkout: a customer's design becomes an order
+    layoutSchema.ts      ← zod twin of PlannerLayout; stored as { schemaVersion, layout }
+    validate.ts          ← can this design be sold as it stands — every rule explicit
+    price.ts             ← the planner's price + the flat delivery fee, server-side
+    items.ts             ← order → delivery rows: box from the design, weight from its row
+    payment.ts           ← manual bank transfer; the seam a gateway plugs into
   lib/mesh/              ← reads an OBJ export into catalogue data
     archive.ts           ← unzip; the .obj text and the texture filenames
     objRead.ts           ← OBJ parse: named boxes in the file's own units
@@ -326,7 +332,9 @@ Three screens. Rooms open on an **empty wall**: there is no invented starter run
 
 1. **Start** — pick a room; a room with no designs yet is shown as coming soon and cannot be picked
 2. **Studio** — drag cabinets in from a menu grouped by category, choose door style and finish, measure. A placed cabinet always wears a door style — its price includes the door
-3. **Quote** — price breakdown + request quote
+3. **Checkout** — price breakdown and delivery fee, place the order → `/[lang]/order/[token]`, which shows bank transfer details until an admin marks it paid
+
+**An order is priced on the server, never by the client.** `POST /api/orders` (public, guarded by BotID) runs `validateOrder` — the engine forgives an unknown family or an off-ladder width silently, which is fine on a canvas and wrong for a payment — then `priceOrder` against the published catalogue, and stores the design as `{ schemaVersion, layout }` with the catalogue version it was priced against. A paid order's **Create delivery** (`/admin/logistics?fromOrder=`) fills the delivery form with one row per cabinet at its designed size and the design row's weight; the delivery create route refuses an order that is not paid.
 
 **No login to configure.** The email/WhatsApp gate sits at **"save & share"**, not at entry — by then the customer has sunk time into a design and will trade a phone number to keep it.
 
@@ -354,7 +362,7 @@ PostHog **Cloud EU**, installed from the Vercel Marketplace, so we can see where
 - **Through our origin:** `next.config.ts` rewrites `/api/ph/*` to the EU hosts, so ad blockers do not hide drop-offs. `/api/` already bypasses the locale redirect and the admin gate. The region is hardcoded there and in `analytics.ts` because PostHog fixes it at install.
 - **Consent (PDPA s.129):** cookieless until the visitor accepts (`opt_out_capturing_by_default` + `cookieless_mode: "on_reject"` — drop the first and "pending" sets cookies). Accepting enables cookies and the error-triggered replay. `/[lang]/privacy` is a **draft** for Infinite Cabinet's counsel.
 - **Never send form fields.** No `identify()` with phone or email, nothing a customer types in any event payload. Replay masks inputs.
-- **Journey events** are a typed union in `analytics.ts`, fired from existing handlers — one per customer decision, never per pointer move. `quote_submitted` is a button press until Phase 3 lead capture exists; move it server-side then.
+- **Journey events** are a typed union in `analytics.ts`, fired from existing handlers — one per customer decision, never per pointer move. `quote_submitted` fires after `POST /api/orders` answers 201 — a placed order, not a button press.
 - **Breakage:** `error.tsx`, `global-error.tsx`, WebGL context loss in `PlannerScene`, and mesh-load failures in `DesignedCabinet` (the procedural fallback hides them on screen).
 - **Alerts → Slack:** PostHog error-tracking alerts (new/reopened issue, spike) and a funnel insight alert; server 5xx via the Vercel rule in `docs/ops/vercel-5xx-alert.json`.
 
@@ -377,7 +385,7 @@ Separate Postgres database from Factory Tracker.
 | 0 | Catalogue + pricing spec workshop with client, including the design-intake process |
 | 1 | Layout schema, rules, pricing — headless, tested against fixtures ✅ |
 | 2 | Planner UI + 3D scene ✅ |
-| 3 | Lead capture, share links, admin inbox (admin catalogue + designs ✅; lead capture not started) |
+| 3 | Lead capture, share links, admin inbox (admin catalogue + designs ✅; paid checkout, orders admin, order → delivery pre-fill ✅; share links and a real payment gateway not started) |
 | 4 | Approved quote → **SKU list** → production job in Factory Tracker |
 
 **Phase 4 changed shape when the planner started rendering the drafted model.** A derived cut list is no longer available, because the app no longer derives the cabinet — it draws the one the client already drew. What Factory Tracker receives is a SKU list (`1× BC 800mm`). For a factory that manufactures to standard modules that is arguably the more useful payload, but it is a change to the contract and **the client should hear it**.
@@ -413,6 +421,10 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
   a wrong postcode there is a wrong price on every parcel quote.
 - Does Prisma Postgres offer an ap-southeast region? If not, quote submission eats a transpacific round trip.
 - Does Infinite Cabinet have an EasyParcel account, and who tops up the wallet? `submit_orders` deducts at booking time and a shipment cannot be booked against an empty wallet.
+- **Which Malaysian payment gateway?** Orders take payment by manual bank transfer until one is chosen (Billplz, Curlec, senangPay, iPay88, …). `BANK_TRANSFER` in `lib/orders/payment.ts` is a placeholder account, and the confirmation page shows it to customers — fill it in before checkout goes live.
+- **The delivery fee.** `RATES.deliveryFlatRm` is `85`, the figure from the client's Order Confirmation design; set the real one in the catalogue settings. It is flat — one fee whatever the load or the distance.
+- **What happens when a paid design changes at re-measure?** The customer pays full price up front; there is no refund or top-up flow, so a re-measure that changes the cabinets is handled outside the app today.
+- **Weights.** Parcel partners price by the kilogram. A design row's optional weight pre-fills its delivery rows; every design without one leaves the admin typing it per delivery.
 - **The privacy notice at `/[lang]/privacy` is a draft.** Infinite Cabinet is the PDPA data controller: their counsel approves the wording, and the PostHog DPA should be signed in their legal name. Ask too whether behavioural analytics counts as "systematic monitoring" under the DPO guideline.
 
 ## Conventions

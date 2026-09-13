@@ -4,6 +4,7 @@ import { prisma } from "@/lib/catalogue/db";
 import { geocoderFault, refreshGeocoderHealth } from "@/lib/logistics/geocode";
 import { easyparcelAppConfigured } from "@/lib/logistics/oauth";
 import { hasConnection } from "@/lib/logistics/tokens";
+import { orderRef } from "@/lib/orders/ref";
 import { DeliveryDetail } from "../DeliveryDetail";
 
 /**
@@ -21,10 +22,14 @@ export default async function DeliveryPage({
 	const { id } = await params;
 	const delivery = await prisma.delivery.findUnique({
 		where: { id },
-		include: { events: { orderBy: { at: "desc" } } },
+		include: {
+			events: { orderBy: { at: "desc" } },
+			order: { select: { id: true, number: true, createdAt: true } },
+		},
 	});
 	if (!delivery) notFound();
 
+	const { order, ...row } = delivery;
 	const appConfigured = easyparcelAppConfigured();
 	const geocoder = await refreshGeocoderHealth();
 
@@ -37,13 +42,18 @@ export default async function DeliveryPage({
 				]}
 			/>
 			<DeliveryDetail
-				initial={JSON.parse(JSON.stringify(delivery))}
+				initial={JSON.parse(JSON.stringify(row))}
 				geocodingConfigured={geocoder.ok}
 				geocodingFault={geocoderFault()}
 				easyparcel={{
 					appConfigured,
 					connected: appConfigured ? await hasConnection("easyparcel") : false,
 				}}
+				order={
+					order
+						? { id: order.id, ref: orderRef(order.number, order.createdAt) }
+						: null
+				}
 			/>
 		</div>
 	);

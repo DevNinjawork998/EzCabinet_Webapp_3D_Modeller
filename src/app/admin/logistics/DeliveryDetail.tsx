@@ -268,12 +268,15 @@ export function DeliveryDetail({
 	geocodingConfigured,
 	geocodingFault,
 	easyparcel,
+	order = null,
 }: {
 	initial: DeliveryRow & { events: DeliveryEventRow[] };
 	geocodingConfigured: boolean;
 	/** Why the geocoder is not answering, in Google's own words. Null when it is. */
 	geocodingFault: string | null;
 	easyparcel: { appConfigured: boolean; connected: boolean };
+	/** The paid order this job came from, for the link back to it. */
+	order?: { id: string; ref: string } | null;
 }) {
 	const id = initial.id;
 	const [delivery, setDelivery] = useState<DeliveryRow>(initial);
@@ -1347,6 +1350,17 @@ export function DeliveryDetail({
 				<aside className="flex min-w-0 flex-[1_1_268px] flex-col gap-3.5 self-start lg:sticky lg:top-4">
 					<section className={`${CARD} gap-2.5 px-[18px] py-4`}>
 						<h2 className={EYEBROW}>Job details</h2>
+						{order && (
+							<div className="flex flex-col gap-0.5">
+								<span className="text-[#8a857c] text-[11px]">From order</span>
+								<Link
+									href={`/admin/orders/${order.id}`}
+									className={`text-[12px] underline ${FOCUS}`}
+								>
+									{order.ref}
+								</Link>
+							</div>
+						)}
 						{details.map((detail) => (
 							<div key={detail.label} className="flex flex-col gap-0.5">
 								<span className="text-[#8a857c] text-[11px]">

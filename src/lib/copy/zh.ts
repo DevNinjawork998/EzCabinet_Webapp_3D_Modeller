@@ -344,8 +344,7 @@ export const zh: Dictionary = {
 		savedBody:
 			"潜在客户功能尚未与 Infinite Cabinet 系统对接（属于本项目后续阶段）。此次操作未发送任何内容。",
 		heading: "订购这间{room}",
-		description:
-			"下单后以银行转账付款。设计师会在制作前到场核实您的尺寸。",
+		description: "下单后以银行转账付款。设计师会在制作前到场核实您的尺寸。",
 		fullName: "姓名",
 		phone: "电话号码（WhatsApp）",
 		email: "电子邮箱",

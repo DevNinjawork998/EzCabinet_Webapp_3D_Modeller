@@ -2,7 +2,7 @@ import { checkBotId } from "botid/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/catalogue/db";
-import { getPublishedPlannerCatalogue } from "@/lib/catalogue/store";
+import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
 import { toE164 } from "@/lib/logistics/phone";
 import {
 	ORDER_DESIGN_VERSION,
@@ -62,7 +62,10 @@ export async function POST(request: Request) {
 		return NextResponse.json({ error: "bad_phone" }, { status: 422 });
 	}
 
-	const published = await getPublishedPlannerCatalogue();
+	// Uncached on purpose. This is the figure a customer is charged, so it is
+	// priced against the version live this instant — not whatever a cache entry
+	// last saw — and it is one query per order.
+	const published = await readPublishedPlannerCatalogue();
 	const check = validateOrder(layout, roomId, finishId, published.data);
 	if (!check.ok) {
 		return NextResponse.json(

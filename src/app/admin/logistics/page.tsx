@@ -1,19 +1,27 @@
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { prisma } from "@/lib/catalogue/db";
+import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
 import { WORKSHOP_ADDRESS } from "@/lib/logistics/carriers";
 import { geocoderFault, refreshGeocoderHealth } from "@/lib/logistics/geocode";
 import { easyparcelAppConfigured } from "@/lib/logistics/oauth";
 import { hasConnection } from "@/lib/logistics/tokens";
+import { deliveryItemsFor } from "@/lib/orders/items";
+import { orderDesignSchema } from "@/lib/orders/layoutSchema";
+import { type FormState, formFromOrder } from "./form";
 import { LogisticsManager } from "./LogisticsManager";
 
 /**
  * Deliveries: getting finished cabinets from the workshop to a customer's site.
  *
- * The job is typed in here rather than arriving from an order, because there is
- * no order table yet — lead capture is Phase 3. When it lands, it pre-fills
- * this same form instead of replacing it.
+ * A job is either typed in, or created from a paid order with `?fromOrder=` —
+ * the order page's "Create delivery" — which opens the same form already filled.
  */
-export default async function LogisticsAdminPage() {
+export default async function LogisticsAdminPage({
+	searchParams,
+}: {
+	searchParams: Promise<{ fromOrder?: string }>;
+}) {
+	const { fromOrder } = await searchParams;
 	const deliveries = await prisma.delivery.findMany({
 		orderBy: { number: "desc" },
 	});
@@ -28,6 +36,7 @@ export default async function LogisticsAdminPage() {
 		appConfigured,
 		connected: appConfigured ? await hasConnection("easyparcel") : false,
 	};
+	const prefill = fromOrder ? await prefillFromOrder(fromOrder) : null;
 
 	return (
 		<div className="flex min-h-screen flex-col bg-[#f4f3f1] text-neutral-900">
@@ -47,8 +56,25 @@ export default async function LogisticsAdminPage() {
 					geocodingConfigured={geocoder.ok}
 					geocodingFault={geocoderFault()}
 					easyparcel={easyparcel}
+					prefill={prefill}
 				/>
 			</main>
 		</div>
 	);
+}
+
+/**
+ * The form for a paid order. Items come from the design as ordered, measured
+ * against today's catalogue so a weight added since the order still arrives.
+ * Null for an order that is not paid or not there — the list opens as usual.
+ */
+async function prefillFromOrder(orderId: string): Promise<FormState | null> {
+	const order = await prisma.order.findUnique({ where: { id: orderId } });
+	if (order?.status !== "PAID") return null;
+	const design = orderDesignSchema.safeParse(order.design);
+	const { data: catalogue } = await readPublishedPlannerCatalogue();
+	const items = design.success
+		? deliveryItemsFor(design.data.layout, catalogue)
+		: [];
+	return formFromOrder(order, items, WORKSHOP_ADDRESS);
 }
