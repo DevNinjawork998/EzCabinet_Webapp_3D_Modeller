@@ -8,5 +8,9 @@ allowBuilds:
   workerd: set this to true or false
 
 overrides:
+  '@hono/node-server': '^1.19.15'
   deepmerge-ts: '>=8.0.0'
+  hono: '^4.13.5'
+  lodash: '^4.18.1'
   mysql2: '>=3.24.3'
+  valibot: '^1.4.2'
