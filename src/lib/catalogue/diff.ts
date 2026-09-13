@@ -17,11 +17,12 @@ export function summariseCatalogueChanges(
 
 	const addedFamilies = next.families.filter((f) => !liveFamilies.has(f.id));
 	const removedFamilies = live.families.filter((f) => !nextFamilies.has(f.id));
-	for (const f of addedFamilies) lines.push(`Family added: ${f.label}`);
-	for (const f of removedFamilies) lines.push(`Family removed: ${f.label}`);
+	for (const f of addedFamilies) lines.push(`Cabinet added: ${f.label}`);
+	for (const f of removedFamilies) lines.push(`Cabinet removed: ${f.label}`);
 
 	let priceChanges = 0;
 	let sizeChanges = 0;
+	let weightChanges = 0;
 	const dimensionChanges: string[] = [];
 
 	for (const [id, nextFamily] of nextFamilies) {
@@ -50,11 +51,31 @@ export function summariseCatalogueChanges(
 		for (const widthMm of livePrices.keys()) {
 			if (!nextPrices.has(widthMm)) sizeChanges++;
 		}
+
+		// A weight never reaches a customer, but logistics pre-fills delivery rows
+		// from it — and publish treats "no change lines" as nothing to publish.
+		const liveWeights = new Map(
+			liveFamily.sizes.map((s) => [s.widthMm, s.weightKg]),
+		);
+		for (const size of nextFamily.sizes) {
+			if (
+				liveWeights.has(size.widthMm) &&
+				liveWeights.get(size.widthMm) !== size.weightKg
+			) {
+				weightChanges++;
+			}
+		}
+	}
+
+	if (weightChanges > 0) {
+		lines.push(
+			`${weightChanges} cabinet ${weightChanges === 1 ? "weight" : "weights"} changed`,
+		);
 	}
 
 	if (priceChanges > 0) {
 		lines.push(
-			`${priceChanges} carcass ${priceChanges === 1 ? "price" : "prices"} changed`,
+			`${priceChanges} cabinet ${priceChanges === 1 ? "price" : "prices"} changed`,
 		);
 	}
 	if (sizeChanges > 0) {
@@ -79,7 +100,7 @@ export function summariseCatalogueChanges(
 		lines.push("Door width ladder changed");
 	}
 	if (JSON.stringify(live.roomTypes) !== JSON.stringify(next.roomTypes)) {
-		lines.push("Room palettes or starter layouts changed");
+		lines.push("Rooms or the cabinets they offer changed");
 	}
 	if (JSON.stringify(live.rates) !== JSON.stringify(next.rates)) {
 		lines.push("Rates changed");

@@ -90,6 +90,8 @@ export async function POST(
 		pickupState: delivery.pickupState,
 		scheduledAt: delivery.scheduledAt,
 		splitFromNumber: delivery.number,
+		// Both halves still deliver the same order.
+		orderId: delivery.orderId,
 		items: items as never,
 		totalVolumeM3: totalVolumeM3(items),
 		totalWeightKg: totalWeightKg(items),

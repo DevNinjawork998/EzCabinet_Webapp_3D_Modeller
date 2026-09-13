@@ -1,4 +1,3 @@
-import { doorPriceRmIn } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
 
 /**
@@ -75,49 +74,4 @@ export function strandedFamilyIds(catalogue: PlannerCatalogue): string[] {
 	return catalogue.families
 		.filter((family) => !offered.has(family.id))
 		.map((family) => family.id);
-}
-
-export type DoorBlocker = {
-	doorStyleId: string;
-	doorStyleLabel: string;
-	widthMm: number;
-};
-
-/**
- * Every door style × offered width that would charge the customer nothing.
- *
- * `doorPriceRmIn` resolves an exact width, else the next rung of the door
- * ladder, else falls through to zero — and an unknown style id returns zero
- * outright. Those fallbacks are right at runtime: a throw would take the
- * planner down for a customer mid-design, and a zero at least renders. But it
- * is the same silent RM 0 the carcass gate already closes, one field over, so
- * it belongs in front of the same publish button. The fallbacks stay; the gate
- * is what stops a zero being published.
- *
- * Only widths a family actually offers count. The door ladder may carry rungs
- * nothing is manufactured at, and a door nobody can buy is not a problem to
- * solve. Stranded families are skipped for the same reason `blockersOf` skips
- * them.
- */
-export function doorBlockersOf(catalogue: PlannerCatalogue): DoorBlocker[] {
-	const stranded = new Set(strandedFamilyIds(catalogue));
-	const widths = new Set<number>();
-	for (const family of catalogue.families) {
-		if (stranded.has(family.id)) continue;
-		for (const size of family.sizes) widths.add(size.widthMm);
-	}
-	const offered = [...widths].sort((a, b) => a - b);
-
-	const blockers: DoorBlocker[] = [];
-	for (const style of catalogue.doorStyles) {
-		for (const widthMm of offered) {
-			if (doorPriceRmIn(catalogue, style.id, widthMm) > 0) continue;
-			blockers.push({
-				doorStyleId: style.id,
-				doorStyleLabel: style.label,
-				widthMm,
-			});
-		}
-	}
-	return blockers;
 }

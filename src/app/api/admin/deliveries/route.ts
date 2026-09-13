@@ -50,6 +50,18 @@ export async function POST(request: Request) {
 		...rest
 	} = parsed.data;
 
+	// Only a paid order becomes a delivery — the same gate the order page puts
+	// on its button, held here because a URL can be typed.
+	if (rest.orderId !== null) {
+		const order = await prisma.order.findUnique({
+			where: { id: rest.orderId },
+			select: { status: true },
+		});
+		if (order?.status !== "PAID") {
+			return NextResponse.json({ error: "order_not_paid" }, { status: 409 });
+		}
+	}
+
 	// Geocode here rather than at quote time: an address Google cannot place is
 	// the admin's typo, and they are far more likely to fix it now than when a
 	// partner comparison silently comes back one row short.

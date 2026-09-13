@@ -157,7 +157,9 @@ describe("snap targets from the cabinet's parts", () => {
 	});
 
 	it("only offers door leaves once a door has been chosen", () => {
-		const bare = layoutWith("base-cabinet");
+		// A placed cabinet arrives with a door now; take it off to get a bare one.
+		const placed = layoutWith("base-cabinet");
+		const bare = setDoor(placed, allPositions(placed)[0].placed.id, null);
 		const [barePosition] = allPositions(bare);
 		expect(barePosition.placed.doorStyleId).toBeNull();
 

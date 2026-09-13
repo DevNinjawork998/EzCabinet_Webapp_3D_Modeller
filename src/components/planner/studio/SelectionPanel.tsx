@@ -74,7 +74,7 @@ export function SelectionPanel({
 	canSwap: { left: boolean; right: boolean };
 	onToggleDoorAction: () => void;
 	onHingeAction: (side: HingeSide) => void;
-	onDoorStyleAction: (doorStyleId: string | null) => void;
+	onDoorStyleAction: (doorStyleId: string) => void;
 	onDuplicateAction: () => void;
 	onRemoveAction: () => void;
 }) {
@@ -85,12 +85,18 @@ export function SelectionPanel({
 		(isWall ? layout.hangingHeightMm : selected.family.floorHeightMm);
 
 	const verbs = [
-		{
-			key: "resize" as const,
-			label: t.planner.selection.verbResize,
-			meta: `${selected.widthMm} mm`,
-			press: () => onVerbAction(verb === "resize" ? null : "resize"),
-		},
+		// One design is one width: a cabinet with a single size has nothing to
+		// resize to, and a greyed-out verb would read as broken.
+		...(selected.family.sizes.length > 1
+			? [
+					{
+						key: "resize" as const,
+						label: t.planner.selection.verbResize,
+						meta: `${selected.widthMm} mm`,
+						press: () => onVerbAction(verb === "resize" ? null : "resize"),
+					},
+				]
+			: []),
 		{
 			key: "replace" as const,
 			label: t.planner.selection.verbReplace,
@@ -334,15 +340,6 @@ export function SelectionPanel({
 							{style.label}
 						</button>
 					))}
-					{selected.placed.doorStyleId && (
-						<button
-							type="button"
-							onClick={() => onDoorStyleAction(null)}
-							className="min-h-9 px-2 text-[12px] text-neutral-500 underline hover:text-neutral-900"
-						>
-							{t.planner.selection.noDoor}
-						</button>
-					)}
 				</div>
 
 				{/* Only a lone leaf gets a choice: a pair always hinges outward from

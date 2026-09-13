@@ -18,8 +18,9 @@ export const runtime = "nodejs";
  * `/api/admin`. What leaves here is the derived mesh — triangles, classified by
  * role, with the drafter's materials and every name stripped out.
  *
- * Only designs that have been pushed into the planner resolve, so this cannot
- * be used to preview a library row a customer was never meant to see.
+ * Any converted design resolves. The id is an unguessable cuid and the bytes
+ * are only triangles, so an unpublished design leaks nothing a live one would
+ * not.
  */
 export async function GET(
 	_request: Request,
@@ -29,13 +30,11 @@ export async function GET(
 
 	const design = await prisma.cabinetDesign.findUnique({
 		where: { id },
-		select: { meshPathname: true, familyId: true, status: true },
+		select: { meshPathname: true },
 	});
-	if (
-		!design?.meshPathname ||
-		!design.familyId ||
-		design.status !== "PUBLISHED"
-	) {
+	// No status check: an archived design stays in the live catalogue until the
+	// next publish, and until then it must still draw as the model, not a box.
+	if (!design?.meshPathname) {
 		return NextResponse.json({ error: "not found" }, { status: 404 });
 	}
 

@@ -81,6 +81,9 @@ export const RATES = {
 	endPanelBaseRm: 150,
 	endPanelWallRm: 90,
 	endPanelTallRm: 330,
+	/** PLACEHOLDER — the flat delivery charge on an order, taken from the
+	 * client's Order Confirmation design. Confirm with Infinite Cabinet. */
+	deliveryFlatRm: 85,
 };
 /** Underside of the wall cabinets — the sample job's own hanging height. */
 export const WALL_CABINET_FLOOR_MM = 1500;
@@ -431,48 +434,24 @@ export const ROOM_TYPES: RoomType[] = [
 			"fridge-housing",
 		],
 		defaultWallWidthMm: 4200,
-		starter: [
-			{ familyId: "base-cabinet", widthMm: 900 },
-			{ familyId: "base-drawers", widthMm: 400 },
-			{ familyId: "base-cabinet", widthMm: 900 },
-			{ familyId: "tall-cabinet", widthMm: 600 },
-			{ familyId: "wall-cabinet", widthMm: 900 },
-			{ familyId: "wall-cabinet", widthMm: 400 },
-			{ familyId: "wall-cabinet", widthMm: 900 },
-		],
 	},
 	{
 		id: "living",
 		label: "Living room",
 		familyIds: ["tv-ledge", "tv-tall", "wall-cabinet"],
 		defaultWallWidthMm: 4800,
-		starter: [
-			{ familyId: "tv-ledge", widthMm: 1800 },
-			{ familyId: "tv-ledge", widthMm: 1200 },
-			{ familyId: "tv-tall", widthMm: 600 },
-		],
 	},
 	{
 		id: "bedroom",
 		label: "Bedroom",
 		familyIds: ["wardrobe"],
 		defaultWallWidthMm: 3600,
-		starter: [
-			{ familyId: "wardrobe", widthMm: 1200 },
-			{ familyId: "wardrobe", widthMm: 900 },
-			{ familyId: "wardrobe", widthMm: 900 },
-		],
 	},
 	{
 		id: "foyer",
 		label: "Foyer",
 		familyIds: ["shoe-cabinet", "shoe-bench"],
 		defaultWallWidthMm: 2400,
-		starter: [
-			{ familyId: "shoe-cabinet", widthMm: 900 },
-			{ familyId: "shoe-cabinet", widthMm: 600 },
-			{ familyId: "shoe-bench", widthMm: 600 },
-		],
 	},
 ];
 

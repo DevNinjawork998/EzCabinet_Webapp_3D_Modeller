@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { blankForm, type DeliveryRow, formFrom, toPayload } from "../form";
+import {
+	blankForm,
+	type DeliveryRow,
+	formFrom,
+	formFromOrder,
+	toPayload,
+} from "../form";
 
 const row: DeliveryRow = {
 	id: "d1",
@@ -41,8 +47,40 @@ const row: DeliveryRow = {
 	bookedBy: null,
 	splitFromNumber: null,
 	publicToken: "tok_d1",
+	orderId: null,
 	createdAt: "2026-09-05T13:28:14.000Z",
 };
+
+describe("formFromOrder", () => {
+	const order = {
+		id: "o1",
+		customerName: "Jia Wei Tan",
+		customerPhone: "+60123384471",
+		siteAddress: "12 Jalan Meranti 4, 47120 Puchong",
+		addressNotes: null,
+	};
+
+	it("opens a new job with the order's customer, address and cabinets", () => {
+		const state = formFromOrder(order, row.items, "Workshop");
+
+		expect(state).toMatchObject({
+			id: null,
+			orderId: "o1",
+			customerName: "Jia Wei Tan",
+			siteAddress: "12 Jalan Meranti 4, 47120 Puchong",
+			addressNotes: "",
+			pickupAddress: "Workshop",
+		});
+		expect(toPayload(state)).toMatchObject({
+			orderId: "o1",
+			items: row.items,
+		});
+	});
+
+	it("still gives the admin a row to type into when the design had no cabinets left", () => {
+		expect(formFromOrder(order, [], "Workshop").items).toHaveLength(1);
+	});
+});
 
 describe("formFrom", () => {
 	it("carries the row's id so a save becomes a PATCH", () => {

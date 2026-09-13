@@ -10,8 +10,6 @@ import {
 	familyIn,
 	type ModuleKind,
 	ROOM_DEPTH_LIMITS,
-	type RoomTypeId,
-	roomTypeIn,
 	WALL_CABINET_FLOOR_MM,
 	WALL_HANG_LIMITS,
 } from "./catalogue";
@@ -909,7 +907,9 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 			id,
 			familyId,
 			widthMm,
-			doorStyleId: null,
+			// A cabinet is priced all-in with its door, so it always carries one.
+			// The first style is the base look; the others are surcharges on it.
+			doorStyleId: catalogue.doorStyles[0]?.id ?? null,
 			hinge: "left",
 			xMm: at,
 		};
@@ -1916,21 +1916,6 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 		return setHangAt(moved, id, to.hangAtMm);
 	}
 
-	/**
-	 * The room's own starter, so no room ever opens on a blank wall — the same
-	 * rule the wardrobe configurator follows. Dropped at 0 each time, so each one
-	 * takes the leftmost gap that holds it and the run comes out packed from the
-	 * left without a tidy-up pass.
-	 */
-	function starterFor(roomId: RoomTypeId): PlannerLayout {
-		const room = roomTypeIn(catalogue, roomId);
-		let layout = emptyLayout(room.defaultWallWidthMm);
-		for (const item of room.starter) {
-			layout = addModule(layout, item.familyId, 0, newId(), item.widthMm);
-		}
-		return layout;
-	}
-
 	return {
 		positionsOf,
 		allPositions,
@@ -1971,7 +1956,6 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 		closeGaps,
 		setWidth,
 		widthOptionsFor,
-		starterFor,
 		swapWithNeighbour,
 	};
 }

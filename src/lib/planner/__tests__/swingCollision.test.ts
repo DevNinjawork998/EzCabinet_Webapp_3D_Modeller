@@ -5,6 +5,7 @@ import { sideGapsMm } from "../exposure";
 import { type HingeSide, plannerEngine } from "../layout";
 import { cabinetPartsMm } from "../parts";
 import { type BoxMm, swingOf } from "../swing";
+import { furnished } from "./furnished";
 
 const engine = plannerEngine(PLANNER_CATALOGUE);
 
@@ -46,7 +47,7 @@ describe("two open doors never sweep through each other", () => {
 	it.each([0, 30, 80, 150, 400])(
 		"across every hinge combination, with the run spread by %imm",
 		(spreadMm) => {
-			const base = engine.starterFor("kitchen");
+			const base = furnished(engine, "kitchen");
 			// Slide each cabinet progressively right, which is what the user did:
 			// the gaps open up, nothing is "touching" any more, and a boolean view
 			// of the neighbour would switch every limit off at once.

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BufferAttribute, BufferGeometry } from "three";
+import { captureError } from "@/lib/analytics";
 import {
 	decodeRenderMesh,
 	type MeshGroup,
@@ -82,6 +83,13 @@ function loadMesh(designId: string): Promise<MeshGroup[]> {
 			.then((mesh) => {
 				resolved.set(designId, mesh.groups);
 				return mesh.groups;
+			})
+			// The cabinet still renders — procedurally — so this failure is
+			// invisible on screen. Reported here, once per design, rather than
+			// in each placement's hook.
+			.catch((error: unknown) => {
+				captureError(error, { designId });
+				throw error;
 			});
 		meshes.set(designId, pending);
 	}

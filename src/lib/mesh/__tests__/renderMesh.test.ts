@@ -271,6 +271,22 @@ describe("splitDoorLeaves", () => {
 		expect(right.bboxMm.max[0] - right.bboxMm.min[0]).toBeCloseTo(398, 0);
 	});
 
+	// The client's own exports: BC 600 draws its leaves 2.3mm apart, BC 800
+	// exactly 3mm. A threshold of "more than 3mm" split only the 900, and the
+	// other two swung open as one leaf.
+	it.each([2.3, 3])("splits a pair drawn %smm apart", (revealMm) => {
+		const pair = PAIR.replace(
+			inchBox("Door_R_", [mm(402), 0, 0], [mm(800), mm(16), mm(720)], 32),
+			inchBox(
+				"Door_R_",
+				[mm(398 + revealMm), 0, 0],
+				[mm(800), mm(16), mm(720)],
+				32,
+			),
+		);
+		expect(splitDoorLeaves(doorOf(pair))).toHaveLength(2);
+	});
+
 	it("keeps every triangle", () => {
 		const door = doorOf(PAIR);
 		const split = splitDoorLeaves(door);
@@ -282,6 +298,66 @@ describe("splitDoorLeaves", () => {
 		const door = doorOf(CABINET);
 		expect(splitDoorLeaves(door)).toEqual([door]);
 	});
+
+	/**
+	 * A narrow single-door cabinet, the way a new upload might draw its front.
+	 * Lowering the reveal threshold must not start cutting a lone leaf in two —
+	 * that would hang it as a pair and take the customer's hinge choice away.
+	 */
+	const singleDoor = (
+		widthMm: number,
+		front: Array<[string, number[], number[]]>,
+	) => {
+		const w = widthMm;
+		const boxes: Array<[string, number[], number[]]> = [
+			["G-UEnd_(L)", [0, 0, 0], [16, 600, 720]],
+			["G-UEnd_(R)", [w - 16, 0, 0], [w, 600, 720]],
+			["G-UBack", [0, 584, 0], [w, 600, 720]],
+			["G-Bottom", [16, 0, 0], [w - 16, 584, 16]],
+			["G-Top", [16, 0, 704], [w - 16, 584, 720]],
+			["G-Fixed_Shelf", [16, 0, 400], [w - 16, 584, 416]],
+			...front,
+		];
+		return boxes
+			.map(([name, lo, hi], i) => inchBox(name, lo.map(mm), hi.map(mm), i * 8))
+			.join("\n");
+	};
+
+	const FRONTS: Record<
+		string,
+		(w: number) => Array<[string, number[], number[]]>
+	> = {
+		"a slab": (w) => [["G-Door", [1.5, 0, 0], [w - 1.5, 16, 720]]],
+		"a slab named with its side": (w) => [
+			["Door_L_", [1.5, 0, 0], [w - 1.5, 16, 720]],
+		],
+		"one board exported as two touching records": (w) => [
+			["G-Door", [1.5, 0, 0], [w / 2, 16, 720]],
+			["G-Door", [w / 2, 0, 0], [w - 1.5, 16, 720]],
+		],
+		"a glass door: frame and pane, every piece touching": (w) => [
+			["G-Door_Stile", [1.5, 0, 0], [61.5, 20, 720]],
+			["G-Door_Stile", [w - 61.5, 0, 0], [w - 1.5, 20, 720]],
+			["G-Door_Rail", [61.5, 0, 0], [w - 61.5, 20, 60]],
+			["G-Door_Rail", [61.5, 0, 660], [w - 61.5, 20, 720]],
+			["G-Door_Glass", [55, 8, 55], [w - 55, 12, 665]],
+		],
+	};
+
+	describe.each([300, 400, 450, 600])(
+		"a %smm single-door design",
+		(widthMm) => {
+			it.each(Object.keys(FRONTS))(
+				"stays one leaf when drawn as %s",
+				(front) => {
+					const door = doorOf(singleDoor(widthMm, FRONTS[front](widthMm)));
+					const leaves = splitDoorLeaves(door);
+					expect(leaves).toHaveLength(1);
+					expect(leaves[0].indices.length).toBe(door.indices.length);
+				},
+			);
+		},
+	);
 });
 
 describe("the drafter's handedness survives intake", () => {

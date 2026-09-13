@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PLANNER_CATALOGUE } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
-import { blockersOf, doorBlockersOf, strandedFamilyIds } from "../health";
+import { blockersOf, strandedFamilyIds } from "../health";
 
 /** Deep clone so a test can mutate without touching the live constant. */
 const clone = (c: PlannerCatalogue): PlannerCatalogue =>
@@ -113,56 +113,5 @@ describe("strandedFamilyIds", () => {
 		next.roomTypes[0].familyIds.push(id);
 
 		expect(strandedFamilyIds(next)).toEqual([]);
-	});
-});
-
-describe("doorBlockersOf", () => {
-	it("finds nothing when every offered width is priced", () => {
-		expect(doorBlockersOf(PLANNER_CATALOGUE)).toEqual([]);
-	});
-
-	it("reports a width no door style prices", () => {
-		const next = clone(PLANNER_CATALOGUE);
-		const family = next.families[0];
-		const style = next.doorStyles[0];
-		for (const key of Object.keys(style.priceRmBySizeMm)) {
-			delete style.priceRmBySizeMm[key];
-		}
-
-		const blocked = doorBlockersOf(next);
-		expect(blocked.some((b) => b.doorStyleId === style.id)).toBe(true);
-		expect(
-			blocked.some(
-				(b) =>
-					b.doorStyleId === style.id && b.widthMm === family.sizes[0].widthMm,
-			),
-		).toBe(true);
-		expect(
-			blocked.every((b) => b.doorStyleLabel === next.doorStyles[0].label),
-		).toBe(true);
-	});
-
-	it("ignores door ladder rungs no family is built at", () => {
-		const next = clone(PLANNER_CATALOGUE);
-		// A door width nothing is manufactured at cannot be sold, so it is not a
-		// problem to solve.
-		next.doorWidthLadderMm = [...next.doorWidthLadderMm, 9999];
-
-		expect(doorBlockersOf(next)).toEqual([]);
-	});
-
-	it("skips families no room offers", () => {
-		const next = clone(PLANNER_CATALOGUE);
-		const orphanWidth = 1234;
-		next.families.push({
-			...PLANNER_CATALOGUE.families[0],
-			id: "test-orphan",
-			label: "Retired",
-			sizes: [{ widthMm: orphanWidth, priceRm: 100 }],
-		});
-
-		expect(doorBlockersOf(next).some((b) => b.widthMm === orphanWidth)).toBe(
-			false,
-		);
 	});
 });

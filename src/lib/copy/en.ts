@@ -18,6 +18,7 @@ export const en = {
 		next: "Next",
 		close: "Close",
 		language: "Language",
+		comingSoon: "Coming soon",
 	},
 	landing: {
 		nav: {
@@ -41,7 +42,7 @@ export const en = {
 			alt: "A finished Infinite Cabinet kitchen",
 		},
 		facts: {
-			starterKitchenLabel: "Starter kitchen run",
+			cabinetsFromLabel: "Cabinets from",
 			typicalDeliveryValue: "4-6 weeks",
 			typicalDeliveryLabel: "Typical delivery",
 			warrantyValue: "5 years",
@@ -105,6 +106,7 @@ export const en = {
 			tutorials: "Tutorials",
 			contactHeading: "Contact",
 			email: "hello@infinitecabinet.com",
+			privacy: "Privacy",
 			adminSignIn: "Admin sign in",
 			copyright: "© 2026 {brand}. All rights reserved.",
 		},
@@ -159,7 +161,7 @@ export const en = {
 		start: {
 			heading: "What room are you planning?",
 			subtitle:
-				"Pick one to start from real Infinite Cabinet sizes and a layout already on your wall.",
+				"Pick one to start on an empty wall with real Infinite Cabinet sizes.",
 			roomIconAlt: "{room} icon",
 			roomSubtitle: {
 				kitchen: "Real Infinite Cabinet sizes",
@@ -167,12 +169,6 @@ export const en = {
 				bedroom: "Wardrobes",
 				foyer: "Shoe cabinets & bench",
 			},
-			thenLayout: "Then, a starting layout for a {width} m wall",
-			fullRun: "Full run",
-			unitsFromPrice: "{count} units · from {price}",
-			startBlank: "Start blank",
-			blankWall: "Blank wall",
-			buildItYourself: "Build it yourself",
 			cta: "Start planning",
 		},
 		room: {
@@ -230,6 +226,14 @@ export const en = {
 			heading: "Add cabinets",
 			subtitle: "Drag onto the wall. Size and front come after.",
 			sizeRange: "{min}–{max}mm · from {price}",
+			widthPrice: "{width}mm · {price}",
+			categories: {
+				BASE_CABINET: "Base cabinets",
+				WALL_CABINET: "Wall cabinets",
+				TALL_CABINET: "Tall cabinets",
+				DRAWER_BASE: "Drawer bases",
+				FRIDGE_HOUSING: "Fridge housings",
+			},
 		},
 		canvas: {
 			selectHint: "Click a cabinet to select it · right-click for its actions",
@@ -280,7 +284,6 @@ export const en = {
 			width: "Width",
 			noRoom: "no room",
 			front: "Front",
-			noDoor: "No door",
 			swing: "Swing",
 			closeDoor: "Close door",
 			openDoor: "Open door",
@@ -357,17 +360,28 @@ export const en = {
 		savedHeading: "Saved — for this demo only",
 		savedBody:
 			"Lead capture isn't wired to Infinite Cabinet yet (that's a later phase of this build). Nothing was sent anywhere.",
-		heading: "Get a real quote on this {room}",
+		heading: "Order this {room}",
 		description:
-			"A designer at Infinite Cabinet checks your layout and measurements, then calls you with a firm price — usually within one business day.",
+			"Place the order, then pay by bank transfer. A designer confirms your measurements on site before anything is built.",
 		fullName: "Full name",
 		phone: "Phone (WhatsApp)",
 		email: "Email",
 		area: "Area",
+		siteAddress: "Delivery address",
+		addressNotes: "Access notes — unit, gate code, lift",
 		remeasureNote:
-			"A designer may re-measure on site — final price can change from this estimate.",
+			"I understand a designer re-measures on site before production and will contact me if the design has to change.",
 		saved: "Saved",
-		submitCta: "Send my design for a quote",
+		submitCta: "Place order",
+		submitting: "Placing your order…",
+		errorGeneric: "We couldn't place your order. Please try again.",
+		errorPhone:
+			"That phone number doesn't look right. Include the area code, like 012-345 6789.",
+		errorDesign:
+			"Something in this design can't be ordered as it stands. Go back to editing and check your cabinets.",
+		subtotal: "Cabinets",
+		delivery: "Delivery",
+		total: "Total",
 		summary: "{room} · {wall} m wall · {count} {unit}",
 		noFrontsYet: "no fronts chosen yet",
 		frontsLabel: "{label} fronts",
@@ -400,6 +414,46 @@ export const en = {
 			intermediate: "Intermediate",
 			advanced: "Advanced",
 		},
+	},
+	/** The page a customer lands on after checkout, reached by its public token. */
+	order: {
+		breadcrumb: "Order confirmation",
+		headingAwaiting: "Order placed — awaiting payment",
+		bodyAwaiting:
+			"Thanks, your order is saved. Transfer the total below to confirm it.",
+		headingPaid: "Order confirmed",
+		bodyPaid: "Payment received. Your cabinets are going into production.",
+		headingCancelled: "Order cancelled",
+		bodyCancelled:
+			"This order was cancelled. Get in touch if that isn't what you expected.",
+		orderId: "Order ID",
+		copyOrderId: "Copy order ID",
+		copied: "Copied",
+		summaryHeading: "Order summary",
+		qty: "Qty {count}",
+		subtotal: "Subtotal",
+		delivery: "Delivery",
+		total: "Total",
+		totalPaid: "Total paid",
+		addressHeading: "Delivery address",
+		payHeading: "Pay by bank transfer",
+		payBank: "Bank",
+		payAccountName: "Account name",
+		payAccountNumber: "Account number",
+		payReference: "Reference",
+		payAmount: "Amount",
+		payNote:
+			"Use your order ID as the transfer reference so we can match your payment. We'll contact you once it arrives, usually within one working day.",
+		nextHeading: "What happens next",
+		stagePaid: "Payment received",
+		stageMeasure: "Site re-measure",
+		stageMeasureDetail:
+			"A designer confirms your measurements before production.",
+		stageBuild: "Cabinets built in our workshop",
+		stageDelivery: "Delivery to your site",
+		trackDelivery: "Track your delivery",
+		backToPlanner: "Back to planner",
+		backHome: "Back to home",
 	},
 	/**
 	 * The delivery tracking page a customer reaches from their link.
@@ -457,6 +511,42 @@ export const en = {
 			CANCELLED: "Cancelled",
 			FAILED: "Failed",
 		},
+	},
+	/**
+	 * The analytics consent banner. PDPA s.129: the transfer outside Malaysia
+	 * is named in the banner itself, not only behind the link.
+	 */
+	consent: {
+		title: "Help us improve the planner",
+		body: "Allow us to record how you use the planner and any errors, processed by PostHog in the EU (outside Malaysia). Nothing you type is included. If you decline, we only count visits, without cookies.",
+		accept: "Allow",
+		reject: "Decline",
+		learnMore: "Privacy notice",
+	},
+	/** Draft wording — Infinite Cabinet's counsel approves it before production. */
+	privacy: {
+		title: "Privacy notice",
+		draft:
+			"Draft — pending review by Infinite Cabinet Sdn Bhd before it takes effect.",
+		intro:
+			"This notice explains what the Infinite Cabinet planner records when you use it, and why.",
+		purposeHeading: "Why",
+		purpose: "To find where the planner is confusing or broken, and fix it.",
+		collectHeading: "What we record",
+		collect:
+			"Which screens you open, the design choices you make (room, cabinets, sizes, finish, doors), the estimated price, the type of device and browser, and technical errors the planner hits. If you allow it, we also keep a short recording of the page — with everything you type hidden — when an error happens, so we can see what went wrong.",
+		notCollectHeading: "What we never record",
+		notCollect:
+			"Your name, phone number, email or address from the quote form are not sent to our analytics provider. We do not keep your IP address in analytics.",
+		whereHeading: "Who processes it, and where",
+		where:
+			"Usage data is processed by PostHog Inc. on servers in the European Union (Frankfurt), under a data processing agreement. This means the data is transferred outside Malaysia. The website itself is hosted by Vercel.",
+		choiceHeading: "Your choice",
+		choice:
+			"If you decline, we only count visits without cookies or local storage, with an identifier that resets daily, and no recordings are made. You can change your choice at any time by clearing this site's data in your browser.",
+		contactHeading: "Contact",
+		contact: "Questions, or requests to access or correct your data: {email}",
+		back: "Back to home",
 	},
 } as const;
 

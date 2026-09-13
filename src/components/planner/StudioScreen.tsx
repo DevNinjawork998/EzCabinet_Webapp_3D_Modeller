@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { track } from "@/lib/analytics";
+import { CATEGORIES } from "@/lib/catalogue/cabinetDesignLabels";
 import type { Dictionary } from "@/lib/copy/en";
 import { fill } from "@/lib/copy/fill";
 import { htmlLang } from "@/lib/copy/locales";
@@ -17,6 +19,7 @@ import {
 	WALL_HANG_LIMITS,
 } from "@/lib/planner/catalogue";
 import {
+	emptyLayout,
 	type HingeSide,
 	type PlannerLayout,
 	type Positioned,
@@ -52,6 +55,13 @@ import { SelectionPanel, type SelectionVerb } from "./studio/SelectionPanel";
 import { PanelOption, PanelToggle, StudioPanel } from "./studio/StudioPanel";
 import { type StudioTool, ToolRail } from "./studio/ToolRail";
 import { FamilyThumb } from "./thumbs";
+
+/** Where a family with no library category is shelved in the add menu. */
+const KIND_CATEGORY = {
+	base: "BASE_CABINET",
+	wall: "WALL_CABINET",
+	tall: "TALL_CABINET",
+} as const;
 
 function ScenePlaceholder() {
 	const t = useCopy();
@@ -245,7 +255,6 @@ export function StudioScreen({
 		setWallToWall,
 		setWallWidth,
 		setWidth,
-		starterFor,
 		swapWithNeighbour,
 		widthOptionsFor,
 	} = useEngine();
@@ -274,7 +283,11 @@ export function StudioScreen({
 	// used to be `measureMode`, and the other four open the overlay panel. One
 	// piece of state rather than two, so the rail and the panel can never
 	// disagree about what is open.
-	const [tool, setTool] = useState<StudioTool>("select");
+	// An empty wall opens on the cabinet menu: a bare room gives no clue where
+	// cabinets come from, and adding one is the only useful first move.
+	const [tool, setTool] = useState<StudioTool>(() =>
+		layout.floor.length + layout.wall.length === 0 ? "add" : "select",
+	);
 	const panel = tool === "select" || tool === "measure" ? null : tool;
 	const measureMode = tool === "measure";
 	const [measurePoints, setMeasurePoints] = useState<SnapPoint[]>([]);
@@ -295,6 +308,7 @@ export function StudioScreen({
 	};
 
 	const pressTool = (next: StudioTool) => {
+		track("tool_used", { tool: next });
 		setTool((current) => (current === next ? "select" : next));
 		if (next !== "measure") return;
 		setMeasurePoints([]);
@@ -334,14 +348,18 @@ export function StudioScreen({
 			.map((family) => ({
 				id: family.id,
 				label: family.label,
-				meta: fill(t.planner.selection.sizeRangeMeta, {
-					min: family.sizes[0].widthMm,
-					max: family.sizes[family.sizes.length - 1].widthMm,
-				}),
+				meta:
+					family.sizes.length === 1
+						? `${family.sizes[0].widthMm} mm`
+						: fill(t.planner.selection.sizeRangeMeta, {
+								min: family.sizes[0].widthMm,
+								max: family.sizes[family.sizes.length - 1].widthMm,
+							}),
 				current: family.id === position.family.id,
 			}));
 
 	const removeSelected = () => {
+		track("cabinet_removed", { count: selectedIds.length, via: "button" });
 		setLayoutAction((prev) => removeModules(prev, selectedIds));
 		setSelectedIdsAction([]);
 	};
@@ -391,6 +409,7 @@ export function StudioScreen({
 
 	const dropCarcass = (familyId: string, clientX: number, clientY: number) => {
 		const runXMm = pickerRef.current?.(clientX, clientY) ?? 0;
+		track("cabinet_added", { family: familyId, via: "drag" });
 		setLayoutAction((prev) => addModule(prev, familyId, runXMm));
 	};
 
@@ -430,45 +449,82 @@ export function StudioScreen({
 		/>
 	);
 
+	// Shelved the way a showroom is: base cabinets together, wall cabinets
+	// together. A family published before categories existed is shelved by how
+	// it places.
+	const offered = room.familyIds.flatMap((familyId) => {
+		const family = familyIn(catalogue, familyId);
+		return family ? [family] : [];
+	});
 	const addBody = (
-		<div className="grid grid-cols-2 gap-2">
-			{room.familyIds.map((familyId) => {
-				const option = familyIn(catalogue, familyId);
-				if (!option) return null;
-				const canFit = fits(layout, familyId);
+		<div className="flex flex-col gap-3">
+			{CATEGORIES.map((category) => {
+				const shelf = offered.filter(
+					(family) =>
+						(family.category ?? KIND_CATEGORY[family.kind]) === category,
+				);
+				if (shelf.length === 0) return null;
 				return (
-					<button
-						key={familyId}
-						type="button"
-						draggable={canFit}
-						onDragStart={(e) => {
-							e.dataTransfer.setData("text/plain", `family:${familyId}`);
-							e.dataTransfer.effectAllowed = "copy";
-							setDragFamilyId(familyId);
-						}}
-						onDragEnd={() => setDragFamilyId(null)}
-						onClick={() =>
-							setLayoutAction((prev) => addModule(prev, familyId, 0))
-						}
-						disabled={!canFit}
-						className={`rounded-lg border p-2 text-left transition ${
-							canFit
-								? "cursor-grab border-neutral-200 hover:border-neutral-500 active:cursor-grabbing"
-								: "cursor-not-allowed border-neutral-100 opacity-40"
-						}`}
-					>
-						<FamilyThumb family={option} />
-						<p className="mt-1.5 font-medium text-[12px]">{option.label}</p>
-						<p className="text-[11px] text-neutral-500">
-							{fill(t.planner.addCabinets.sizeRange, {
-								min: option.sizes[0].widthMm,
-								max: option.sizes[option.sizes.length - 1].widthMm,
-								price: formatRm(option.sizes[0].priceRm, {
-									maximumFractionDigits: 0,
-								}),
-							})}
+					<section key={category} className="flex flex-col gap-1.5">
+						<p className="font-semibold text-[11px] text-neutral-600 uppercase tracking-[0.06em]">
+							{t.planner.addCabinets.categories[category]}
 						</p>
-					</button>
+						<div className="grid grid-cols-2 gap-2">
+							{shelf.map((option) => {
+								const familyId = option.id;
+								const canFit = fits(layout, familyId);
+								const price = formatRm(option.sizes[0].priceRm, {
+									maximumFractionDigits: 0,
+								});
+								return (
+									<button
+										key={familyId}
+										type="button"
+										draggable={canFit}
+										onDragStart={(e) => {
+											e.dataTransfer.setData(
+												"text/plain",
+												`family:${familyId}`,
+											);
+											e.dataTransfer.effectAllowed = "copy";
+											setDragFamilyId(familyId);
+										}}
+										onDragEnd={() => setDragFamilyId(null)}
+										onClick={() => {
+											track("cabinet_added", {
+												family: familyId,
+												via: "click",
+											});
+											setLayoutAction((prev) => addModule(prev, familyId, 0));
+										}}
+										disabled={!canFit}
+										className={`rounded-lg border p-2 text-left transition ${
+											canFit
+												? "cursor-grab border-neutral-200 hover:border-neutral-500 active:cursor-grabbing"
+												: "cursor-not-allowed border-neutral-100 opacity-40"
+										}`}
+									>
+										<FamilyThumb family={option} />
+										<p className="mt-1.5 font-medium text-[12px]">
+											{option.label}
+										</p>
+										<p className="text-[11px] text-neutral-500">
+											{option.sizes.length === 1
+												? fill(t.planner.addCabinets.widthPrice, {
+														width: option.sizes[0].widthMm,
+														price,
+													})
+												: fill(t.planner.addCabinets.sizeRange, {
+														min: option.sizes[0].widthMm,
+														max: option.sizes[option.sizes.length - 1].widthMm,
+														price,
+													})}
+										</p>
+									</button>
+								);
+							})}
+						</div>
+					</section>
 				);
 			})}
 		</div>
@@ -488,7 +544,10 @@ export function StudioScreen({
 								: t.planner.panel.planHint
 					}
 					pressed={view === option.id}
-					onPressAction={() => setView(option.id)}
+					onPressAction={() => {
+						track("view_changed", { view: option.id });
+						setView(option.id);
+					}}
 				/>
 			))}
 			<PanelOption
@@ -514,6 +573,7 @@ export function StudioScreen({
 					}
 					pressed={doorView === mode.id}
 					onPressAction={() => {
+						track("doors_toggled", { scope: "all", mode: mode.id });
 						setDoorsHidden(mode.id === "hidden");
 						setOpenIds(
 							mode.id === "open"
@@ -615,7 +675,9 @@ export function StudioScreen({
 	);
 
 	return (
-		<main className="flex h-screen flex-col bg-[#f4f3f1] text-neutral-900">
+		// Viewport less the language strip's `h-9` above it: a bare `h-screen`
+		// pushed the checkout button 36px below the fold.
+		<main className="flex h-[calc(100dvh-2.25rem)] flex-col bg-[#f4f3f1] text-neutral-900">
 			<PlannerHeader
 				trail={[
 					{ label: t.common.brand, href: "/" },
@@ -737,11 +799,16 @@ export function StudioScreen({
 							y={menu.y}
 							onDismissAction={() => setMenu(null)}
 							items={[
-								{
-									key: "resize",
-									label: t.planner.selection.verbResize,
-									press: () => setVerb("resize"),
-								},
+								...((placed.find((p) => p.placed.id === menu.id)?.family.sizes
+									.length ?? 0) > 1
+									? [
+											{
+												key: "resize",
+												label: t.planner.selection.verbResize,
+												press: () => setVerb("resize"),
+											},
+										]
+									: []),
 								{
 									key: "replace",
 									label: t.planner.selection.verbReplace,
@@ -919,16 +986,21 @@ export function StudioScreen({
 										?.amountRm ?? 0,
 									{ maximumFractionDigits: 0 },
 								)}
-								onWidthAction={(widthMm) =>
+								onWidthAction={(widthMm) => {
+									track("cabinet_resized", {
+										family: selected.family.id,
+										widthMm,
+									});
 									setLayoutAction((prev) =>
 										setWidth(prev, selected.placed.id, widthMm),
-									)
-								}
-								onReplaceAction={(familyId) =>
+									);
+								}}
+								onReplaceAction={(familyId) => {
+									track("cabinet_replaced", { family: familyId });
 									setLayoutAction((prev) =>
 										replaceFamily(prev, selected.placed.id, familyId),
-									)
-								}
+									);
+								}}
 								onOffsetAction={(xMm) =>
 									setLayoutAction((prev) =>
 										moveModule(prev, selected.placed.id, xMm),
@@ -950,25 +1022,27 @@ export function StudioScreen({
 										setRotation(prev, selected.placed.id, deg),
 									)
 								}
-								onToggleDoorAction={() =>
+								onToggleDoorAction={() => {
+									track("doors_toggled", { scope: "one" });
 									setOpenIds((prev) => {
 										const next = new Set(prev);
 										if (!next.delete(selected.placed.id)) {
 											next.add(selected.placed.id);
 										}
 										return next;
-									})
-								}
+									});
+								}}
 								onHingeAction={(side) =>
 									setLayoutAction((prev) =>
 										setHinge(prev, selected.placed.id, side),
 									)
 								}
-								onDoorStyleAction={(doorStyleId) =>
+								onDoorStyleAction={(doorStyleId) => {
+									track("door_style_changed", { doorStyle: doorStyleId });
 									setLayoutAction((prev) =>
 										setDoors(prev, [selected.placed.id], doorStyleId),
-									)
-								}
+									);
+								}}
 								onDuplicateAction={() =>
 									setLayoutAction((prev) =>
 										duplicateModule(prev, selected.placed.id),
@@ -991,27 +1065,19 @@ export function StudioScreen({
 												<button
 													key={style.id}
 													type="button"
-													onClick={() =>
+													onClick={() => {
+														track("door_style_changed", {
+															doorStyle: style.id,
+														});
 														setLayoutAction((prev) =>
 															setDoors(prev, selectedIds, style.id),
-														)
-													}
+														);
+													}}
 													className="rounded-md bg-white px-2.5 py-1 text-[12px] text-neutral-700 shadow-[inset_0_0_0_1px_#d4d4d4] transition hover:shadow-[inset_0_0_0_1px_#a3a3a3]"
 												>
 													{style.label}
 												</button>
 											))}
-											<button
-												type="button"
-												onClick={() =>
-													setLayoutAction((prev) =>
-														setDoors(prev, selectedIds, null),
-													)
-												}
-												className="rounded-md px-2.5 py-1 text-[12px] text-neutral-500 underline hover:text-neutral-900"
-											>
-												{t.planner.selection.noDoor}
-											</button>
 										</div>
 									</div>
 
@@ -1052,7 +1118,7 @@ export function StudioScreen({
 								setLayoutAction((prev) => closeGaps(prev))
 							}
 							onResetAction={() => {
-								setLayoutAction(starterFor(roomId));
+								setLayoutAction(emptyLayout(room.defaultWallWidthMm));
 								setSelectedIdsAction([]);
 							}}
 						/>

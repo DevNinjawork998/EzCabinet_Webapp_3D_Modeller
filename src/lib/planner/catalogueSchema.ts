@@ -12,6 +12,13 @@ const sizeOptionSchema = z.object({
 	widthMm: z.number().positive(),
 	priceRm: z.number().min(0),
 	/**
+	 * What one of these weighs, typed on the design row. Optional because most
+	 * carcasses have never been weighed, and a delivery row leaves weight blank
+	 * rather than guess — parcel partners price by the kilogram. Placed before
+	 * `meshDesignId` so a built size and a parsed one serialise identically.
+	 */
+	weightKg: z.number().positive().optional(),
+	/**
 	 * The design this rung is drawn from, if one has been published for it.
 	 *
 	 * The planner fetches `/api/cabinet-mesh/<id>` and draws the model the
@@ -36,7 +43,7 @@ export type SizeOption = z.infer<typeof sizeOptionSchema>;
  * design intake existed have to keep validating. `Cabinet.tsx` falls back to
  * its own defaults when it is absent.
  */
-const cabinetGeometrySchema = z.object({
+export const cabinetGeometrySchema = z.object({
 	shelves: z.number().int().min(0),
 	fixedShelves: z.number().int().min(0),
 	doorLeaves: z.number().int().min(0),
@@ -63,6 +70,19 @@ export const familySchema = z.object({
 	id: z.string(),
 	label: z.string(),
 	kind: z.enum(["base", "wall", "tall"]),
+	/** The design library's category, which heads the customer's add-cabinet
+	 * menu. Finer than `kind`: a drawer base and a fridge housing place like a
+	 * base and a tall unit but are shelved separately. Optional so the seed and
+	 * versions published before it keep parsing. */
+	category: z
+		.enum([
+			"BASE_CABINET",
+			"WALL_CABINET",
+			"TALL_CABINET",
+			"DRAWER_BASE",
+			"FRIDGE_HOUSING",
+		])
+		.optional(),
 	depthMm: z.number().positive(),
 	heightMm: z.number().positive(),
 	floorHeightMm: z.number().min(0),
@@ -86,10 +106,9 @@ export type DoorStyle = z.infer<typeof doorStyleSchema>;
 const roomTypeSchema = z.object({
 	id: z.enum(["kitchen", "living", "bedroom", "foyer"]),
 	label: z.string(),
-	familyIds: z.array(z.string()).min(1),
-	starter: z.array(
-		z.object({ familyId: z.string(), widthMm: z.number().positive() }),
-	),
+	/** Empty is a real state: a room no design is filed under yet, which the
+	 * start screen shows as coming soon. */
+	familyIds: z.array(z.string()),
 	defaultWallWidthMm: z.number().positive(),
 });
 export type RoomType = z.infer<typeof roomTypeSchema>;
@@ -127,11 +146,16 @@ const ratesSchema = z.object({
 	endPanelBaseRm: z.number().min(0).optional(),
 	endPanelWallRm: z.number().min(0).optional(),
 	endPanelTallRm: z.number().min(0).optional(),
+	/** One flat delivery charge added to an order at checkout. Optional like
+	 * the rest. */
+	deliveryFlatRm: z.number().min(0).optional(),
 });
 export type Rates = z.infer<typeof ratesSchema>;
 
 export const plannerCatalogueSchema = z.object({
-	families: z.array(familySchema).min(1),
+	/** Rebuilt from the design library on every publish, so a library with no
+	 * designs yet is an empty list, not an invalid catalogue. */
+	families: z.array(familySchema),
 	doorStyles: z.array(doorStyleSchema).min(1),
 	/** The width ladder doors are priced against — was a private constant,
 	 * now catalogue data so a new door size is actually priceable. */

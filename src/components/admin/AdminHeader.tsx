@@ -17,14 +17,22 @@ import { usePathname, useRouter } from "next/navigation";
 
 const TABS = [
 	{ label: "Cabinet designs", href: "/admin/cabinet-designs" },
-	{ label: "Catalogue", href: "/admin/catalogue" },
-	{ label: "Import design", href: "/admin/import" },
+	{ label: "Orders", href: "/admin/orders" },
 	{ label: "Logistics", href: "/admin/logistics" },
 	{ label: "Site content", href: "/admin/site-content" },
 	{ label: "Tutorials", href: "/admin/tutorials" },
 ];
 
-export function AdminHeader() {
+/**
+ * `trail` is where a page sits under "Infinite Cabinet /" — a delivery's own
+ * page reads "Deliveries / #14". Left out, the crumb just says "Admin". The
+ * last entry is the current page and never a link.
+ */
+export function AdminHeader({
+	trail = [{ label: "Admin" }],
+}: {
+	trail?: { label: string; href?: string }[];
+}) {
 	const router = useRouter();
 	const pathname = usePathname();
 
@@ -47,10 +55,23 @@ export function AdminHeader() {
 					>
 						Infinite Cabinet
 					</Link>
-					<span>/</span>
-					<span className="px-1 py-1.5 font-medium text-neutral-900">
-						Admin
-					</span>
+					{trail.map((crumb, i) => (
+						<span key={crumb.label} className="flex items-center gap-1.5">
+							<span>/</span>
+							{crumb.href && i < trail.length - 1 ? (
+								<Link
+									href={crumb.href}
+									className="px-1 py-1.5 text-neutral-400 hover:text-neutral-600"
+								>
+									{crumb.label}
+								</Link>
+							) : (
+								<span className="px-1 py-1.5 font-medium text-neutral-900">
+									{crumb.label}
+								</span>
+							)}
+						</span>
+					))}
 				</div>
 				<div className="flex items-center gap-2">
 					<Link

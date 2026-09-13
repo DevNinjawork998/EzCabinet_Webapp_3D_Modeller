@@ -79,9 +79,10 @@ enum CabinetDesignStatus {
   ARCHIVED
 }
 
-/// A single named, priced cabinet design uploaded as one `.skp` file. Flat
-/// reference catalog, independent of CatalogueVersion — not wired into
-/// wardrobe/planner pricing or the viewer.
+/// One cabinet a customer can place: one uploaded OBJ export, its name, its
+/// all-in price and the rooms it is offered in. The planner catalogue's
+/// families are rebuilt from these rows on every publish
+/// (`lib/catalogue/buildCatalogue.ts`), so a family id is a design id.
 model CabinetDesign {
   id           String              @id @default(cuid())
   name         String
@@ -91,22 +92,24 @@ model CabinetDesign {
   sizeBytes    Int
   sha256       String              @unique
   category     CabinetCategory
-  room         CabinetRoom
+  /// Every room this cabinet is offered in. Non-empty is enforced by the API.
+  rooms        CabinetRoom[]
   widthMm      Int
   heightMm     Int
   depthMm      Int
   priceRm      Float
+  /// What one of these weighs, in kg. Null until someone weighs it — a delivery
+  /// row pre-filled from an order then leaves weight blank rather than guess.
+  weightKg     Float?
   sku          String              @unique
   description  String?
   tags         String?
   finishes     String[]
   status       CabinetDesignStatus @default(PUBLISHED)
-  /// The planner family this design was pushed into, once it has been.
-  /// Null means the design is library-only and no customer can see it.
-  /// Not a relation: families live inside a CatalogueVersion's JSON, not in a
-  /// table, so this is a soft reference the publish route writes and the
-  /// delete guard reads.
-  familyId     String?
+  /// What the file holds — shelves, door leaves, drawers, legs — read when the
+  /// design is converted. The procedural fallback draws from it. Null means the
+  /// file has not been converted yet (or was refused).
+  geometry     Json?
   /// The derived render mesh: the drafted geometry, classified by role and
   /// converted to binary at publish time. This is what the planner draws — the
   /// customer sees the model the drafter made, not a box rebuilt from counts.
@@ -125,7 +128,6 @@ model CabinetDesign {
   updatedAt    DateTime            @updatedAt
 
   @@index([status])
-  @@index([familyId])
 }
 
 /// One marketing photo, keyed by the homepage slot it fills (`hero`,
@@ -300,12 +302,66 @@ model Delivery {
   /// count. Separate from `id` as well, so a link forwarded to the wrong
   /// WhatsApp group can be rotated without moving the job.
   publicToken       String         @unique @default(cuid())
+  /// The paid order this job delivers, when it came from one. SetNull rather
+  /// than cascade: a job already booked with a carrier outlives a removed order.
+  orderId           String?
+  order             Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
   events DeliveryEvent[]
 
   @@index([status, scheduledAt])
+  @@index([orderId])
+}
+
+/// A customer's checkout: the design they drew, what it was charged, and
+/// whether it has been paid. Deliveries are created from a paid order, with
+/// their item rows pre-filled from `design` — see `lib/orders`.
+model Order {
+  id                 String      @id @default(cuid())
+  /// Printed as `IC-YYYYMMDD-NNN` (`lib/orders/ref.ts`) and said on the phone.
+  number             Int         @unique @default(autoincrement())
+  /// The key to the customer's confirmation page, never `number` — same
+  /// reasoning as `Delivery.publicToken`.
+  publicToken        String      @unique @default(cuid())
+  status             OrderStatus @default(AWAITING_PAYMENT)
+  customerName       String
+  /// E.164, via `lib/logistics/phone.ts`.
+  customerPhone      String
+  customerEmail      String?
+  siteAddress        String
+  addressNotes       String?
+  roomId             String
+  finishId           String
+  /// `{ schemaVersion, layout }` — the layout document exactly as ordered.
+  design             Json
+  /// The published catalogue version it was priced against: the price history.
+  catalogueVersionId String
+  /// The price breakdown as charged, so the order keeps its figures after the
+  /// catalogue moves on.
+  breakdown          Json
+  cabinetsRm         Float
+  deliveryRm         Float
+  totalRm            Float
+  /// `manual` — bank transfer, marked paid by an admin — until a gateway exists.
+  paymentProvider    String      @default("manual")
+  paymentRef         String?
+  paidAt             DateTime?
+  /// Admin auth is one shared password, so this typed name is the record.
+  paidBy             String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  deliveries Delivery[]
+
+  @@index([status, createdAt])
+}
+
+enum OrderStatus {
+  AWAITING_PAYMENT
+  PAID
+  CANCELLED
 }
 
 /// Every booking, every status change, every webhook payload we accepted.
