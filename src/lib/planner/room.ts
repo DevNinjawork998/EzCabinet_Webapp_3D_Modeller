@@ -1,14 +1,24 @@
-import { familyIn, isCorner, ROOM_DEPTH_LIMITS } from "./catalogue";
-import type { PlannerCatalogue } from "./catalogueSchema";
 import {
+	constructionOf,
+	familyIn,
+	isCorner,
+	ROOM_DEPTH_LIMITS,
+} from "./catalogue";
+import type { PlannerCatalogue } from "./catalogueSchema";
+import type { ExposedSides } from "./exposure";
+import {
+	type EndPanel,
 	emptyLayout,
 	type HingeSide,
+	inRun,
+	newId,
 	type PlacedModule,
 	type PlannerLayout,
 	type Positioned,
 	plannerEngine,
 	type Row,
 	type Span,
+	spreadMm,
 	WALL_LIMITS,
 } from "./layout";
 
@@ -226,6 +236,220 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		};
 	};
 
+	/**
+	 * The corner units, placed along the main wall so the main run's scene
+	 * draws them. Designs are drawn for the left-hand corner; the right-hand one
+	 * is the same unit turned a quarter clockwise — never mirrored, which would
+	 * flip its faces inside out.
+	 */
+	function cornerPositions(room: RoomLayout): Positioned[] {
+		const corner = room.corner;
+		if (!corner) return [];
+		return (["floor", "wall"] as const).flatMap((row) => {
+			const placed = corner[row];
+			const family = placed && familyIn(catalogue, placed.familyId);
+			const span = reservedSpan(room, 0, row);
+			if (!placed || !family || !span) return [];
+			const shown: PlacedModule = {
+				...placed,
+				xMm: span.startMm,
+				...(corner.side === "right" ? { rotationDeg: 270 } : {}),
+			};
+			return [
+				{ placed: shown, family, widthMm: placed.widthMm, xMm: span.startMm },
+			];
+		});
+	}
+
+	/**
+	 * Slide one row of every run away from the corner until nothing is inside
+	 * its square. Every module in the row moves by the same amount, so the run
+	 * keeps its own order and gaps; `isClear` decides afterwards whether the
+	 * wall had the room.
+	 */
+	function clearCorner(room: RoomLayout, row: Row): RoomLayout {
+		return room.runs.reduce((next, _, run) => {
+			const view = runView(next, run);
+			const span = view.reserved?.[row];
+			if (!span) return next;
+			const atStart = span.startMm === 0;
+			const needMm = Math.max(
+				0,
+				...wall.positionsOf(view, row).map((position) => {
+					const spread = spreadMm(position);
+					return atStart
+						? span.endMm - (position.xMm - spread)
+						: position.xMm + position.widthMm + spread - span.startMm;
+				}),
+			);
+			if (needMm === 0) return next;
+			const shiftMm = atStart ? needMm : -needMm;
+			return withRun(next, run, {
+				...view,
+				[row]: view[row].map((module) => ({
+					...module,
+					xMm: module.xMm + shiftMm,
+				})),
+			});
+		}, room);
+	}
+
+	function placeCorner(
+		room: RoomLayout,
+		familyId: string,
+		id: string = newId(),
+	): RoomLayout {
+		const family = familyIn(catalogue, familyId);
+		if (!room.corner || !family || !isCorner(family)) return room;
+		const row: Row = family.kind === "wall" ? "wall" : "floor";
+		if (room.corner[row]) return room;
+		const placed: PlacedModule = {
+			id,
+			familyId,
+			widthMm: family.sizes[0].widthMm,
+			// Priced all-in with its door, like every cabinet — see `addModule`.
+			doorStyleId: catalogue.doorStyles[0]?.id ?? null,
+			hinge: "left",
+			// Unused: a corner unit's place is the corner. `cornerPositions` says where.
+			xMm: 0,
+		};
+		const next = clearCorner(
+			{ ...room, corner: { ...room.corner, [row]: placed } },
+			row,
+		);
+		return views(next).every((view) => wall.isClear(view)) ? next : room;
+	}
+
+	function setCornerSide(room: RoomLayout, side: CornerSide): RoomLayout {
+		if (!room.corner || room.corner.side === side) return room;
+		const mirror =
+			(lengthMm: number) =>
+			(module: PlacedModule): PlacedModule => ({
+				...module,
+				xMm: lengthMm - module.xMm - module.widthMm,
+				...(module.rotationDeg
+					? { rotationDeg: (360 - module.rotationDeg) % 360 }
+					: {}),
+			});
+		return {
+			...room,
+			corner: { ...room.corner, side },
+			runs: room.runs.map((run, i) => ({
+				floor: run.floor.map(mirror(lengthOf(room, i))),
+				wall: run.wall.map(mirror(lengthOf(room, i))),
+			})),
+		};
+	}
+
+	/**
+	 * One wall or an L. Going straight is refused while the side wall or the
+	 * corner holds anything — the same answer `setWallWidth` gives rather than
+	 * deleting cabinets the customer placed. Going to an L moves the main run
+	 * out of the new corner if it has the wall to, and is refused if not.
+	 */
+	function setShape(room: RoomLayout, shape: RoomShape): RoomLayout {
+		if (shape === shapeOf(room)) return room;
+		if (shape === "straight") {
+			const side = room.runs[1];
+			if (side && (side.floor.length > 0 || side.wall.length > 0)) return room;
+			if (room.corner?.floor || room.corner?.wall) return room;
+			return { ...room, runs: [room.runs[0]], corner: null };
+		}
+		if (room.corner) return setCornerSide(room, shape);
+		const next = clearCorner(
+			clearCorner(
+				{
+					...room,
+					runs: [room.runs[0], { floor: [], wall: [] }],
+					corner: { side: shape, floor: null, wall: null },
+				},
+				"floor",
+			),
+			"wall",
+		);
+		return views(next).every((view) => wall.isClear(view)) ? next : room;
+	}
+
+	function exposureOf(room: RoomLayout): Map<string, ExposedSides> {
+		const touchingMm = constructionOf(catalogue).panelThicknessMm;
+		const exposure = new Map<string, ExposedSides>();
+		room.runs.forEach((_, run) => {
+			const view = runView(room, run);
+			for (const [id, sides] of wall.exposureOf(view)) exposure.set(id, sides);
+			for (const row of ["floor", "wall"] as const) {
+				const span = view.reserved?.[row];
+				// An empty corner leaves the ends beside it in the open.
+				if (!span || !room.corner?.[row]) continue;
+				for (const position of wall.positionsOf(view, row)) {
+					const sides = exposure.get(position.placed.id);
+					if (!sides) continue;
+					const spread = spreadMm(position);
+					exposure.set(position.placed.id, {
+						left:
+							sides.left &&
+							Math.abs(position.xMm - spread - span.endMm) > touchingMm,
+						right:
+							sides.right &&
+							Math.abs(
+								position.xMm + position.widthMm + spread - span.startMm,
+							) > touchingMm,
+					});
+				}
+			}
+		});
+		// A corner unit's ends are part of its drawing, not panels fixed to it.
+		// ponytail: an assumption until EzCabinet confirms — see CLAUDE.md.
+		for (const position of cornerPositions(room)) {
+			exposure.set(position.placed.id, { left: false, right: false });
+		}
+		return exposure;
+	}
+
+	function endPanels(room: RoomLayout): EndPanel[] {
+		const exposure = exposureOf(room);
+		return views(room)
+			.flatMap((view) => wall.endPanels(view))
+			.filter((panel) => exposure.get(panel.moduleId)?.[panel.side]);
+	}
+
+	/**
+	 * The square of worktop over the corner: over a corner base unit, or closing
+	 * an empty corner when a base unit in either run meets it. Otherwise there
+	 * is no counter to join. The same answer feeds the scene and the price.
+	 */
+	function cornerWorktop(
+		room: RoomLayout,
+	): { sizeMm: number; topMm: number } | null {
+		if (!room.corner) return null;
+		const unit = cornerPositions(room).find((p) => p.family.kind === "base");
+		if (unit) {
+			return {
+				sizeMm: unit.widthMm,
+				topMm: unit.family.floorHeightMm + unit.family.heightMm,
+			};
+		}
+		for (const view of views(room)) {
+			const span = view.reserved?.floor;
+			if (!span) continue;
+			const meeting = wall
+				.positionsOf(view, "floor")
+				.find(
+					(p) =>
+						p.family.kind === "base" &&
+						inRun(p) &&
+						(Math.abs(p.xMm - span.endMm) < 1 ||
+							Math.abs(p.xMm + p.widthMm - span.startMm) < 1),
+				);
+			if (meeting) {
+				return {
+					sizeMm: cornerSquareMm(room, "floor"),
+					topMm: meeting.family.floorHeightMm + meeting.family.heightMm,
+				};
+			}
+		}
+		return null;
+	}
+
 	function addModule(
 		room: RoomLayout,
 		familyId: string,
@@ -235,7 +459,9 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		run = 0,
 	): RoomLayout {
 		const family = familyIn(catalogue, familyId);
-		if (!family || isCorner(family) || run >= room.runs.length) return room;
+		if (!family) return room;
+		if (isCorner(family)) return placeCorner(room, familyId, id);
+		if (run >= room.runs.length) return room;
 		return withRun(
 			room,
 			run,
@@ -250,7 +476,9 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		run = 0,
 	): boolean {
 		const family = familyIn(catalogue, familyId);
-		if (!family || isCorner(family) || run >= room.runs.length) return false;
+		if (!family) return false;
+		if (isCorner(family)) return placeCorner(room, familyId, "probe") !== room;
+		if (run >= room.runs.length) return false;
 		return wall.fits(runView(room, run), familyId, widthMm);
 	}
 
@@ -339,8 +567,10 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 	return {
 		positionsOf: (room: RoomLayout, row: Row, run = 0): Positioned[] =>
 			run < room.runs.length ? wall.positionsOf(runView(room, run), row) : [],
-		allPositions: (room: RoomLayout): Positioned[] =>
-			views(room).flatMap((view) => wall.allPositions(view)),
+		allPositions: (room: RoomLayout): Positioned[] => [
+			...views(room).flatMap((view) => wall.allPositions(view)),
+			...cornerPositions(room),
+		],
 		rowEndMm: (room: RoomLayout, row: Row, run = 0) =>
 			wall.rowEndMm(runView(room, run), row),
 		freeSpans: (room: RoomLayout, row: Row, run = 0) =>
@@ -355,7 +585,17 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		},
 		widthOptionsFor: (room: RoomLayout, id: string) => {
 			const run = runIndexOf(room, id);
-			return run < 0 ? [] : wall.widthOptionsFor(runView(room, run), id);
+			if (run >= 0) return wall.widthOptionsFor(runView(room, run), id);
+			const unit = cornerPositions(room).find((p) => p.placed.id === id);
+			return unit
+				? [
+						{
+							widthMm: unit.widthMm,
+							priceRm: unit.family.sizes[0].priceRm,
+							fits: true,
+						},
+					]
+				: [];
 		},
 		setGap: inRunOf(wall.setGap),
 		moveModule: inRunOf(wall.moveModule),
@@ -417,6 +657,13 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		minRoomDepthMm,
 		setWallWidth,
 		setRoomDepth,
+		setShape,
+		setCornerSide,
+		placeCorner,
+		cornerPositions,
+		exposureOf,
+		endPanels,
+		cornerWorktop,
 	};
 }
 
