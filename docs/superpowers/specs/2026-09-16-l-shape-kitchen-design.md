@@ -158,3 +158,24 @@ against wall units.
 - U-shape (a third run and second corner fit the model).
 - Dragging a cabinet between walls.
 - Share links.
+
+## Amendments (implementation plan, 2026-09-16)
+
+- **Naming.** The stored document is `RoomLayout` (`src/lib/planner/room.ts`):
+  shared settings + `runs` + `corner`. `PlannerLayout` stays exactly what it is —
+  one wall's layout — and is what `runView` hands the existing engine. This keeps
+  the one-wall engine, its tests, the measuring tool and the scene's `Run`
+  unchanged. `roomEngine(catalogue)` is the document-level engine.
+- **Run coordinates.** Every run's `xMm` is left-to-right *as seen facing that
+  wall from inside the room*. So the reserved corner span is: main run `[0, d]`
+  for a left corner, `[W − d, W]` for a right one; side run `[D − d, D]` for a
+  left corner, `[0, d]` for a right one. (Replaces "return run: always `[0, d]`".)
+  With this, the side run is drawn by the same `Run` component turned ±90°, with
+  no mirroring.
+- **Corner kind.** No new `kind`. A corner design keeps `kind: base | wall` and is
+  recognised by `category` (`CORNER_BASE_CABINET`, `CORNER_WALL_CABINET`) via
+  `isCorner`. Worktop, hang height and row rules then apply to it unchanged.
+- **Corner skirting deferred.** No kick board is drawn or charged along a corner
+  unit's faces yet; its shape varies by design (L, diagonal, blind).
+- **Ceiling mode.** Each run lines its wall-unit tops up with its own tallest wall
+  unit; tops still meet the ceiling in every run.
