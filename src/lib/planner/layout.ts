@@ -36,7 +36,7 @@ import { standOf } from "./parts";
  * Pure: the UI holds a `PlannerLayout` and calls these.
  */
 
-type PlacedModule = {
+export type PlacedModule = {
 	id: string;
 	familyId: string;
 	/**
@@ -118,11 +118,19 @@ export type PlannerLayout = {
 	floor: PlacedModule[];
 	/** Hung row. */
 	wall: PlacedModule[];
+	/**
+	 * Stretches of this wall a corner has taken, per row. Only set on a run view
+	 * built by `room.ts`; a straight wall has none. They enter `occupiedSpans`,
+	 * so everything that settles against a neighbour — clamping, snapping, gaps,
+	 * `isClear` — treats a corner as one more neighbour and needs no rule of
+	 * its own.
+	 */
+	reserved?: Partial<Record<Row, Span>>;
 };
 
 export type Row = "floor" | "wall";
 
-type Span = { startMm: number; endMm: number };
+export type Span = { startMm: number; endMm: number };
 
 /** Where a cabinet sits: the clear gap either side of it, and what the gap
  * runs to — a neighbour's edge, or the wall. See `offsetsOf`. */
@@ -263,7 +271,7 @@ function overlapsAnything(
 let counter = 0;
 /** ponytail: a counter is enough for a client-side planner; swap for nanoid
  * when layouts start being saved and merged. */
-const newId = () => `m${++counter}`;
+export const newId = () => `m${++counter}`;
 
 const find = (
 	layout: PlannerLayout,
@@ -474,7 +482,7 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 					? positionsOf(layout, "wall")
 					: [];
 
-		return [...own, ...crossRow]
+		const cabinets = [...own, ...crossRow]
 			.filter((position) => position.placed.id !== ignoreId)
 			.map((position) => {
 				// What it actually occupies along the wall, not what it is wide —
@@ -484,8 +492,17 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 					startMm: position.xMm - spread,
 					endMm: position.xMm + position.widthMm + spread,
 				};
-			})
-			.sort((a, b) => a.startMm - b.startMm);
+			});
+		const corner = [
+			layout.reserved?.[row],
+			// A tall unit stands in the hung row too, so that row's corner is in
+			// its way as well — the same two-way rule as the wall cabinets above.
+			row === "floor" && isTallModule(layout, ignoreId)
+				? layout.reserved?.wall
+				: undefined,
+		].filter((span): span is Span => span !== undefined);
+
+		return [...cabinets, ...corner].sort((a, b) => a.startMm - b.startMm);
 	}
 
 	/** The clear stretches of wall in a row, in order. */
@@ -670,6 +687,11 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 	): number[] {
 		const other: Row = row === "floor" ? "wall" : "floor";
 		const edges = [0, layout.wallWidthMm];
+
+		// A corner's edge is somewhere a run is meant to start.
+		for (const span of [layout.reserved?.floor, layout.reserved?.wall]) {
+			if (span) edges.push(span.startMm, span.endMm);
+		}
 
 		for (const r of [row, other]) {
 			for (const position of positionsOf(layout, r)) {
@@ -1759,7 +1781,12 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 		// next cabinet under a turned one's corner — the run came out flush on
 		// paper and superimposed on screen.
 		const floor: PlacedModule[] = [];
-		let cursor = 0;
+		// A corner at the start of this wall is where the run begins.
+		const startOf = (row: Row) => {
+			const span = layout.reserved?.[row];
+			return span?.startMm === 0 ? span.endMm : 0;
+		};
+		let cursor = startOf("floor");
 		for (const position of positionsOf(layout, "floor")) {
 			const spread = spreadMm(position);
 			floor.push({ ...position.placed, xMm: cursor + spread });
@@ -1778,7 +1805,7 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 			});
 
 		const wall: PlacedModule[] = [];
-		cursor = 0;
+		cursor = startOf("wall");
 		for (const position of positionsOf(layout, "wall")) {
 			const spread = spreadMm(position);
 			const footprintMm = position.widthMm + spread * 2;
@@ -2030,6 +2057,7 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 		setWidth,
 		widthOptionsFor,
 		swapWithNeighbour,
+		isClear,
 	};
 }
 
