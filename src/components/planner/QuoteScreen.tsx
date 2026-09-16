@@ -89,7 +89,9 @@ export function QuoteScreen({
 					})
 				: t.quote.mixedFronts;
 
-	const pickerRef = useRef<((x: number, y: number) => number) | null>(null);
+	const pickerRef = useRef<
+		((x: number, y: number, run: number) => number) | null
+	>(null);
 	const hitTestRef = useRef<((x: number, y: number) => string | null) | null>(
 		null,
 	);

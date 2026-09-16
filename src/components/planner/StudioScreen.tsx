@@ -263,7 +263,9 @@ export function StudioScreen({
 	const selectedSet = new Set(selectedIds);
 
 	// Filled in by the scene: screen-point → run position / cabinet under it.
-	const pickerRef = useRef<((x: number, y: number) => number) | null>(null);
+	const pickerRef = useRef<
+		((x: number, y: number, run: number) => number) | null
+	>(null);
 	const hitTestRef = useRef<((x: number, y: number) => string | null) | null>(
 		null,
 	);
@@ -421,7 +423,7 @@ export function StudioScreen({
 	);
 
 	const dropCarcass = (familyId: string, clientX: number, clientY: number) => {
-		const runXMm = pickerRef.current?.(clientX, clientY) ?? 0;
+		const runXMm = pickerRef.current?.(clientX, clientY, 0) ?? 0;
 		track("cabinet_added", { family: familyId, via: "drag" });
 		setLayoutAction((prev) => addModule(prev, familyId, runXMm));
 	};
