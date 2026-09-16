@@ -14,9 +14,19 @@ is one flat namespace of boxes with no units and no up-axis. So:
   one that puts the modal panel thickness in 12–25mm. Board thickness is a
   constant of the trade; model size is not.
 - **Up-axis** is found by settling *depth first* (this product plans one wall, so
-  depth is the smallest extent) and then voting between the two axes left, on
-  which one panels are thin on. Voting across all three gets it wrong on a real
-  file, because doors and backs are thin on depth and outvote the shelves.
+  depth is usually the smallest extent) and then voting between the two axes
+  left, on which one panels are thin on. Voting across all three gets it wrong
+  on a real file, because doors and backs are thin on depth and outvote the
+  shelves. The exception is a **square footprint**: a corner unit is drawn
+  square on purpose and is often no taller than it is deep, so its smallest
+  extent is its height, not its depth, and "depth first" would lay it on its
+  back. A square-*fronted* ordinary cabinet (width tied with height, both
+  bigger than depth) ties the same two extents without being a corner, so the
+  tie alone is not enough — the plate vote decides which reading is real: only
+  when the smallest axis strictly wins the vote (a corner's bottom, top and
+  adjustable shelf are thin along it, and nothing else is) is it read as up;
+  otherwise the tie is a coincidence of proportions and depth-first proceeds
+  as normal.
 - **Which end is the wall.** A *named* front wins — if the drafter typed
   `Door_L_`, that panel's side is the front, full stop. `inferFrontSide` is the
   fallback, and it deliberately ignores anything standing on the floor: feet are

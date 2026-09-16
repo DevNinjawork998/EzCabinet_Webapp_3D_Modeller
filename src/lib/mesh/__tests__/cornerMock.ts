@@ -41,6 +41,44 @@ function boxObj(box: Box, offset: number): string {
 	].join("\n");
 }
 
+/**
+ * An ordinary (non-corner) box cabinet, same naming and coordinate convention
+ * as `cornerObj`. Exists to pin that a square *front* — width tied with
+ * height, as an 600×600 or 900×900 base unit draws — is not mistaken for a
+ * corner unit's square *footprint*. `inferUpAxis` tells them apart by which
+ * axis the horizontal boards (top, bottom, shelf) are thin on; this fixture's
+ * top/bottom/shelf are thin on height, same as any other box cabinet.
+ */
+export function boxCabinetObj({
+	widthMm: w,
+	heightMm: h,
+	depthMm: d,
+}: {
+	widthMm: number;
+	heightMm: number;
+	depthMm: number;
+}): string {
+	const t = 16; // board
+	const boxes: Box[] = [
+		{ name: "G-UEnd_(L)", min: [0, 0, 0], max: [t, h, d] },
+		{ name: "G-UEnd_(R)", min: [w - t, 0, 0], max: [w, h, d] },
+		{ name: "G-Top", min: [0, h - t, 0], max: [w, h, d] },
+		{ name: "G-Bottom", min: [0, 0, 0], max: [w, t, d] },
+		{ name: "G-Back", min: [0, 0, 0], max: [w, h, t] },
+		{
+			name: "G-Adjustable_Shelf",
+			min: [t, h / 2, t],
+			max: [w - t, h / 2 + t, d - t],
+		},
+		{ name: "Door_L_", min: [t, t, d - 18], max: [w - t, h - t, d] },
+	];
+	return [
+		"# Mock box cabinet — see src/lib/mesh/__tests__/cornerMock.ts",
+		...boxes.map((box, i) => boxObj(box, i * 8)),
+		"",
+	].join("\n");
+}
+
 export function cornerObj({
 	sizeMm: s,
 	heightMm: h,

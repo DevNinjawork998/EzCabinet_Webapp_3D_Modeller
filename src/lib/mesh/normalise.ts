@@ -135,10 +135,22 @@ const sameExtent = (a: number, b: number) =>
  * Which axis points at the ceiling, in two steps that have to happen in this
  * order.
  *
- * **Depth first.** This product plans one wall, so depth is always the model's
- * smallest extent — a 600mm carcass against a 3.8m run 2.4m tall. Even a lone
- * tall cabinet is deeper-than-nothing but narrower in depth than in width or
- * height.
+ * **Depth first — usually.** This product plans one wall, so depth is normally
+ * the model's smallest extent — a 600mm carcass against a 3.8m run 2.4m tall.
+ * Even a lone tall cabinet is deeper-than-nothing but narrower in depth than in
+ * width or height.
+ *
+ * **Except a square footprint.** A corner unit is drawn square on purpose and
+ * is often no taller than it is deep, so its smallest extent is its *height*,
+ * not its depth — "depth first" would lay it on its back. But a square-*fronted*
+ * wall unit (width tied with height, both bigger than depth) ties the same two
+ * extents without being a corner at all, and "depth first" is exactly right for
+ * it. The two cases are told apart by the same evidence the plate vote below
+ * already gathers: a corner's horizontal boards — bottoms, tops, the adjustable
+ * shelf — are thin along its short *height* axis, so that axis only wins the
+ * plate vote when it genuinely is the up axis. When the smallest axis does not
+ * win that vote outright, the tie is a coincidence of the model's proportions,
+ * not evidence of a corner, and depth-first proceeds as normal.
  *
  * **Then vote between the two that are left.** The up axis is the one most
  * panels are thin on: shelves, tops and bottoms are horizontal and outnumber
@@ -164,20 +176,42 @@ export function inferUpAxis(
 	const spans = axes.map((axis) => spanOf(parts, axis));
 	const [low, mid, high] = [...axes].sort((a, b) => spans[a] - spans[b]);
 
+	// Panels only. Hardware is not a board and has no grain direction to read.
+	// Gathered before depth is decided, because telling a corner unit from an
+	// ordinary square-fronted cabinet needs this same evidence.
+	const plates = parts.filter(isPlate);
+	const voters = plates.length > 0 ? plates : parts;
+
+	const thinAxisVotes = [0, 0, 0];
+	for (const part of voters) {
+		const thin = smallest(part);
+		if (!Number.isFinite(thin)) continue;
+		const axis = part.sizeMm.indexOf(thin);
+		if (axis >= 0) thinAxisVotes[axis] += 1;
+	}
+
 	// A corner unit: its footprint is square and it is no taller than it is
-	// deep, so the smallest extent is its *height* and "depth first" would lay
-	// it on its back. The square pair is the floor plan, so up is the odd one out.
+	// deep, so the smallest extent could be its *height* — but a square-fronted
+	// wall unit ties the same two extents without being a corner. Only trust
+	// the corner reading when the smallest axis strictly wins the plate vote:
+	// a corner's bottom, top and adjustable shelf are thin along it, and
+	// nothing else is, so the vote is lopsided when it really is up.
 	if (
 		sameExtent(spans[mid], spans[high]) &&
-		!sameExtent(spans[low], spans[mid])
+		!sameExtent(spans[low], spans[mid]) &&
+		thinAxisVotes[low] > thinAxisVotes[mid] &&
+		thinAxisVotes[low] > thinAxisVotes[high]
 	) {
+		const second = Math.max(thinAxisVotes[mid], thinAxisVotes[high]);
 		return {
 			upAxis: low,
 			// Of the two equal floor axes, the later one is depth: every exporter
 			// seen so far runs along the wall on x, and taking x for depth would
 			// turn the axis permutation into a mirror image.
 			depthAxis: Math.max(mid, high) as 0 | 1 | 2,
-			confident: spans[low] * scaleFactor <= CEILING_MM,
+			confident:
+				spans[low] * scaleFactor <= CEILING_MM &&
+				thinAxisVotes[low] >= Math.max(1, second * 1.5),
 		};
 	}
 
@@ -186,27 +220,16 @@ export function inferUpAxis(
 		sameExtent(spans[low], spans[mid]) ? Math.max(low, mid) : low
 	) as 0 | 1 | 2;
 
-	// Panels only. Hardware is not a board and has no grain direction to read.
-	const plates = parts.filter(isPlate);
-	const voters = plates.length > 0 ? plates : parts;
-
-	const votes = [0, 0, 0];
-	for (const part of voters) {
-		const thin = smallest(part);
-		if (!Number.isFinite(thin)) continue;
-		const axis = part.sizeMm.indexOf(thin);
-		if (axis >= 0 && axis !== depthAxis) votes[axis] += 1;
-	}
-
 	const candidates = axes.filter((axis) => axis !== depthAxis);
 	const [a, b] = candidates;
-	const upAxis = votes[a] >= votes[b] ? a : b;
+	const upAxis = thinAxisVotes[a] >= thinAxisVotes[b] ? a : b;
 	const other = upAxis === a ? b : a;
 
 	// Two corroborations, both of which have to hold before we stop asking the
 	// reviewer to check: the vote was not a near-tie, and the height we picked
 	// fits under a ceiling.
-	const decisiveVote = votes[upAxis] >= Math.max(1, votes[other] * 1.5);
+	const decisiveVote =
+		thinAxisVotes[upAxis] >= Math.max(1, thinAxisVotes[other] * 1.5);
 	const fitsARoom = spans[upAxis] * scaleFactor <= CEILING_MM;
 
 	return { upAxis, depthAxis, confident: decisiveVote && fitsARoom };
