@@ -14,19 +14,12 @@ import {
 	constructionOf,
 	type FinishId,
 	familyIn,
+	isCorner,
 	type RoomTypeId,
 	roomTypeIn,
 	WALL_HANG_LIMITS,
 } from "@/lib/planner/catalogue";
-import {
-	emptyLayout,
-	type HingeSide,
-	type PlannerLayout,
-	type Positioned,
-	rowFor,
-	setDoors,
-	setHinge,
-} from "@/lib/planner/layout";
+import { type HingeSide, type Positioned, rowFor } from "@/lib/planner/layout";
 import {
 	AXIS_COLOR,
 	AXIS_LABEL,
@@ -39,7 +32,14 @@ import {
 } from "@/lib/planner/measure";
 import { fitOutOf } from "@/lib/planner/parts";
 import { computePlannerPrice } from "@/lib/planner/pricing";
-import { useCatalogue, useEngine } from "./CatalogueContext";
+import {
+	emptyRoom,
+	type RoomLayout,
+	runIndexOf,
+	setDoors,
+	setHinge,
+} from "@/lib/planner/room";
+import { useCatalogue, useRoomEngine } from "./CatalogueContext";
 import { useCopy, useLocale } from "./CopyContext";
 import { peekDesignMesh } from "./DesignedCabinet";
 import { DimensionField } from "./DimensionField";
@@ -199,9 +199,9 @@ export function StudioScreen({
 }: {
 	roomId: RoomTypeId;
 	onChangeRoomAction: (id: RoomTypeId) => void;
-	layout: PlannerLayout;
+	layout: RoomLayout;
 	setLayoutAction: (
-		next: PlannerLayout | ((prev: PlannerLayout) => PlannerLayout),
+		next: RoomLayout | ((prev: RoomLayout) => RoomLayout),
 	) => void;
 	finish: FinishId;
 	/** Finish id → uploaded decor photo. Passed straight through to the scene. */
@@ -258,7 +258,7 @@ export function StudioScreen({
 		setWidth,
 		swapWithNeighbour,
 		widthOptionsFor,
-	} = useEngine();
+	} = useRoomEngine();
 	const room = roomTypeIn(catalogue, roomId);
 	const selectedSet = new Set(selectedIds);
 
@@ -287,7 +287,7 @@ export function StudioScreen({
 	// An empty wall opens on the cabinet menu: a bare room gives no clue where
 	// cabinets come from, and adding one is the only useful first move.
 	const [tool, setTool] = useState<StudioTool>(() =>
-		layout.floor.length + layout.wall.length === 0 ? "add" : "select",
+		allPositions(layout).length === 0 ? "add" : "select",
 	);
 	const panel = tool === "select" || tool === "measure" ? null : tool;
 	const measureMode = tool === "measure";
@@ -331,18 +331,23 @@ export function StudioScreen({
 
 	/** Whether this cabinet has anything to trade places with, each way. */
 	const neighboursOf = (position: Positioned) => {
-		const row = positionsOf(layout, rowFor(position.family.kind));
+		const run = Math.max(0, runIndexOf(layout, position.placed.id));
+		const row = positionsOf(layout, rowFor(position.family.kind), run);
 		const index = row.findIndex(
 			(other) => other.placed.id === position.placed.id,
 		);
 		return { left: index > 0, right: index >= 0 && index < row.length - 1 };
 	};
 
-	/** The families this cabinet could become — same row, offered in this room. */
+	/** The families this cabinet could become — same row, offered in this room.
+	 * A run cabinet may never be swapped into a corner design, nor a corner unit
+	 * into an ordinary one: the one-wall `replaceFamily` knows nothing of
+	 * corners, and checkout would refuse the result. */
 	const replaceOptionsFor = (position: Positioned) =>
 		catalogue.families
 			.filter(
 				(family) =>
+					isCorner(family) === isCorner(position.family) &&
 					rowFor(family.kind) === rowFor(position.family.kind) &&
 					room.familyIds.includes(family.id),
 			)
@@ -401,12 +406,17 @@ export function StudioScreen({
 		price.endPanelCount > 0 && t.planner.price.endPanels,
 	].filter((piece): piece is string => typeof piece === "string");
 
-	const gapCount = (["floor", "wall"] as const).reduce(
-		(total, row) =>
+	const gapCount = layout.runs.reduce(
+		(total, _, run) =>
 			total +
-			freeSpans(layout, row).filter(
-				(gap) => gap.endMm < rowEndMm(layout, row) && gap.startMm > 0,
-			).length,
+			(["floor", "wall"] as const).reduce(
+				(sum, row) =>
+					sum +
+					freeSpans(layout, row, run).filter(
+						(gap) => gap.endMm < rowEndMm(layout, row, run) && gap.startMm > 0,
+					).length,
+				0,
+			),
 		0,
 	);
 
@@ -1122,7 +1132,7 @@ export function StudioScreen({
 								setLayoutAction((prev) => closeGaps(prev))
 							}
 							onResetAction={() => {
-								setLayoutAction(emptyLayout(room.defaultWallWidthMm));
+								setLayoutAction(emptyRoom(room.defaultWallWidthMm));
 								setSelectedIdsAction([]);
 							}}
 						/>

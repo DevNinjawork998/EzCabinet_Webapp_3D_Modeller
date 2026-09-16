@@ -51,6 +51,7 @@ import {
 	snapToCabinet,
 	type Vec3Mm,
 } from "@/lib/planner/measure";
+import { type RoomLayout, runView, withRun } from "@/lib/planner/room";
 import { Cabinet } from "./Cabinet";
 import { useCatalogue, useEngine } from "./CatalogueContext";
 import { designPartBoxes, peekDesignMesh } from "./DesignedCabinet";
@@ -1666,7 +1667,7 @@ export default function PlannerScene({
 	pickerRef,
 	hitTestRef,
 }: {
-	layout: PlannerLayout;
+	layout: RoomLayout;
 	finish: FinishId;
 	/** Finish id → uploaded decor photo, for the finishes that have one.
 	 *
@@ -1702,7 +1703,7 @@ export default function PlannerScene({
 	/** Whether the Position verb is open. The offset callouts are that panel's
 	 * readout, so they come up with it and not on plain selection. */
 	positionMode?: boolean;
-	onLayoutChangeAction: (next: PlannerLayout) => void;
+	onLayoutChangeAction: (next: RoomLayout) => void;
 	onSelectAction: (id: string | null, additive: boolean) => void;
 	onMeasurePickAction?: (snap: SnapPoint) => void;
 	pickerRef: React.RefObject<
@@ -1716,7 +1717,8 @@ export default function PlannerScene({
 	const catalogue = useCatalogue();
 	const engine = useEngine();
 	const construction = constructionOf(catalogue);
-	const runWidthMm = layout.wallWidthMm;
+	const main = runView(layout, 0);
+	const runWidthMm = main.wallWidthMm;
 	const finishHex =
 		catalogue.finishes.find((f) => f.id === finish)?.hex ??
 		catalogue.finishes[0].hex;
@@ -1735,9 +1737,9 @@ export default function PlannerScene({
 			? [...selectedIds][0]
 			: null;
 	const positioned = lonelyId
-		? engine.allPositions(layout).find((p) => p.placed.id === lonelyId)
+		? engine.allPositions(main).find((p) => p.placed.id === lonelyId)
 		: undefined;
-	const offsets = lonelyId ? engine.offsetsOf(layout, lonelyId) : null;
+	const offsets = lonelyId ? engine.offsetsOf(main, lonelyId) : null;
 
 	return (
 		<Canvas
@@ -1772,7 +1774,7 @@ export default function PlannerScene({
 			/>
 
 			<Run
-				layout={layout}
+				layout={main}
 				catalogue={catalogue}
 				engine={engine}
 				finishHex={finishHex}
@@ -1784,7 +1786,9 @@ export default function PlannerScene({
 				measureMode={measureMode}
 				measureAxis={measureAxis}
 				measureAnchor={measureAnchor}
-				onLayoutChange={onLayoutChangeAction}
+				onLayoutChange={(next) =>
+					onLayoutChangeAction(withRun(layout, 0, next))
+				}
 				onSelect={onSelectAction}
 				onMeasurePick={onMeasurePickAction ?? (() => {})}
 				onMeasureHover={setHoverPoint}
@@ -1796,10 +1800,12 @@ export default function PlannerScene({
 			/>
 			{positioned && offsets && (
 				<PositionDimensions
-					onLayoutChange={onLayoutChangeAction}
+					onLayoutChange={(next) =>
+						onLayoutChangeAction(withRun(layout, 0, next))
+					}
 					position={positioned}
 					offsets={offsets}
-					layout={layout}
+					layout={main}
 					engine={engine}
 				/>
 			)}
@@ -1827,20 +1833,20 @@ export default function PlannerScene({
 			/>
 			<PanGizmo
 				bounds={{
-					runWidthMm: Math.max(runWidthMm, engine.rowEndMm(layout, "floor")),
+					runWidthMm: Math.max(runWidthMm, engine.rowEndMm(main, "floor")),
 					roomDepthMm: layout.roomDepthMm,
 					ceilingHeightMm: layout.ceilingHeightMm,
 					// The floor units only. A wall unit hangs over floor a person
 					// can stand on, and so can the puck.
 					runDepthMm: engine
-						.positionsOf(layout, "floor")
+						.positionsOf(main, "floor")
 						.reduce((deepest, p) => Math.max(deepest, p.family.depthMm), 0),
 				}}
 				view={view}
 				refitKey={refitKey}
 			/>
 			<FitCamera
-				runWidthMm={Math.max(runWidthMm, engine.rowEndMm(layout, "floor"))}
+				runWidthMm={Math.max(runWidthMm, engine.rowEndMm(main, "floor"))}
 				roomDepthMm={layout.roomDepthMm}
 				ceilingHeightMm={layout.ceilingHeightMm}
 				view={view}

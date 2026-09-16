@@ -2,12 +2,8 @@
 
 import { fill } from "@/lib/copy/fill";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
-import type {
-	HingeSide,
-	Offsets,
-	PlannerLayout,
-	Positioned,
-} from "@/lib/planner/layout";
+import type { HingeSide, Offsets, Positioned } from "@/lib/planner/layout";
+import type { RoomLayout } from "@/lib/planner/room";
 import { useCopy } from "../CopyContext";
 import { GapInput } from "../GapInput";
 import { chip, verbBtn } from "./chrome";
@@ -47,7 +43,7 @@ export function SelectionPanel({
 	onRemoveAction,
 }: {
 	catalogue: PlannerCatalogue;
-	layout: PlannerLayout;
+	layout: RoomLayout;
 	selected: Positioned;
 	verb: SelectionVerb;
 	onVerbAction: (verb: SelectionVerb) => void;

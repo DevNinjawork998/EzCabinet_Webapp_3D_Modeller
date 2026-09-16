@@ -8,9 +8,9 @@ import { fill } from "@/lib/copy/fill";
 import { htmlLang } from "@/lib/copy/locales";
 import type { FinishId, RoomTypeId } from "@/lib/planner/catalogue";
 import { doorStyleIn, ratesOf, roomTypeIn } from "@/lib/planner/catalogue";
-import type { PlannerLayout } from "@/lib/planner/layout";
 import { computePlannerPrice } from "@/lib/planner/pricing";
-import { useCatalogue, useEngine } from "./CatalogueContext";
+import type { RoomLayout } from "@/lib/planner/room";
+import { useCatalogue, useRoomEngine } from "./CatalogueContext";
 import { useCopy, useLocale } from "./CopyContext";
 import { AdminLink, PlannerHeader } from "./PlannerHeader";
 import { priceLineDetail, priceLineLabel } from "./priceLineCopy";
@@ -49,7 +49,7 @@ export function QuoteScreen({
 	onBackToStartAction,
 }: {
 	roomId: RoomTypeId;
-	layout: PlannerLayout;
+	layout: RoomLayout;
 	finish: FinishId;
 	/** Finish id → uploaded decor photo. The quote screenshot is what goes out
 	 * over WhatsApp, so it has to show the same board the planner did. */
@@ -61,7 +61,7 @@ export function QuoteScreen({
 	const locale = useLocale();
 	const router = useRouter();
 	const catalogue = useCatalogue();
-	const { allPositions } = useEngine();
+	const { allPositions } = useRoomEngine();
 	const room = roomTypeIn(catalogue, roomId);
 	const price = computePlannerPrice(layout, finish, catalogue);
 	const deliveryRm = ratesOf(catalogue).deliveryFlatRm;

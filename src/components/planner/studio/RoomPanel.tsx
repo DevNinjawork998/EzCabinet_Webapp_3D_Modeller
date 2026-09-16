@@ -7,7 +7,8 @@ import {
 	type RoomTypeId,
 } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
-import { type PlannerLayout, WALL_LIMITS } from "@/lib/planner/layout";
+import { WALL_LIMITS } from "@/lib/planner/layout";
+import type { RoomLayout } from "@/lib/planner/room";
 import { useCopy } from "../CopyContext";
 import { DimensionField } from "../DimensionField";
 import { chip } from "./chrome";
@@ -41,7 +42,7 @@ export function RoomPanel({
 }: {
 	catalogue: PlannerCatalogue;
 	roomId: RoomTypeId;
-	layout: PlannerLayout;
+	layout: RoomLayout;
 	/** The shortest wall the placed run fits on — the slider's real floor. */
 	minWallMm: number;
 	/** Wall left over, negative when the run is longer than the wall. */
