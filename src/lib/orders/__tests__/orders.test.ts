@@ -7,8 +7,13 @@ import {
 	plannerEngine,
 } from "@/lib/planner/layout";
 import { computePlannerPrice } from "@/lib/planner/pricing";
+import { asRoom, emptyRoom, roomEngine } from "@/lib/planner/room";
 import { deliveryItemsFor } from "../items";
-import { plannerLayoutSchema } from "../layoutSchema";
+import {
+	orderDesignSchema,
+	plannerLayoutSchema,
+	roomLayoutSchema,
+} from "../layoutSchema";
 import { priceOrder } from "../price";
 import { orderRef } from "../ref";
 import { validateOrder } from "../validate";
@@ -40,7 +45,7 @@ const clone = (layout: PlannerLayout): PlannerLayout =>
 	JSON.parse(JSON.stringify(layout));
 
 const check = (layout: PlannerLayout, cat: PlannerCatalogue = catalogue) =>
-	validateOrder(layout, "kitchen", finishId, cat);
+	validateOrder(asRoom(layout), "kitchen", finishId, cat);
 
 describe("validateOrder", () => {
 	it("accepts a layout the planner itself built", () => {
@@ -86,10 +91,14 @@ describe("validateOrder", () => {
 
 	it("refuses an unknown room or finish", () => {
 		const layout = twoCabinets();
-		expect(validateOrder(layout, "garage", finishId, catalogue)).toMatchObject({
+		expect(
+			validateOrder(asRoom(layout), "garage", finishId, catalogue),
+		).toMatchObject({
 			problem: "unknown_room",
 		});
-		expect(validateOrder(layout, "kitchen", "neon", catalogue)).toMatchObject({
+		expect(
+			validateOrder(asRoom(layout), "kitchen", "neon", catalogue),
+		).toMatchObject({
 			problem: "unknown_finish",
 		});
 	});
@@ -98,17 +107,17 @@ describe("validateOrder", () => {
 describe("priceOrder", () => {
 	it("charges the planner's price plus the flat delivery fee", () => {
 		const layout = twoCabinets();
-		const planner = computePlannerPrice(layout, finishId, catalogue);
+		const planner = computePlannerPrice(asRoom(layout), finishId, catalogue);
 		const withFee = {
 			...catalogue,
 			rates: { worktopRmPerFt: 200, deliveryFlatRm: 60 },
 		};
 
-		const order = priceOrder(layout, finishId, withFee);
+		const order = priceOrder(asRoom(layout), finishId, withFee);
 
 		expect(order.deliveryRm).toBe(60);
 		expect(order.cabinetsRm).toBeCloseTo(
-			computePlannerPrice(layout, finishId, withFee).totalRm,
+			computePlannerPrice(asRoom(layout), finishId, withFee).totalRm,
 			2,
 		);
 		expect(order.totalRm).toBeCloseTo(order.cabinetsRm + 60, 2);
@@ -122,7 +131,7 @@ describe("deliveryItemsFor", () => {
 		// `addModule` places a family's middle size, so read the width back.
 		const widthMm = layout.floor[0].widthMm;
 
-		expect(deliveryItemsFor(layout, catalogue)).toEqual([
+		expect(deliveryItemsFor(asRoom(layout), catalogue)).toEqual([
 			{
 				label: expect.stringContaining(inKitchen.label),
 				qty: 2,
@@ -143,7 +152,7 @@ describe("deliveryItemsFor", () => {
 		if (!size) throw new Error("fixture");
 		size.weightKg = 41.5;
 
-		expect(deliveryItemsFor(layout, weighed)[0].weightKg).toBe(41.5);
+		expect(deliveryItemsFor(asRoom(layout), weighed)[0].weightKg).toBe(41.5);
 	});
 });
 
@@ -165,5 +174,102 @@ describe("orderRef", () => {
 		expect(orderRef(14, "2026-08-26T07:12:00Z")).toBe("IC-20260826-014");
 		// 17:30 UTC is already the next day in Kuala Lumpur.
 		expect(orderRef(14, "2026-08-26T17:30:00Z")).toBe("IC-20260827-014");
+	});
+});
+
+describe("an L-shaped order", () => {
+	const rooms = roomEngine(catalogue);
+	const lKitchen = () => {
+		let room = rooms.setShape(emptyRoom(4200), "left");
+		room = rooms.addModule(
+			room,
+			inKitchen.id,
+			0,
+			"m",
+			inKitchen.sizes[0].widthMm,
+		);
+		return rooms.addModule(room, "corner-base", 0, "c");
+	};
+	const checkRoom = (room: ReturnType<typeof lKitchen>) =>
+		validateOrder(room, "kitchen", finishId, catalogue);
+
+	it("accepts an L the planner built", () => {
+		expect(checkRoom(lKitchen())).toEqual({ ok: true });
+	});
+
+	it("refuses a corner unit standing in a run", () => {
+		const room = lKitchen();
+		const corner = room.corner?.floor;
+		if (!corner) throw new Error("fixture lost its corner");
+		const tampered = {
+			...room,
+			corner: { ...room.corner!, floor: null },
+			runs: [
+				{
+					...room.runs[0],
+					floor: [...room.runs[0].floor, { ...corner, xMm: 2000 }],
+				},
+				room.runs[1],
+			],
+		};
+		expect(checkRoom(tampered)).toMatchObject({
+			problem: "does_not_fit",
+			moduleId: "c",
+		});
+	});
+
+	it("refuses an ordinary cabinet in the corner slot", () => {
+		const room = lKitchen();
+		const tampered = {
+			...room,
+			corner: {
+				...room.corner!,
+				floor: {
+					...room.corner!.floor!,
+					familyId: inKitchen.id,
+					widthMm: inKitchen.sizes[0].widthMm,
+				},
+			},
+		};
+		expect(checkRoom(tampered)).toMatchObject({
+			problem: "does_not_fit",
+			moduleId: "c",
+		});
+	});
+
+	it("refuses a cabinet pushed into the corner square", () => {
+		const room = structuredClone(lKitchen());
+		room.runs[0].floor[0].xMm = 0;
+		expect(checkRoom(room)).toMatchObject({ problem: "does_not_fit" });
+	});
+});
+
+describe("roomLayoutSchema", () => {
+	it("refuses a side wall with no corner, and a corner with no side wall", () => {
+		const straight = emptyRoom(4200);
+		expect(
+			roomLayoutSchema.safeParse({
+				...straight,
+				runs: [straight.runs[0], { floor: [], wall: [] }],
+			}).success,
+		).toBe(false);
+		expect(
+			roomLayoutSchema.safeParse({
+				...straight,
+				corner: { side: "left", floor: null, wall: null },
+			}).success,
+		).toBe(false);
+	});
+});
+
+describe("orderDesignSchema", () => {
+	it("reads an order placed before L-shapes as a one-wall room", () => {
+		const layout = twoCabinets();
+		const parsed = orderDesignSchema.parse({ schemaVersion: 1, layout });
+		expect(parsed.schemaVersion).toBe(2);
+		expect(parsed.layout.runs).toEqual([
+			{ floor: layout.floor, wall: layout.wall },
+		]);
+		expect(parsed.layout.corner).toBeNull();
 	});
 });

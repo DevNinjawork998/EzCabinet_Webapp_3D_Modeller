@@ -6,7 +6,7 @@ import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
 import { toE164 } from "@/lib/logistics/phone";
 import {
 	ORDER_DESIGN_VERSION,
-	plannerLayoutSchema,
+	roomLayoutSchema,
 } from "@/lib/orders/layoutSchema";
 import { PAYMENT_PROVIDER } from "@/lib/orders/payment";
 import { priceOrder } from "@/lib/orders/price";
@@ -26,7 +26,7 @@ export const runtime = "nodejs";
 const orderInputSchema = z.object({
 	roomId: z.string().min(1).max(40),
 	finishId: z.string().min(1).max(128),
-	layout: plannerLayoutSchema,
+	layout: roomLayoutSchema,
 	customer: z.object({
 		name: z.string().trim().min(1).max(200),
 		phone: z.string().trim().min(1).max(40),

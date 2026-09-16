@@ -2,16 +2,13 @@ import {
 	CEILING_LIMITS,
 	doorStyleIn,
 	familyIn,
+	isCorner,
 	ROOM_DEPTH_LIMITS,
 	WALL_HANG_LIMITS,
 } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
-import {
-	type PlannerLayout,
-	plannerEngine,
-	rowFor,
-	WALL_LIMITS,
-} from "@/lib/planner/layout";
+import { rowFor, WALL_LIMITS } from "@/lib/planner/layout";
+import { type RoomLayout, roomEngine } from "@/lib/planner/room";
 
 /**
  * Whether a customer's design can be sold as it stands.
@@ -46,7 +43,7 @@ const within = (value: number, limits: { minMm: number; maxMm: number }) =>
 	value >= limits.minMm && value <= limits.maxMm;
 
 export function validateOrder(
-	layout: PlannerLayout,
+	layout: RoomLayout,
 	roomId: string,
 	finishId: string,
 	catalogue: PlannerCatalogue,
@@ -67,8 +64,22 @@ export function validateOrder(
 	}
 
 	const rows = [
-		...layout.floor.map((placed) => ({ placed, row: "floor" as const })),
-		...layout.wall.map((placed) => ({ placed, row: "wall" as const })),
+		...layout.runs.flatMap((run) => [
+			...run.floor.map((placed) => ({
+				placed,
+				row: "floor" as const,
+				corner: false,
+			})),
+			...run.wall.map((placed) => ({
+				placed,
+				row: "wall" as const,
+				corner: false,
+			})),
+		]),
+		...(["floor", "wall"] as const).flatMap((row) => {
+			const placed = layout.corner?.[row];
+			return placed ? [{ placed, row, corner: true }] : [];
+		}),
 	];
 	if (rows.length === 0) return { ok: false, problem: "empty" };
 
@@ -80,8 +91,8 @@ export function validateOrder(
 		ids.add(placed.id);
 	}
 
-	const engine = plannerEngine(catalogue);
-	for (const { placed, row } of rows) {
+	const engine = roomEngine(catalogue);
+	for (const { placed, row, corner } of rows) {
 		const fail = (problem: OrderProblem): OrderCheck => ({
 			ok: false,
 			problem,
@@ -100,6 +111,8 @@ export function validateOrder(
 			return fail("unknown_door");
 		}
 		if (rowFor(family.kind) !== row) return fail("does_not_fit");
+		// A corner unit belongs in the corner and only there.
+		if (isCorner(family) !== corner) return fail("does_not_fit");
 		if (
 			placed.hangAtMm !== undefined &&
 			placed.hangAtMm > layout.ceilingHeightMm
@@ -116,6 +129,10 @@ export function validateOrder(
 	if (overhanging.length > 0) {
 		return { ok: false, problem: "does_not_fit", moduleId: overhanging[0] };
 	}
+
+	// A cabinet inside the corner square, or a corner square grown into a run,
+	// is not a design anyone can fit.
+	if (!engine.isClear(layout)) return { ok: false, problem: "does_not_fit" };
 
 	return { ok: true };
 }
