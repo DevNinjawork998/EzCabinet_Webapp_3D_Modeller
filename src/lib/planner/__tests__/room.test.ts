@@ -235,6 +235,16 @@ describe("setCornerSide", () => {
 		expect(flipped.runs[1].floor[0].xMm).toBe(3600 - 1000 - 600);
 		expect(engine.isClear(flipped)).toBe(true);
 	});
+
+	it("flips a turned module's rotation and mirrors a wall-row module too", () => {
+		let room = engine.setShape(kitchen(), "left");
+		room = engine.addModule(room, "base-cabinet", 1000, "a", 600);
+		room = engine.setRotation(room, "a", 90);
+		room = engine.addModule(room, "wall-cabinet", 1000, "w", 600, 0);
+		const flipped = engine.setCornerSide(room, "right");
+		expect(flipped.runs[0].floor[0].rotationDeg).toBe(270);
+		expect(flipped.runs[0].wall[0].xMm).toBe(4200 - 1000 - 600);
+	});
 });
 
 describe("corner units", () => {
@@ -279,6 +289,38 @@ describe("corner units", () => {
 		room = engine.addModule(room, "base-cabinet", 607, "s1", 900, 1);
 		room = engine.addModule(room, "base-cabinet", 1507, "s2", 400, 1);
 		expect(engine.fits(room, "corner-base")).toBe(false);
+	});
+
+	it("moves a cabinet only as far as it needs, leaving a free gap alone", () => {
+		let room = engine.setShape(kitchen(), "left");
+		room = engine.addModule(room, "base-cabinet", 700, "a", 600);
+		room = engine.addModule(room, "base-cabinet", 3600, "b", 600);
+		// 1300–3600 is free, so there is room for the 900mm corner square.
+		expect(engine.fits(room, "corner-base")).toBe(true);
+		const next = engine.addModule(room, "corner-base", 0, "c");
+		expect(next.corner?.floor?.familyId).toBe("corner-base");
+		expect(next.runs[0].floor.find((m) => m.id === "a")?.xMm).toBe(900);
+		expect(next.runs[0].floor.find((m) => m.id === "b")?.xMm).toBe(3600);
+	});
+
+	it("moves only what needs to move when going to an L", () => {
+		let room = kitchen();
+		room = engine.addModule(room, "base-cabinet", 300, "a", 600);
+		room = engine.addModule(room, "base-cabinet", 3600, "b", 600);
+		const next = engine.setShape(room, "left");
+		expect(next.corner?.side).toBe("left");
+		expect(next.runs[0].floor.find((m) => m.id === "a")?.xMm).toBe(607);
+		expect(next.runs[0].floor.find((m) => m.id === "b")?.xMm).toBe(3600);
+	});
+
+	it("clears both rows together for a tall unit, so the wall unit clears its end", () => {
+		let room = kitchen();
+		room = engine.addModule(room, "tall-cabinet", 0, "t", 600);
+		room = engine.addModule(room, "wall-cabinet", 600, "w", 400);
+		const next = engine.setShape(room, "left");
+		expect(next.corner).not.toBeNull();
+		expect(next.runs[0].floor.find((m) => m.id === "t")?.xMm).toBe(607);
+		expect(next.runs[0].wall.find((m) => m.id === "w")?.xMm).toBe(1207);
 	});
 
 	it("sit at the corner end of the main wall, turned for a right corner", () => {
@@ -349,6 +391,35 @@ describe("cornerWorktop", () => {
 		let room = engine.setShape(kitchen(), "left");
 		room = engine.addModule(room, "base-cabinet", 0, "a", 600);
 		expect(engine.cornerWorktop(room)).toEqual({ sizeMm: 607, topMm: 880 });
+	});
+
+	it("is none when the corner floor slot holds a non-base unit", () => {
+		// No non-base corner family exists in the seed yet — a corner tall
+		// unit is a future shape, per the CLAUDE.md corner-panel rules.
+		const cornerTall: (typeof PLANNER_CATALOGUE.families)[number] = {
+			id: "corner-tall",
+			label: "Corner tall cabinet",
+			category: "CORNER_BASE_CABINET",
+			kind: "tall",
+			depthMm: 900,
+			heightMm: 2380,
+			floorHeightMm: 0,
+			drawers: 0,
+			sizes: [{ widthMm: 900, priceRm: 1500 }],
+		};
+		const testCatalogue = {
+			...PLANNER_CATALOGUE,
+			families: [...PLANNER_CATALOGUE.families, cornerTall],
+		};
+		const testEngine = roomEngine(testCatalogue);
+		const room = testEngine.addModule(
+			testEngine.setShape(kitchen(), "left"),
+			"corner-tall",
+			0,
+			"c",
+		);
+		expect(room.corner?.floor?.familyId).toBe("corner-tall");
+		expect(testEngine.cornerWorktop(room)).toBeNull();
 	});
 
 	it("covers a corner base unit", () => {

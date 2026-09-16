@@ -262,34 +262,72 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 	}
 
 	/**
-	 * Slide one row of every run away from the corner until nothing is inside
-	 * its square. Every module in the row moves by the same amount, so the run
-	 * keeps its own order and gaps; `isClear` decides afterwards whether the
-	 * wall had the room.
+	 * Make room for the corner square by sliding cabinets, not whole rows.
+	 *
+	 * Walks each run's floor and wall cabinets together, ordered by distance
+	 * from the corner end, keeping one cursor per row for how far that row is
+	 * claimed so far — starting at the square's own edge. A cabinet moves only
+	 * if its own footprint starts before the cursor of every row it occupies:
+	 * its own row, plus the *other* row too for a tall unit, the same two-way
+	 * rule `occupiedSpans` uses, since a tall unit stands floor to ceiling. It
+	 * is pushed exactly clear and never pulled toward the corner, and the
+	 * cursors of the rows it occupies advance to its new far edge — so a
+	 * cabinet already past the square, with a free gap behind it, stays put.
+	 * A run with nowhere to slide is not refused here; `isClear` is still the
+	 * gate for that, in `placeCorner` and `setShape`.
 	 */
-	function clearCorner(room: RoomLayout, row: Row): RoomLayout {
+	function cascadeCorner(room: RoomLayout): RoomLayout {
+		if (!room.corner) return room;
+		const { side } = room.corner;
 		return room.runs.reduce((next, _, run) => {
 			const view = runView(next, run);
-			const span = view.reserved?.[row];
-			if (!span) return next;
-			const atStart = span.startMm === 0;
-			const needMm = Math.max(
-				0,
-				...wall.positionsOf(view, row).map((position) => {
+			if (!view.reserved) return next;
+			const atStart = run === 0 ? side === "left" : side === "right";
+			const lengthMm = lengthOf(next, run);
+
+			const entries = (["floor", "wall"] as const).flatMap((row) =>
+				wall.positionsOf(view, row).map((position) => {
 					const spread = spreadMm(position);
-					return atStart
-						? span.endMm - (position.xMm - spread)
-						: position.xMm + position.widthMm + spread - span.startMm;
+					const startMm = position.xMm - spread;
+					const endMm = position.xMm + position.widthMm + spread;
+					return {
+						id: position.placed.id,
+						nearMm: atStart ? startMm : lengthMm - endMm,
+						farMm: atStart ? endMm : lengthMm - startMm,
+						rows:
+							position.family.kind === "tall"
+								? (["floor", "wall"] as const)
+								: ([row] as const),
+					};
 				}),
 			);
-			if (needMm === 0) return next;
-			const shiftMm = atStart ? needMm : -needMm;
+			entries.sort((a, b) => a.nearMm - b.nearMm);
+
+			const cursor: Record<Row, number> = {
+				floor: cornerSquareMm(next, "floor"),
+				wall: cornerSquareMm(next, "wall"),
+			};
+			const shiftById = new Map<string, number>();
+			for (const entry of entries) {
+				const requiredMm = Math.max(...entry.rows.map((row) => cursor[row]));
+				const shiftMm = Math.max(0, requiredMm - entry.nearMm);
+				if (shiftMm > 0) shiftById.set(entry.id, shiftMm);
+				const newFarMm = entry.farMm + shiftMm;
+				for (const row of entry.rows)
+					cursor[row] = Math.max(cursor[row], newFarMm);
+			}
+			if (shiftById.size === 0) return next;
+
+			const apply = (module: PlacedModule): PlacedModule => {
+				const shiftMm = shiftById.get(module.id);
+				return shiftMm
+					? { ...module, xMm: module.xMm + (atStart ? shiftMm : -shiftMm) }
+					: module;
+			};
 			return withRun(next, run, {
 				...view,
-				[row]: view[row].map((module) => ({
-					...module,
-					xMm: module.xMm + shiftMm,
-				})),
+				floor: view.floor.map(apply),
+				wall: view.wall.map(apply),
 			});
 		}, room);
 	}
@@ -313,10 +351,10 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			// Unused: a corner unit's place is the corner. `cornerPositions` says where.
 			xMm: 0,
 		};
-		const next = clearCorner(
-			{ ...room, corner: { ...room.corner, [row]: placed } },
-			row,
-		);
+		const next = cascadeCorner({
+			...room,
+			corner: { ...room.corner, [row]: placed },
+		});
 		return views(next).every((view) => wall.isClear(view)) ? next : room;
 	}
 
@@ -356,17 +394,11 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			return { ...room, runs: [room.runs[0]], corner: null };
 		}
 		if (room.corner) return setCornerSide(room, shape);
-		const next = clearCorner(
-			clearCorner(
-				{
-					...room,
-					runs: [room.runs[0], { floor: [], wall: [] }],
-					corner: { side: shape, floor: null, wall: null },
-				},
-				"floor",
-			),
-			"wall",
-		);
+		const next = cascadeCorner({
+			...room,
+			runs: [room.runs[0], { floor: [], wall: [] }],
+			corner: { side: shape, floor: null, wall: null },
+		});
 		return views(next).every((view) => wall.isClear(view)) ? next : room;
 	}
 
@@ -421,6 +453,12 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		room: RoomLayout,
 	): { sizeMm: number; topMm: number } | null {
 		if (!room.corner) return null;
+		// A non-base corner unit (a tall corner, once drawn) fills the corner
+		// without closing it for a worktop — no falling through to the
+		// empty-square rule below.
+		const occupant =
+			room.corner.floor && familyIn(catalogue, room.corner.floor.familyId);
+		if (occupant && occupant.kind !== "base") return null;
 		const unit = cornerPositions(room).find((p) => p.family.kind === "base");
 		if (unit) {
 			return {
