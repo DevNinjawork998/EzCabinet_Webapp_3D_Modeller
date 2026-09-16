@@ -304,6 +304,10 @@ function Group({
 	return (
 		<mesh geometry={geometry}>
 			<meshStandardMaterial
+				// Remount on glass <-> solid. R3F "resets" a dropped prop to 0 on a
+				// material (its constructor takes arguments), so glass -> slab left
+				// the door at opacity 0 with depthWrite off: see-through.
+				key={door?.look === "glass" ? "glass" : "solid"}
 				{...material}
 				emissive={emissive}
 				emissiveIntensity={emphasis}
