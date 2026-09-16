@@ -209,6 +209,29 @@ export const FAMILIES: Family[] = [
 			{ widthMm: 900, priceRm: 1240 },
 		],
 	},
+	{
+		...BASE,
+		id: "corner-base",
+		label: "Corner base cabinet",
+		category: "CORNER_BASE_CABINET",
+		// PLACEHOLDER — no corner export from the client yet. An L-shaped unit
+		// is as deep as it is wide; drawn for the left-hand corner.
+		depthMm: 900,
+		drawers: 0,
+		note: "L-shaped corner unit, drawn for the left-hand corner",
+		sizes: [{ widthMm: 900, priceRm: 1150 }],
+	},
+	{
+		...WALL,
+		id: "corner-wall",
+		label: "Corner wall cabinet",
+		category: "CORNER_WALL_CABINET",
+		// PLACEHOLDER — as above.
+		depthMm: 600,
+		drawers: 0,
+		note: "L-shaped corner wall unit, drawn for the left-hand corner",
+		sizes: [{ widthMm: 600, priceRm: 680 }],
+	},
 
 	// ------------------------------------------------------- other rooms --
 	// PLACEHOLDER dimensions — no design export for these yet.
@@ -443,6 +466,8 @@ export const ROOM_TYPES: RoomType[] = [
 			"wall-cabinet",
 			"tall-cabinet",
 			"fridge-housing",
+			"corner-base",
+			"corner-wall",
 		],
 		defaultWallWidthMm: 4200,
 	},
