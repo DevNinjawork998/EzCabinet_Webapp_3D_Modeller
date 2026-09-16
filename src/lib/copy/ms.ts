@@ -234,6 +234,8 @@ export const ms: Dictionary = {
 				TALL_CABINET: "Kabinet tinggi",
 				DRAWER_BASE: "Kabinet laci",
 				FRIDGE_HOUSING: "Kabinet peti sejuk",
+				CORNER_BASE_CABINET: "Kabinet sudut bawah",
+				CORNER_WALL_CABINET: "Kabinet sudut dinding",
 			},
 		},
 		canvas: {
@@ -518,8 +520,7 @@ export const ms: Dictionary = {
 	},
 	privacy: {
 		title: "Notis privasi",
-		draft:
-			"Draf — menunggu semakan EzCabinet Sdn Bhd sebelum berkuat kuasa.",
+		draft: "Draf — menunggu semakan EzCabinet Sdn Bhd sebelum berkuat kuasa.",
 		intro:
 			"Notis ini menerangkan apa yang direkod oleh perancang EzCabinet apabila anda menggunakannya, dan sebabnya.",
 		purposeHeading: "Tujuan",

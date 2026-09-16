@@ -160,8 +160,7 @@ export const en = {
 		},
 		start: {
 			heading: "What room are you planning?",
-			subtitle:
-				"Pick one to start on an empty wall with real EzCabinet sizes.",
+			subtitle: "Pick one to start on an empty wall with real EzCabinet sizes.",
 			roomIconAlt: "{room} icon",
 			roomSubtitle: {
 				kitchen: "Real EzCabinet sizes",
@@ -233,6 +232,8 @@ export const en = {
 				TALL_CABINET: "Tall cabinets",
 				DRAWER_BASE: "Drawer bases",
 				FRIDGE_HOUSING: "Fridge housings",
+				CORNER_BASE_CABINET: "Corner base cabinets",
+				CORNER_WALL_CABINET: "Corner wall cabinets",
 			},
 		},
 		canvas: {

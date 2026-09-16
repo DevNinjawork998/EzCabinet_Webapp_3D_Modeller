@@ -120,6 +120,18 @@ const spanOf = (parts: MeshPart[], axis: 0 | 1 | 2) =>
 const CEILING_MM = 3000;
 
 /**
+ * Two extents within this fraction of each other are the same extent.
+ *
+ * A corner unit's footprint is drawn square on purpose — 900 by 900 — so the
+ * two are equal to the drafter's precision. Tight enough that a BC 600 (600
+ * wide, 588 deep) still reads as two different sizes.
+ */
+const SAME_EXTENT = 0.005;
+
+const sameExtent = (a: number, b: number) =>
+	Math.abs(a - b) <= Math.max(a, b) * SAME_EXTENT;
+
+/**
  * Which axis points at the ceiling, in two steps that have to happen in this
  * order.
  *
@@ -150,7 +162,29 @@ export function inferUpAxis(
 } {
 	const axes = [0, 1, 2] as const;
 	const spans = axes.map((axis) => spanOf(parts, axis));
-	const depthAxis = spans.indexOf(Math.min(...spans)) as 0 | 1 | 2;
+	const [low, mid, high] = [...axes].sort((a, b) => spans[a] - spans[b]);
+
+	// A corner unit: its footprint is square and it is no taller than it is
+	// deep, so the smallest extent is its *height* and "depth first" would lay
+	// it on its back. The square pair is the floor plan, so up is the odd one out.
+	if (
+		sameExtent(spans[mid], spans[high]) &&
+		!sameExtent(spans[low], spans[mid])
+	) {
+		return {
+			upAxis: low,
+			// Of the two equal floor axes, the later one is depth: every exporter
+			// seen so far runs along the wall on x, and taking x for depth would
+			// turn the axis permutation into a mirror image.
+			depthAxis: Math.max(mid, high) as 0 | 1 | 2,
+			confident: spans[low] * scaleFactor <= CEILING_MM,
+		};
+	}
+
+	// Width and depth tied (a square wall corner): same rule, later axis is depth.
+	const depthAxis = (
+		sameExtent(spans[low], spans[mid]) ? Math.max(low, mid) : low
+	) as 0 | 1 | 2;
 
 	// Panels only. Hardware is not a board and has no grain direction to read.
 	const plates = parts.filter(isPlate);

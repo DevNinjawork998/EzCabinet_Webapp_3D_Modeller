@@ -22,6 +22,8 @@ const createSchema = z.object({
 		"TALL_CABINET",
 		"DRAWER_BASE",
 		"FRIDGE_HOUSING",
+		"CORNER_BASE_CABINET",
+		"CORNER_WALL_CABINET",
 	]),
 	rooms: z.array(z.enum(["KITCHEN", "LIVING_ROOM", "BEDROOM", "FOYER"])).min(1),
 	widthMm: z.number().int().positive(),

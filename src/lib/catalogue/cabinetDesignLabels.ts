@@ -11,7 +11,9 @@ export type Category =
 	| "WALL_CABINET"
 	| "TALL_CABINET"
 	| "DRAWER_BASE"
-	| "FRIDGE_HOUSING";
+	| "FRIDGE_HOUSING"
+	| "CORNER_BASE_CABINET"
+	| "CORNER_WALL_CABINET";
 
 export type Room = "KITCHEN" | "LIVING_ROOM" | "BEDROOM" | "FOYER";
 
@@ -21,6 +23,8 @@ export const CATEGORIES: Category[] = [
 	"TALL_CABINET",
 	"DRAWER_BASE",
 	"FRIDGE_HOUSING",
+	"CORNER_BASE_CABINET",
+	"CORNER_WALL_CABINET",
 ];
 
 export const CATEGORY_LABELS: Record<Category, string> = {
@@ -29,6 +33,8 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 	TALL_CABINET: "Tall cabinet",
 	DRAWER_BASE: "Drawer base",
 	FRIDGE_HOUSING: "Fridge housing",
+	CORNER_BASE_CABINET: "Corner base cabinet (draw for the left corner)",
+	CORNER_WALL_CABINET: "Corner wall cabinet (draw for the left corner)",
 };
 
 /** The gallery card's placeholder art. The design *is* parsed — the upload
@@ -41,6 +47,8 @@ export const CATEGORY_SWATCH: Record<Category, string> = {
 	TALL_CABINET: "#b7ab9e",
 	DRAWER_BASE: "#d1af81",
 	FRIDGE_HOUSING: "#8a8580",
+	CORNER_BASE_CABINET: "#bfb6a6",
+	CORNER_WALL_CABINET: "#98a3ad",
 };
 
 export const ROOMS: Room[] = ["KITCHEN", "LIVING_ROOM", "BEDROOM", "FOYER"];
@@ -88,4 +96,6 @@ export const CATEGORY_TO_KIND: Record<Category, "base" | "wall" | "tall"> = {
 	TALL_CABINET: "tall",
 	DRAWER_BASE: "base",
 	FRIDGE_HOUSING: "tall",
+	CORNER_BASE_CABINET: "base",
+	CORNER_WALL_CABINET: "wall",
 };

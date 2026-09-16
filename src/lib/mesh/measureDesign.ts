@@ -30,7 +30,9 @@ export type DesignCategory =
 	| "WALL_CABINET"
 	| "TALL_CABINET"
 	| "DRAWER_BASE"
-	| "FRIDGE_HOUSING";
+	| "FRIDGE_HOUSING"
+	| "CORNER_BASE_CABINET"
+	| "CORNER_WALL_CABINET";
 
 export type DesignMeasurement = {
 	widthMm: number;

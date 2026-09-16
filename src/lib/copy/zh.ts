@@ -59,8 +59,7 @@ export const zh: Dictionary = {
 		},
 		gallery: {
 			heading: "按房间浏览",
-			subtitle:
-				"每个房间都以真实的 EzCabinet 尺寸和现成的布局开始设计。",
+			subtitle: "每个房间都以真实的 EzCabinet 尺寸和现成的布局开始设计。",
 			roomAlt: "{room}橱柜",
 			roomSubtitle: {
 				kitchen: "真实的 EzCabinet 尺寸",
@@ -220,6 +219,8 @@ export const zh: Dictionary = {
 				TALL_CABINET: "高柜",
 				DRAWER_BASE: "抽屉地柜",
 				FRIDGE_HOUSING: "冰箱柜",
+				CORNER_BASE_CABINET: "转角地柜",
+				CORNER_WALL_CABINET: "转角吊柜",
 			},
 		},
 		canvas: {
