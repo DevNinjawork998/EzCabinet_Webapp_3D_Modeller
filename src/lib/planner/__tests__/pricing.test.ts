@@ -27,15 +27,32 @@ const {
 	setWidth,
 } = engine;
 
+import type { PlannerCatalogue } from "../catalogueSchema";
 import {
-	ceilingTrimFt,
-	computePlannerPrice,
-	endPanelPriceRm,
 	MM_PER_FT,
-	skirtingFt,
+	ceilingTrimFt as roomCeilingTrimFt,
+	endPanelPriceRm as roomEndPanelPriceRm,
+	computePlannerPrice as roomPrice,
+	skirtingFt as roomSkirtingFt,
+	worktopFt as roomWorktopFt,
 	WORKTOP_RM_PER_FT,
-	worktopFt,
 } from "../pricing";
+import { asRoom, emptyRoom, roomEngine } from "../room";
+
+/** These tests were written against one wall; a straight room is one run. */
+const worktopFt = (l: PlannerLayout, c: PlannerCatalogue) =>
+	roomWorktopFt(asRoom(l), c);
+const ceilingTrimFt = (l: PlannerLayout, c: PlannerCatalogue) =>
+	roomCeilingTrimFt(asRoom(l), c);
+const skirtingFt = (l: PlannerLayout, c: PlannerCatalogue) =>
+	roomSkirtingFt(asRoom(l), c);
+const endPanelPriceRm = (l: PlannerLayout, c: PlannerCatalogue) =>
+	roomEndPanelPriceRm(asRoom(l), c);
+const computePlannerPrice = (
+	l: PlannerLayout,
+	f: Parameters<typeof roomPrice>[1],
+	c: PlannerCatalogue,
+) => roomPrice(asRoom(l), f, c);
 
 const WALL_MM = 6000;
 const empty = () => emptyLayout(WALL_MM);
@@ -450,5 +467,34 @@ describe("end panels", () => {
 			RATES.endPanelBaseRm * 2,
 			6,
 		);
+	});
+});
+
+describe("an L-shaped room", () => {
+	const rooms = roomEngine(PLANNER_CATALOGUE);
+	const finish = PLANNER_CATALOGUE.finishes[0].id;
+
+	const lWithBases = () => {
+		let room = rooms.setShape(emptyRoom(4200), "left");
+		room = rooms.addModule(room, "base-cabinet", 0, "m", 600);
+		room = rooms.addModule(room, "base-cabinet", 3600, "s", 600, 1);
+		return room;
+	};
+
+	it("runs the worktop along both walls and across the corner once", () => {
+		expect(roomWorktopFt(lWithBases(), PLANNER_CATALOGUE)).toBeCloseTo(
+			(600 + 600 + 607) / MM_PER_FT,
+		);
+	});
+
+	it("charges a corner unit as a cabinet, and its square of worktop", () => {
+		const room = rooms.addModule(lWithBases(), "corner-base", 0, "c");
+		const price = roomPrice(room, finish, PLANNER_CATALOGUE);
+		expect(price.cabinets.map((line) => line.id).sort()).toEqual([
+			"c",
+			"m",
+			"s",
+		]);
+		expect(price.worktopFt).toBeCloseTo((600 + 600 + 900) / MM_PER_FT);
 	});
 });

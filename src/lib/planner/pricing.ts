@@ -8,12 +8,8 @@ import {
 	sizePriceRmIn,
 } from "./catalogue";
 import type { PlannerCatalogue } from "./catalogueSchema";
-import {
-	inRun,
-	type PlannerLayout,
-	type Positioned,
-	plannerEngine,
-} from "./layout";
+import { inRun, type Positioned } from "./layout";
+import { type RoomLayout, roomEngine } from "./room";
 
 /**
  * Indicative planner pricing.
@@ -119,11 +115,12 @@ function cabinetPriceRm(
  * wall — the only state it could express that `kind` could not.
  */
 export function worktopFt(
-	layout: PlannerLayout,
+	layout: RoomLayout,
 	catalogue: PlannerCatalogue,
 ): number {
-	const mm = plannerEngine(catalogue)
-		.positionsOf(layout, "floor")
+	const engine = roomEngine(catalogue);
+	const mm = layout.runs
+		.flatMap((_, run) => engine.positionsOf(layout, "floor", run))
 		.filter((position) => position.family.kind === "base")
 		// A cabinet lifted off the floor or turned off the wall has left the
 		// counter run, and the scene draws no slab over it. The same predicate
@@ -131,7 +128,8 @@ export function worktopFt(
 		// same slab — see `inRun`.
 		.filter(inRun)
 		.reduce((total, position) => total + position.widthMm, 0);
-	return ftOf(mm);
+	// The square where two runs meet is one piece of worktop, counted once.
+	return ftOf(mm + (engine.cornerWorktop(layout)?.sizeMm ?? 0));
 }
 
 /**
@@ -140,13 +138,15 @@ export function worktopFt(
  * hangs, because then there is no strip.
  */
 export function ceilingTrimFt(
-	layout: PlannerLayout,
+	layout: RoomLayout,
 	catalogue: PlannerCatalogue,
 ): number {
 	if (!layout.wallToCeiling) return 0;
-	const mm = plannerEngine(catalogue)
-		.positionsOf(layout, "wall")
-		.reduce((total, position) => total + position.widthMm, 0);
+	const engine = roomEngine(catalogue);
+	const mm = [
+		...layout.runs.flatMap((_, run) => engine.positionsOf(layout, "wall", run)),
+		...engine.cornerPositions(layout).filter((p) => p.family.kind === "wall"),
+	].reduce((total, position) => total + position.widthMm, 0);
 	return ftOf(mm);
 }
 
@@ -156,11 +156,12 @@ export function ceilingTrimFt(
  * across the gap would bill for a piece nobody fits. Same rule as the worktop.
  */
 export function skirtingFt(
-	layout: PlannerLayout,
+	layout: RoomLayout,
 	catalogue: PlannerCatalogue,
 ): number {
-	const mm = plannerEngine(catalogue)
-		.skirtingSpans(layout)
+	const engine = roomEngine(catalogue);
+	const mm = layout.runs
+		.flatMap((_, run) => engine.skirtingSpans(layout, run))
 		.reduce((total, span) => total + (span.endMm - span.startMm), 0);
 	return ftOf(mm);
 }
@@ -177,14 +178,14 @@ const END_PANEL_RM: Record<ModuleKind, keyof ResolvedRates> = {
  * times the board of a wall unit's, so the rate is per kind rather than flat.
  */
 export function endPanelPriceRm(
-	layout: PlannerLayout,
+	layout: RoomLayout,
 	catalogue: PlannerCatalogue,
 ): {
 	count: number;
 	amountRm: number;
 } {
 	const rates = ratesOf(catalogue);
-	const panels = plannerEngine(catalogue).endPanels(layout);
+	const panels = roomEngine(catalogue).endPanels(layout);
 	return {
 		count: panels.length,
 		amountRm: panels.reduce(
@@ -195,16 +196,13 @@ export function endPanelPriceRm(
 }
 
 export function computePlannerPrice(
-	layout: PlannerLayout,
+	layout: RoomLayout,
 	_finish: FinishId,
 	catalogue: PlannerCatalogue,
 ): KitchenPrice {
 	const rates = ratesOf(catalogue);
-	const engine = plannerEngine(catalogue);
-	const placed: Positioned[] = [
-		...engine.positionsOf(layout, "floor"),
-		...engine.positionsOf(layout, "wall"),
-	];
+	const engine = roomEngine(catalogue);
+	const placed: Positioned[] = engine.allPositions(layout);
 
 	const cabinets = placed.map((position) => {
 		const { carcassRm, doorRm } = cabinetPriceRm(position, catalogue);
