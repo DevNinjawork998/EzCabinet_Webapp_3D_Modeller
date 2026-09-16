@@ -288,6 +288,17 @@ export const FAMILIES: Family[] = [
 	},
 ];
 
+/**
+ * Whether a family fills the corner of an L rather than standing in a run.
+ *
+ * Read off the design library's category, the one shape question the admin
+ * answers explicitly. A corner unit keeps its ordinary `kind` — a corner base
+ * is still a base, worktop and all — so nothing else has to learn a new kind.
+ */
+export const isCorner = (family: Pick<Family, "category">): boolean =>
+	family.category === "CORNER_BASE_CABINET" ||
+	family.category === "CORNER_WALL_CABINET";
+
 // ------------------------------------------------------------------ doors --
 
 /** The width ladder doors are priced against — the union of the families'. */

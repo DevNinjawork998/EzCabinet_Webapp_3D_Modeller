@@ -81,6 +81,8 @@ export const familySchema = z.object({
 			"TALL_CABINET",
 			"DRAWER_BASE",
 			"FRIDGE_HOUSING",
+			"CORNER_BASE_CABINET",
+			"CORNER_WALL_CABINET",
 		])
 		.optional(),
 	depthMm: z.number().positive(),
