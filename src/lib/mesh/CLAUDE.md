@@ -24,9 +24,11 @@ is one flat namespace of boxes with no units and no up-axis. So:
   bigger than depth) ties the same two extents without being a corner, so the
   tie alone is not enough — the plate vote decides which reading is real: only
   when the smallest axis strictly wins the vote (a corner's bottom, top and
-  adjustable shelf are thin along it, and nothing else is) is it read as up;
-  otherwise the tie is a coincidence of proportions and depth-first proceeds
-  as normal.
+  adjustable shelf are thin along it, and nothing else is) is it read as up.
+  Otherwise depth-first proceeds — right for a square-fronted cabinet, but
+  possibly wrong for a corner unit whose named boards do not settle the vote —
+  and that reading comes back **not confident**, which raises the "could not
+  confidently tell which axis is up" note rather than asserting a guess.
 - **Which end is the wall.** A *named* front wins — if the drafter typed
   `Door_L_`, that panel's side is the front, full stop. `inferFrontSide` is the
   fallback, and it deliberately ignores anything standing on the floor: feet are

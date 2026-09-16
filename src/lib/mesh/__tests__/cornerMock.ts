@@ -79,6 +79,60 @@ export function boxCabinetObj({
 	].join("\n");
 }
 
+/**
+ * A blind corner with one door: no adjustable shelf, neither `_Return` board,
+ * and only `Door_L_` — the second arm has no separate front to name.
+ *
+ * Reproduces a real failure mode: with fewer named boards, the smallest axis
+ * no longer strictly wins the plate vote (`G-Bottom`/`G-Top` are outvoted by
+ * `G-UBack`/`G-UEnd_(L)`/`Door_L_`, all thin on the other tied axis), so the
+ * corner branch in `inferUpAxis` declines and depth-first reads it lying on
+ * its back — the vote margin between the two floor axes still looks
+ * "decisive" on its own, which is exactly what used to let this through with
+ * no warning.
+ */
+export function blindCornerObj({
+	sizeMm: s,
+	heightMm: h,
+	armMm: a,
+	legMm: l,
+}: {
+	sizeMm: number;
+	heightMm: number;
+	armMm: number;
+	legMm: number;
+}): string {
+	const t = 16; // board
+	const boxes: Box[] = [
+		{ name: "G-UBack", min: [0, l, 0], max: [s, h, t] },
+		{ name: "G-UBack_Return", min: [0, l, 0], max: [t, h, s] },
+		{ name: "G-UEnd_(R)", min: [s - t, l, 0], max: [s, h, a] },
+		{ name: "G-UEnd_(L)", min: [0, l, s - t], max: [a, h, s] },
+		{ name: "G-Bottom", min: [0, l, 0], max: [s, l + t, a] },
+		{ name: "G-Top", min: [0, h - t, 0], max: [s, h, a] },
+		{ name: "Door_L_", min: [a, l + t, a - 18], max: [s - t, h - t, a] },
+		// A wall unit hangs, so it has no feet.
+		...(l > 0
+			? [
+					[40, 40],
+					[s - 90, 40],
+					[40, s - 90],
+					[a - 90, a - 90],
+				]
+			: []
+		).map(([x, z], i) => ({
+			name: `Leveller_${i + 1}`,
+			min: [x, 0, z] as [number, number, number],
+			max: [x + 50, l, z + 50] as [number, number, number],
+		})),
+	];
+	return [
+		"# Mock blind corner unit — see src/lib/mesh/__tests__/cornerMock.ts",
+		...boxes.map((box, i) => boxObj(box, i * 8)),
+		"",
+	].join("\n");
+}
+
 export function cornerObj({
 	sizeMm: s,
 	heightMm: h,

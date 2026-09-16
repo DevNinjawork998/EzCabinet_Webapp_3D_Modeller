@@ -149,8 +149,13 @@ const sameExtent = (a: number, b: number) =>
  * already gathers: a corner's horizontal boards — bottoms, tops, the adjustable
  * shelf — are thin along its short *height* axis, so that axis only wins the
  * plate vote when it genuinely is the up axis. When the smallest axis does not
- * win that vote outright, the tie is a coincidence of the model's proportions,
- * not evidence of a corner, and depth-first proceeds as normal.
+ * win that vote outright, the tie is a coincidence of the model's proportions
+ * — an ordinary square-fronted cabinet — *or* a genuinely ambiguous corner
+ * whose named boards do not settle it either way, and there is no way from
+ * extents and votes alone to tell those two apart. Depth-first proceeds, but
+ * `confident` comes back `false` whenever the footprint was tied and the vote
+ * did not win it outright, so the caller is warned rather than shown a
+ * guess dressed up as a reading.
  *
  * **Then vote between the two that are left.** The up axis is the one most
  * panels are thin on: shelves, tops and bottoms are horizontal and outnumber
@@ -196,9 +201,11 @@ export function inferUpAxis(
 	// the corner reading when the smallest axis strictly wins the plate vote:
 	// a corner's bottom, top and adjustable shelf are thin along it, and
 	// nothing else is, so the vote is lopsided when it really is up.
+	const footprintTie =
+		sameExtent(spans[mid], spans[high]) && !sameExtent(spans[low], spans[mid]);
+
 	if (
-		sameExtent(spans[mid], spans[high]) &&
-		!sameExtent(spans[low], spans[mid]) &&
+		footprintTie &&
 		thinAxisVotes[low] > thinAxisVotes[mid] &&
 		thinAxisVotes[low] > thinAxisVotes[high]
 	) {
@@ -232,7 +239,18 @@ export function inferUpAxis(
 		thinAxisVotes[upAxis] >= Math.max(1, thinAxisVotes[other] * 1.5);
 	const fitsARoom = spans[upAxis] * scaleFactor <= CEILING_MM;
 
-	return { upAxis, depthAxis, confident: decisiveVote && fitsARoom };
+	// A tied footprint that the plate vote could not confidently hand to the
+	// corner reading above is not confidently anything else either: this
+	// depth-first reading might be right (an ordinary square-fronted cabinet)
+	// or might be a corner read lying on its back with too few named boards to
+	// tell. Flag it instead of asserting either silently — the vote margin
+	// below would otherwise happily call a 3-votes-to-2 split "decisive" on a
+	// tie it was never entitled to settle.
+	return {
+		upAxis,
+		depthAxis,
+		confident: footprintTie ? false : decisiveVote && fitsARoom,
+	};
 }
 
 export function normalise(parts: MeshPart[]): Normalised {
