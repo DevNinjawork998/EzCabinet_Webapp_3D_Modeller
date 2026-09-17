@@ -55,8 +55,7 @@ export const KIND: Record<string, CarrierKind> = Object.fromEntries(
  * a settings row because there is one workshop, and a Settings table for a
  * single string nobody has asked to change twice is a table nobody maintains.
  */
-export const WORKSHOP_ADDRESS =
-	"EzCabinet Sdn Bhd, Klang Valley, Selangor";
+export const WORKSHOP_ADDRESS = "EzCabinet Sdn Bhd, Klang Valley, Selangor";
 
 /**
  * The workshop's pin, as a constant rather than something we look up.

@@ -11,7 +11,8 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 // Vercel's Prisma Postgres marketplace integration injects the connection
 // string under its own prefix; DATABASE_URL is what .env and the Prisma CLI use.
 const adapter = new PrismaPg({
-	connectionString: process.env.DATABASE_URL ?? process.env.STORAGE_DATABASE_URL,
+	connectionString:
+		process.env.DATABASE_URL ?? process.env.STORAGE_DATABASE_URL,
 });
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });

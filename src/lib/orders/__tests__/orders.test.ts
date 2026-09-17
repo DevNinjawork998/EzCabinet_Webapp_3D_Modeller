@@ -200,10 +200,10 @@ describe("an L-shaped order", () => {
 	it("refuses a corner unit standing in a run", () => {
 		const room = lKitchen();
 		const corner = room.corner?.floor;
-		if (!corner) throw new Error("fixture lost its corner");
+		if (!room.corner || !corner) throw new Error("fixture lost its corner");
 		const tampered = {
 			...room,
-			corner: { ...room.corner!, floor: null },
+			corner: { ...room.corner, floor: null },
 			runs: [
 				{
 					...room.runs[0],
@@ -220,12 +220,14 @@ describe("an L-shaped order", () => {
 
 	it("refuses an ordinary cabinet in the corner slot", () => {
 		const room = lKitchen();
+		const floor = room.corner?.floor;
+		if (!room.corner || !floor) throw new Error("fixture lost its corner");
 		const tampered = {
 			...room,
 			corner: {
-				...room.corner!,
+				...room.corner,
 				floor: {
-					...room.corner!.floor!,
+					...floor,
 					familyId: inKitchen.id,
 					widthMm: inKitchen.sizes[0].widthMm,
 				},
