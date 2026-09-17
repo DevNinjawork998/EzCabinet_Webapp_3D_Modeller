@@ -130,6 +130,15 @@ function runPointFromRay(
 			? [direction.z, origin.z, planeZ]
 			: [direction.y, origin.y, levelY];
 	if (Math.abs(along) < 1e-6) return null;
+	// The level plane is only a fallback, and it can be as badly placed as the
+	// plane it stands in for: in the side view the eye sits about at grab
+	// height, so a grazing crossing turns a pixel into a metre of run.
+	if (
+		levelY !== null &&
+		(Math.abs(direction.y) < 0.25 || Math.abs(origin.y - levelY) < 0.3)
+	) {
+		return null;
+	}
 	const t = (to - from) / along;
 	if (t <= 0) return null;
 	return {
@@ -1067,15 +1076,22 @@ function Run({
 
 	// A drag can end anywhere — off the plane, outside the canvas, or with this
 	// unmounting mid-gesture. All of them have to give orbiting back.
+	// Read through a ref: `onLayoutChange` is a fresh arrow per render (one per
+	// run), and re-running this effect on it gave orbiting back mid-drag — the
+	// press that selected a cabinet re-rendered, and the camera swung round
+	// while the cabinet slid.
+	const endDragRef = useRef(endDrag);
+	endDragRef.current = endDrag;
 	useEffect(() => {
-		window.addEventListener("pointerup", endDrag);
-		window.addEventListener("pointercancel", endDrag);
+		const end = () => endDragRef.current();
+		window.addEventListener("pointerup", end);
+		window.addEventListener("pointercancel", end);
 		return () => {
-			window.removeEventListener("pointerup", endDrag);
-			window.removeEventListener("pointercancel", endDrag);
+			window.removeEventListener("pointerup", end);
+			window.removeEventListener("pointercancel", end);
 			if (controls) controls.enabled = true;
 		};
-	}, [endDrag, controls]);
+	}, [controls]);
 
 	/**
 	 * A drag's pointer moves, read off the window and cast from the camera.
@@ -1095,6 +1111,9 @@ function Run({
 			((event.clientX - rect.left) / rect.width) * 2 - 1,
 			-((event.clientY - rect.top) / rect.height) * 2 + 1,
 		);
+		// Off the canvas — over the sidebar, say — the ray means nothing on
+		// screen, so the cabinet stays where the pointer last left the scene.
+		if (Math.abs(DRAG_NDC.x) > 1 || Math.abs(DRAG_NDC.y) > 1) return;
 		DRAG_RAYCASTER.setFromCamera(DRAG_NDC, camera);
 		const ray = localRay(DRAG_RAYCASTER.ray, yaw);
 

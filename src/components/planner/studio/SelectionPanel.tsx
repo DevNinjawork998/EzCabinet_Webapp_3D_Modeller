@@ -1,6 +1,7 @@
 "use client";
 
 import { fill } from "@/lib/copy/fill";
+import { isCorner } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
 import type { HingeSide, Offsets, Positioned } from "@/lib/planner/layout";
 import type { RoomLayout } from "@/lib/planner/room";
@@ -81,6 +82,10 @@ export function SelectionPanel({
 }) {
 	const t = useCopy();
 	const isWall = selected.family.kind === "wall";
+	// A corner unit's place is the corner and its doors are part of the drawing:
+	// the room engine leaves it unchanged under move, turn, hinge, replace and
+	// duplicate, so none of those is offered.
+	const corner = isCorner(selected.family);
 	const hangAtMm =
 		selected.placed.hangAtMm ??
 		(isWall ? layout.hangingHeightMm : selected.family.floorHeightMm);
@@ -98,18 +103,22 @@ export function SelectionPanel({
 					},
 				]
 			: []),
-		{
-			key: "replace" as const,
-			label: t.planner.selection.verbReplace,
-			meta: selected.family.label,
-			press: () => onVerbAction(verb === "replace" ? null : "replace"),
-		},
-		{
-			key: "move" as const,
-			label: t.planner.selection.verbMove,
-			meta: t.planner.selection.moveMeta,
-			press: () => onVerbAction(verb === "move" ? null : "move"),
-		},
+		...(corner
+			? []
+			: [
+					{
+						key: "replace" as const,
+						label: t.planner.selection.verbReplace,
+						meta: selected.family.label,
+						press: () => onVerbAction(verb === "replace" ? null : "replace"),
+					},
+					{
+						key: "move" as const,
+						label: t.planner.selection.verbMove,
+						meta: t.planner.selection.moveMeta,
+						press: () => onVerbAction(verb === "move" ? null : "move"),
+					},
+				]),
 		{
 			key: "doors" as const,
 			label: doorsOpen
@@ -119,12 +128,16 @@ export function SelectionPanel({
 			press: onToggleDoorAction,
 			disabled: selected.placed.doorStyleId === null,
 		},
-		{
-			key: "duplicate" as const,
-			label: t.planner.selection.duplicate,
-			meta: "⌘D",
-			press: onDuplicateAction,
-		},
+		...(corner
+			? []
+			: [
+					{
+						key: "duplicate" as const,
+						label: t.planner.selection.duplicate,
+						meta: "⌘D",
+						press: onDuplicateAction,
+					},
+				]),
 		{
 			key: "remove" as const,
 			label: t.planner.selection.remove,
@@ -212,7 +225,7 @@ export function SelectionPanel({
 				</section>
 			)}
 
-			{verb === "replace" && (
+			{verb === "replace" && !corner && (
 				<section className="flex flex-col gap-1.5 border-[#f0efec] border-b px-4 py-3.5">
 					<p className="font-semibold text-[12px] text-neutral-700">
 						{t.planner.selection.replaceHeading}
@@ -234,7 +247,7 @@ export function SelectionPanel({
 				</section>
 			)}
 
-			{verb === "move" && (
+			{verb === "move" && !corner && (
 				<section className="flex flex-col gap-2 border-[#f0efec] border-b px-4 py-3.5">
 					<p className="font-semibold text-[12px] text-neutral-700">
 						{t.planner.selection.positionHeading}
@@ -359,7 +372,7 @@ export function SelectionPanel({
 
 				{/* Only a lone leaf gets a choice: a pair always hinges outward from
 				    the middle, which is the only way a pair is hung. */}
-				{selected.placed.doorStyleId && leaves === 1 && (
+				{selected.placed.doorStyleId && leaves === 1 && !corner && (
 					<div className="flex flex-wrap gap-1">
 						{hingeOptions.map((option) => (
 							<button

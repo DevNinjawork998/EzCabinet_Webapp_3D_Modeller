@@ -18,6 +18,7 @@ import type { PostHog } from "posthog-js";
 export type JourneyEvent =
 	| "screen_viewed"
 	| "room_picked"
+	| "room_shape_changed"
 	| "planner_started"
 	| "cabinet_added"
 	| "cabinet_removed"

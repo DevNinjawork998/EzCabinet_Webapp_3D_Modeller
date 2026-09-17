@@ -8,7 +8,7 @@ import {
 } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
 import { WALL_LIMITS } from "@/lib/planner/layout";
-import type { RoomLayout } from "@/lib/planner/room";
+import type { RoomLayout, RoomShape } from "@/lib/planner/room";
 import { useCopy } from "../CopyContext";
 import { DimensionField } from "../DimensionField";
 import { chip } from "./chrome";
@@ -34,6 +34,10 @@ export function RoomPanel({
 	minWallMm,
 	freeMm,
 	overhangMm,
+	shape,
+	canStraighten,
+	minDepthMm,
+	onShapeAction,
 	onChangeRoomAction,
 	onWallWidthAction,
 	onCeilingAction,
@@ -48,6 +52,14 @@ export function RoomPanel({
 	/** Wall left over, negative when the run is longer than the wall. */
 	freeMm: number;
 	overhangMm: number;
+	/** One wall, or which side the corner of an L is on. */
+	shape: RoomShape;
+	/** Whether one wall is still reachable — not while the side wall or corner
+	 * holds anything. */
+	canStraighten: boolean;
+	/** The shortest room the side wall's cabinets fit in. */
+	minDepthMm: number;
+	onShapeAction: (shape: RoomShape) => void;
 	onChangeRoomAction: (id: RoomTypeId) => void;
 	onWallWidthAction: (mm: number) => void;
 	onCeilingAction: (mm: number) => void;
@@ -75,6 +87,37 @@ export function RoomPanel({
 				))}
 			</div>
 
+			<div className="flex flex-col gap-1.5">
+				<p className="text-[12px] text-neutral-600">{t.planner.room.shape}</p>
+				<div className="flex flex-wrap gap-1">
+					{(
+						[
+							["straight", t.planner.room.shapeStraight],
+							["left", t.planner.room.shapeLeft],
+							["right", t.planner.room.shapeRight],
+						] as const
+					).map(([option, label]) => (
+						<button
+							key={option}
+							type="button"
+							aria-pressed={shape === option}
+							disabled={
+								option === "straight" && shape !== "straight" && !canStraighten
+							}
+							onClick={() => onShapeAction(option)}
+							className={`${chip(shape === option)} disabled:cursor-not-allowed disabled:text-neutral-300`}
+						>
+							{label}
+						</button>
+					))}
+				</div>
+				{shape !== "straight" && !canStraighten && (
+					<p className="text-[11px] text-neutral-500 leading-4">
+						{t.planner.room.shapeLocked}
+					</p>
+				)}
+			</div>
+
 			<DimensionField
 				label={t.planner.room.wallLength}
 				valueMm={layout.wallWidthMm}
@@ -99,9 +142,13 @@ export function RoomPanel({
 			/>
 
 			<DimensionField
-				label={t.planner.room.roomDepth}
+				label={
+					shape === "straight"
+						? t.planner.room.roomDepth
+						: t.planner.room.sideWallLength
+				}
 				valueMm={layout.roomDepthMm}
-				minMm={ROOM_DEPTH_LIMITS.minMm}
+				minMm={minDepthMm}
 				maxMm={ROOM_DEPTH_LIMITS.maxMm}
 				stepMm={50}
 				onChangeAction={onDepthAction}

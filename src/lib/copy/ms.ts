@@ -138,6 +138,7 @@ export const ms: Dictionary = {
 			defaultsTitle: "Tetapan lalai untuk seluruh baris",
 		},
 		panel: {
+			sideHint: "Pandangan rata ke dinding sisi.",
 			close: "Tutup panel",
 			addTitle: "Tambah kabinet",
 			addHint:
@@ -179,6 +180,13 @@ export const ms: Dictionary = {
 			wallLength: "Panjang dinding",
 			ceiling: "Siling",
 			roomDepth: "Kedalaman bilik",
+			shape: "Susun atur",
+			shapeStraight: "Satu dinding",
+			shapeLeft: "L, sudut di kiri",
+			shapeRight: "L, sudut di kanan",
+			shapeLocked:
+				"Kosongkan dinding sisi dan sudut untuk kembali ke satu dinding.",
+			sideWallLength: "Panjang dinding sisi",
 			wallUnitsHangAt: "Unit dinding tergantung pada",
 			narrowWallNote:
 				"Susunan {min}mm anda menetapkan dinding paling sempit yang boleh memuatkannya. Buang atau ubah saiz kabinet untuk lebih sempit lagi.",
@@ -218,12 +226,16 @@ export const ms: Dictionary = {
 				"Susunan ini melebihi dinding sebanyak {overhang}mm — rapatkan jurang di bawah, atau buang satu kabinet.",
 		},
 		view: {
+			side: "Dinding sisi",
 			ariaLabel: "Paparan",
 			threeD: "Paparan 3D",
 			elevation: "Pandangan sisi",
 			plan: "Pelan",
 		},
 		addCabinets: {
+			targetWall: "Tambah ke",
+			mainWall: "Dinding utama",
+			sideWall: "Dinding sisi",
 			heading: "Tambah kabinet",
 			subtitle: "Seret ke dinding. Saiz dan pintu boleh dipilih kemudian.",
 			sizeRange: "{min}–{max}mm · dari {price}",

@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { track } from "@/lib/analytics";
 import { CATEGORIES } from "@/lib/catalogue/cabinetDesignLabels";
 import type { Dictionary } from "@/lib/copy/en";
@@ -38,6 +38,7 @@ import {
 	runIndexOf,
 	setDoors,
 	setHinge,
+	shapeOf,
 } from "@/lib/planner/room";
 import { useCatalogue, useRoomEngine } from "./CatalogueContext";
 import { useCopy, useLocale } from "./CopyContext";
@@ -47,6 +48,7 @@ import { AdminLink, PlannerHeader } from "./PlannerHeader";
 import type { PlannerView } from "./PlannerScene";
 import { priceLineDetail, priceLineLabel } from "./priceLineCopy";
 import { CabinetMenu } from "./studio/CabinetMenu";
+import { chip } from "./studio/chrome";
 import { DesignRecap } from "./studio/DesignRecap";
 import { PriceFooter } from "./studio/PriceFooter";
 import { RoomPanel } from "./studio/RoomPanel";
@@ -78,9 +80,13 @@ const PlannerScene = dynamic(() => import("./PlannerScene"), {
 });
 
 /** Labels for the view toggle, in the order a fitter reads them. */
-const views = (t: Dictionary): { id: PlannerView; label: string }[] => [
+const views = (
+	t: Dictionary,
+	hasSide: boolean,
+): { id: PlannerView; label: string }[] => [
 	{ id: "3d", label: t.planner.view.threeD },
 	{ id: "elevation", label: t.planner.view.elevation },
+	...(hasSide ? [{ id: "side" as const, label: t.planner.view.side }] : []),
 	{ id: "plan", label: t.planner.view.plan },
 ];
 
@@ -237,6 +243,7 @@ export function StudioScreen({
 		flushWallToTallTops,
 		freeSpans,
 		hangingHeightMmOf,
+		minRoomDepthMm,
 		minWallWidthMm,
 		overhangMm,
 		positionsOf,
@@ -252,6 +259,7 @@ export function StudioScreen({
 		setHangingHeight,
 		setRoomDepth,
 		setRotation,
+		setShape,
 		setWallToCeiling,
 		setWallToWall,
 		setWallWidth,
@@ -271,6 +279,13 @@ export function StudioScreen({
 	);
 	const [dragFamilyId, setDragFamilyId] = useState<string | null>(null);
 	const [view, setView] = useState<PlannerView>("3d");
+	// A straightened room has no side wall to look at.
+	useEffect(() => {
+		if (view === "side" && !layout.corner) setView("elevation");
+	}, [view, layout.corner]);
+	// Which wall the add menu places on. Only an L has a choice.
+	const [targetRun, setTargetRun] = useState(0);
+	const run = layout.corner ? targetRun : 0;
 	// A pan now survives a layout change, so something has to be able to put
 	// the framing back. Bumping this is the only thing that refits the camera.
 	const [refitKey, setRefitKey] = useState(0);
@@ -333,8 +348,8 @@ export function StudioScreen({
 
 	/** Whether this cabinet has anything to trade places with, each way. */
 	const neighboursOf = (position: Positioned) => {
-		const run = Math.max(0, runIndexOf(layout, position.placed.id));
-		const row = positionsOf(layout, rowFor(position.family.kind), run);
+		const at = Math.max(0, runIndexOf(layout, position.placed.id));
+		const row = positionsOf(layout, rowFor(position.family.kind), at);
 		const index = row.findIndex(
 			(other) => other.placed.id === position.placed.id,
 		);
@@ -423,9 +438,11 @@ export function StudioScreen({
 	);
 
 	const dropCarcass = (familyId: string, clientX: number, clientY: number) => {
-		const runXMm = pickerRef.current?.(clientX, clientY, 0) ?? 0;
+		const runXMm = pickerRef.current?.(clientX, clientY, run) ?? 0;
 		track("cabinet_added", { family: familyId, via: "drag" });
-		setLayoutAction((prev) => addModule(prev, familyId, runXMm));
+		setLayoutAction((prev) =>
+			addModule(prev, familyId, runXMm, undefined, undefined, run),
+		);
 	};
 
 	// A third click starts a fresh measurement rather than adding a third
@@ -442,6 +459,10 @@ export function StudioScreen({
 		? Math.max(measurement.widthMm, measurement.heightMm, measurement.depthMm)
 		: 0;
 
+	const menuFamily = menu
+		? placed.find((position) => position.placed.id === menu.id)?.family
+		: undefined;
+
 	const canFlush = placed.some((position) => position.family.kind === "tall");
 
 	const roomBody = (
@@ -452,6 +473,13 @@ export function StudioScreen({
 			minWallMm={minWallMm}
 			freeMm={freeMm}
 			overhangMm={overhang}
+			shape={shapeOf(layout)}
+			canStraighten={setShape(layout, "straight") !== layout}
+			minDepthMm={minRoomDepthMm(layout)}
+			onShapeAction={(shape) => {
+				track("room_shape_changed", { shape });
+				setLayoutAction((prev) => setShape(prev, shape));
+			}}
 			onChangeRoomAction={onChangeRoomAction}
 			onWallWidthAction={(mm) =>
 				setLayoutAction((prev) => setWallWidth(prev, mm))
@@ -473,7 +501,32 @@ export function StudioScreen({
 	});
 	const addBody = (
 		<div className="flex flex-col gap-3">
+			{layout.corner && (
+				<div className="flex flex-col gap-1.5">
+					<p className="font-semibold text-[11px] text-neutral-600 uppercase tracking-[0.06em]">
+						{t.planner.addCabinets.targetWall}
+					</p>
+					<div className="flex gap-1">
+						{[
+							t.planner.addCabinets.mainWall,
+							t.planner.addCabinets.sideWall,
+						].map((label, index) => (
+							<button
+								key={label}
+								type="button"
+								aria-pressed={run === index}
+								onClick={() => setTargetRun(index)}
+								className={chip(run === index)}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+				</div>
+			)}
 			{CATEGORIES.map((category) => {
+				// A corner unit has nowhere to go until there is a corner.
+				if (category.startsWith("CORNER_") && !layout.corner) return null;
 				const shelf = offered.filter(
 					(family) =>
 						(family.category ?? KIND_CATEGORY[family.kind]) === category,
@@ -487,7 +540,7 @@ export function StudioScreen({
 						<div className="grid grid-cols-2 gap-2">
 							{shelf.map((option) => {
 								const familyId = option.id;
-								const canFit = fits(layout, familyId);
+								const canFit = fits(layout, familyId, undefined, run);
 								const price = formatRm(option.sizes[0].priceRm, {
 									maximumFractionDigits: 0,
 								});
@@ -510,7 +563,9 @@ export function StudioScreen({
 												family: familyId,
 												via: "click",
 											});
-											setLayoutAction((prev) => addModule(prev, familyId, 0));
+											setLayoutAction((prev) =>
+												addModule(prev, familyId, 0, undefined, undefined, run),
+											);
 										}}
 										disabled={!canFit}
 										className={`rounded-lg border p-2 text-left transition ${
@@ -547,7 +602,7 @@ export function StudioScreen({
 
 	const viewBody = (
 		<div className="flex flex-col gap-1.5">
-			{views(t).map((option) => (
+			{views(t, layout.corner !== null).map((option) => (
 				<PanelOption
 					key={option.id}
 					label={option.label}
@@ -556,7 +611,9 @@ export function StudioScreen({
 							? t.planner.panel.threeDHint
 							: option.id === "elevation"
 								? t.planner.panel.elevationHint
-								: t.planner.panel.planHint
+								: option.id === "side"
+									? t.planner.panel.sideHint
+									: t.planner.panel.planHint
 					}
 					pressed={view === option.id}
 					onPressAction={() => {
@@ -814,8 +871,7 @@ export function StudioScreen({
 							y={menu.y}
 							onDismissAction={() => setMenu(null)}
 							items={[
-								...((placed.find((p) => p.placed.id === menu.id)?.family.sizes
-									.length ?? 0) > 1
+								...((menuFamily?.sizes.length ?? 0) > 1
 									? [
 											{
 												key: "resize",
@@ -824,22 +880,29 @@ export function StudioScreen({
 											},
 										]
 									: []),
-								{
-									key: "replace",
-									label: t.planner.selection.verbReplace,
-									press: () => setVerb("replace"),
-								},
-								{
-									key: "move",
-									label: t.planner.selection.verbMove,
-									press: () => setVerb("move"),
-								},
-								{
-									key: "duplicate",
-									label: t.planner.selection.duplicate,
-									press: () =>
-										setLayoutAction((prev) => duplicateModule(prev, menu.id)),
-								},
+								// A corner unit stays in its corner — see SelectionPanel.
+								...(menuFamily && isCorner(menuFamily)
+									? []
+									: [
+											{
+												key: "replace",
+												label: t.planner.selection.verbReplace,
+												press: () => setVerb("replace"),
+											},
+											{
+												key: "move",
+												label: t.planner.selection.verbMove,
+												press: () => setVerb("move"),
+											},
+											{
+												key: "duplicate",
+												label: t.planner.selection.duplicate,
+												press: () =>
+													setLayoutAction((prev) =>
+														duplicateModule(prev, menu.id),
+													),
+											},
+										]),
 								{
 									key: "remove",
 									label: t.planner.selection.remove,
@@ -860,7 +923,11 @@ export function StudioScreen({
 							{placed.length === 1 ? t.planner.unit : t.planner.units}
 						</span>
 						<span className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[12px] text-[#8a857c] shadow-[0_1px_2px_rgba(0,0,0,.04)]">
-							{views(t).find((option) => option.id === view)?.label}
+							{
+								views(t, layout.corner !== null).find(
+									(option) => option.id === view,
+								)?.label
+							}
 						</span>
 					</div>
 

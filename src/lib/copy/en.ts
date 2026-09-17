@@ -141,6 +141,7 @@ export const en = {
 			defaultsTitle: "Defaults for the whole run",
 		},
 		panel: {
+			sideHint: "Flat onto the side wall.",
 			close: "Close panel",
 			addTitle: "Add a cabinet",
 			addHint:
@@ -180,6 +181,12 @@ export const en = {
 			wallLength: "Wall length",
 			ceiling: "Ceiling",
 			roomDepth: "Room depth",
+			shape: "Layout",
+			shapeStraight: "One wall",
+			shapeLeft: "L, corner on the left",
+			shapeRight: "L, corner on the right",
+			shapeLocked: "Clear the side wall and corner to go back to one wall.",
+			sideWallLength: "Side wall length",
 			wallUnitsHangAt: "Wall units hang at",
 			narrowWallNote:
 				"Your {min}mm run sets the shortest wall it fits on. Remove or resize a cabinet to go narrower.",
@@ -216,12 +223,16 @@ export const en = {
 				"The run overhangs this wall by {overhang}mm — close the gaps below, or remove a cabinet.",
 		},
 		view: {
+			side: "Side wall",
 			ariaLabel: "View",
 			threeD: "3D",
 			elevation: "Elevation",
 			plan: "Plan",
 		},
 		addCabinets: {
+			targetWall: "Add to",
+			mainWall: "Main wall",
+			sideWall: "Side wall",
 			heading: "Add cabinets",
 			subtitle: "Drag onto the wall. Size and front come after.",
 			sizeRange: "{min}–{max}mm · from {price}",
