@@ -239,6 +239,15 @@ describe("an L-shaped order", () => {
 		});
 	});
 
+	it("refuses a turned cabinet whose footprint reaches into the corner", () => {
+		// Its width clears the corner square, so only the footprint check in
+		// `isClear` sees the turned carcass swing into it.
+		const room = structuredClone(lKitchen());
+		room.runs[0].floor[0].rotationDeg = 45;
+		expect(rooms.widthOptionsFor(room, "m")[0]?.fits).toBe(true);
+		expect(checkRoom(room)).toEqual({ ok: false, problem: "does_not_fit" });
+	});
+
 	it("refuses a cabinet pushed into the corner square", () => {
 		const room = structuredClone(lKitchen());
 		room.runs[0].floor[0].xMm = 0;
