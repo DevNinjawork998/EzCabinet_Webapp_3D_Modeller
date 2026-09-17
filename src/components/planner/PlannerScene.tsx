@@ -114,6 +114,13 @@ const SIDE_RIGHT_DIRECTION = new Vector3(-1, 0, 0);
  * Read off the ray rather than `e.point`, which is wherever the ray happened
  * to strike a mesh and would offset the grab by the height of the door it hit.
  */
+/** A ray this close to parallel with a drag plane (the component of its unit
+ * direction along the plane's normal)… */
+const GRAZING_DIRECTION = 0.25;
+/** …or an eye this close to the plane, in metres, crosses it too unsteadily
+ * to drag against. Shared by the cabinet's own plane and the level fallback. */
+const GRAZING_DISTANCE_M = 0.3;
+
 function runPointFromRay(
 	ray: Ray,
 	planeZ: number,
@@ -135,7 +142,8 @@ function runPointFromRay(
 	// height, so a grazing crossing turns a pixel into a metre of run.
 	if (
 		levelY !== null &&
-		(Math.abs(direction.y) < 0.25 || Math.abs(origin.y - levelY) < 0.3)
+		(Math.abs(direction.y) < GRAZING_DIRECTION ||
+			Math.abs(origin.y - levelY) < GRAZING_DISTANCE_M)
 	) {
 		return null;
 	}
@@ -158,7 +166,8 @@ function runPointFromRay(
  * Decided once per grab, so a drag never switches planes mid-gesture.
  */
 const seenEdgeOn = (ray: Ray, planeZ: number) =>
-	Math.abs(ray.origin.z - planeZ) < 0.3 || Math.abs(ray.direction.z) < 0.25;
+	Math.abs(ray.origin.z - planeZ) < GRAZING_DISTANCE_M ||
+	Math.abs(ray.direction.z) < GRAZING_DIRECTION;
 
 /**
  * The same solve turned on its side: where the pointer's ray crosses a

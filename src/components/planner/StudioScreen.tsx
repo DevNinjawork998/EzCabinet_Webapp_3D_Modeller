@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { track } from "@/lib/analytics";
 import { CATEGORIES } from "@/lib/catalogue/cabinetDesignLabels";
 import type { Dictionary } from "@/lib/copy/en";
@@ -36,6 +36,7 @@ import {
 	emptyRoom,
 	type RoomLayout,
 	runIndexOf,
+	runView,
 	setDoors,
 	setHinge,
 	shapeOf,
@@ -279,10 +280,10 @@ export function StudioScreen({
 	);
 	const [dragFamilyId, setDragFamilyId] = useState<string | null>(null);
 	const [view, setView] = useState<PlannerView>("3d");
-	// A straightened room has no side wall to look at.
-	useEffect(() => {
-		if (view === "side" && !layout.corner) setView("elevation");
-	}, [view, layout.corner]);
+	// A straightened room has no side wall to look at. Derived rather than
+	// reset in an effect, so no frame ever draws a side view with no side.
+	const shownView: PlannerView =
+		view === "side" && !layout.corner ? "elevation" : view;
 	// Which wall the add menu places on. Only an L has a choice.
 	const [targetRun, setTargetRun] = useState(0);
 	const run = layout.corner ? targetRun : 0;
@@ -411,7 +412,22 @@ export function StudioScreen({
 	const minWallMm = minWallWidthMm(layout);
 	// Whole millimetres: a dragged cabinet lands on a fractional x, and the
 	// customer measures with a tape, not a micrometer.
-	const freeMm = Math.round(layout.wallWidthMm - runExtentMm(layout));
+	// In an L the corner square is not free wall: count from where the main
+	// run's reserved span ends (corner on the left) to where it starts (on the
+	// right). `runExtentMm` alone missed a right-hand corner, and a left-hand
+	// one whenever the main wall was empty.
+	const reserved = Object.values(runView(layout, 0).reserved ?? {});
+	const usableStartMm = Math.max(
+		0,
+		...reserved.filter((span) => span.startMm === 0).map((span) => span.endMm),
+	);
+	const usableEndMm = Math.min(
+		layout.wallWidthMm,
+		...reserved.filter((span) => span.startMm > 0).map((span) => span.startMm),
+	);
+	const freeMm = Math.round(
+		usableEndMm - Math.max(usableStartMm, runExtentMm(layout)),
+	);
 	const construction = constructionOf(catalogue);
 	const price = computePlannerPrice(layout, finish, catalogue);
 	// Named so the customer knows what the extra lines are for. Both are added
@@ -474,9 +490,15 @@ export function StudioScreen({
 			freeMm={freeMm}
 			overhangMm={overhang}
 			shape={shapeOf(layout)}
-			canStraighten={setShape(layout, "straight") !== layout}
+			reachable={{
+				straight: setShape(layout, "straight") !== layout,
+				left: setShape(layout, "left") !== layout,
+				right: setShape(layout, "right") !== layout,
+			}}
 			minDepthMm={minRoomDepthMm(layout)}
 			onShapeAction={(shape) => {
+				// Only a change that lands: a re-press or a refused L is not one.
+				if (setShape(layout, shape) === layout) return;
 				track("room_shape_changed", { shape });
 				setLayoutAction((prev) => setShape(prev, shape));
 			}}
@@ -615,7 +637,7 @@ export function StudioScreen({
 									? t.planner.panel.sideHint
 									: t.planner.panel.planHint
 					}
-					pressed={view === option.id}
+					pressed={shownView === option.id}
 					onPressAction={() => {
 						track("view_changed", { view: option.id });
 						setView(option.id);
@@ -856,7 +878,7 @@ export function StudioScreen({
 						measurePoints={measurePoints}
 						measureAxis={measureAxis}
 						positionMode={verb === "move"}
-						view={view}
+						view={shownView}
 						refitKey={refitKey}
 						onLayoutChangeAction={setLayoutAction}
 						onSelectAction={select}
@@ -925,7 +947,7 @@ export function StudioScreen({
 						<span className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[12px] text-[#8a857c] shadow-[0_1px_2px_rgba(0,0,0,.04)]">
 							{
 								views(t, layout.corner !== null).find(
-									(option) => option.id === view,
+									(option) => option.id === shownView,
 								)?.label
 							}
 						</span>

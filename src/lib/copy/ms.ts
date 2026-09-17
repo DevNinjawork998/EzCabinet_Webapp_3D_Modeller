@@ -186,6 +186,8 @@ export const ms: Dictionary = {
 			shapeRight: "L, sudut di kanan",
 			shapeLocked:
 				"Kosongkan dinding sisi dan sudut untuk kembali ke satu dinding.",
+			shapeRefused:
+				"Kosongkan ruang di hujung dinding itu untuk menjadikannya bentuk L.",
 			sideWallLength: "Panjang dinding sisi",
 			wallUnitsHangAt: "Unit dinding tergantung pada",
 			narrowWallNote:

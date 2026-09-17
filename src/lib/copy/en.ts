@@ -186,6 +186,7 @@ export const en = {
 			shapeLeft: "L, corner on the left",
 			shapeRight: "L, corner on the right",
 			shapeLocked: "Clear the side wall and corner to go back to one wall.",
+			shapeRefused: "Make room at that end of the wall to turn this into an L.",
 			sideWallLength: "Side wall length",
 			wallUnitsHangAt: "Wall units hang at",
 			narrowWallNote:

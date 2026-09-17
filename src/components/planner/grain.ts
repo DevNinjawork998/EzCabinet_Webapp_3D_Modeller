@@ -1,5 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react";
 import {
+	DataTexture,
 	NoColorSpace,
 	RepeatWrapping,
 	SRGBColorSpace,
@@ -181,9 +182,23 @@ export function useGrain(
 		roughnessMap.repeat.set(repeat[0], repeat[1]);
 		roughnessMap.needsUpdate = true;
 
-		return { roughnessMap };
+		return { map: BLANK_MAP, roughnessMap };
 	}, [direction, width, height]);
 }
+
+/**
+ * The `map` a surface wears when it has no photo: white, so it multiplies the
+ * finish colour by one and changes nothing on screen.
+ *
+ * It exists so a material never *loses* its map. three.js only recompiles a
+ * shader on `needsUpdate`, and R3F sets a prop that disappears to `0` rather
+ * than its default, so a material swapping between a photo and no photo —
+ * a veneered end becoming a covered side, a finish without a scan — kept the
+ * old shader sampling a texture that was no longer bound. Every grain surface
+ * carrying a map, photo or blank, keeps the props the same shape.
+ */
+const BLANK_MAP = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+BLANK_MAP.needsUpdate = true;
 
 /**
  * Where in the decor sheet a cabinet's fronts are cut from, 0-1.

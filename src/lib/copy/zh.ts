@@ -177,6 +177,7 @@ export const zh: Dictionary = {
 			shapeLeft: "L型，转角在左",
 			shapeRight: "L型，转角在右",
 			shapeLocked: "清空侧墙和转角后，才能改回一字型。",
+			shapeRefused: "请先腾出墙那一端的空间，才能改成L型。",
 			sideWallLength: "侧墙长度",
 			wallUnitsHangAt: "吊柜悬挂高度",
 			narrowWallNote:

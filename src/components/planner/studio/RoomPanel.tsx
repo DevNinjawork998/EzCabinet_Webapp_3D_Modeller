@@ -35,7 +35,7 @@ export function RoomPanel({
 	freeMm,
 	overhangMm,
 	shape,
-	canStraighten,
+	reachable,
 	minDepthMm,
 	onShapeAction,
 	onChangeRoomAction,
@@ -54,9 +54,10 @@ export function RoomPanel({
 	overhangMm: number;
 	/** One wall, or which side the corner of an L is on. */
 	shape: RoomShape;
-	/** Whether one wall is still reachable — not while the side wall or corner
-	 * holds anything. */
-	canStraighten: boolean;
+	/** Which shapes a press would actually reach. One wall is refused while the
+	 * side wall or corner holds anything; an L while the main run fills the end
+	 * its corner would take. */
+	reachable: Record<RoomShape, boolean>;
 	/** The shortest room the side wall's cabinets fit in. */
 	minDepthMm: number;
 	onShapeAction: (shape: RoomShape) => void;
@@ -101,9 +102,7 @@ export function RoomPanel({
 							key={option}
 							type="button"
 							aria-pressed={shape === option}
-							disabled={
-								option === "straight" && shape !== "straight" && !canStraighten
-							}
+							disabled={option !== shape && !reachable[option]}
 							onClick={() => onShapeAction(option)}
 							className={`${chip(shape === option)} disabled:cursor-not-allowed disabled:text-neutral-300`}
 						>
@@ -111,9 +110,16 @@ export function RoomPanel({
 						</button>
 					))}
 				</div>
-				{shape !== "straight" && !canStraighten && (
+				{shape !== "straight" && !reachable.straight && (
 					<p className="text-[11px] text-neutral-500 leading-4">
 						{t.planner.room.shapeLocked}
+					</p>
+				)}
+				{(["left", "right"] as const).some(
+					(option) => option !== shape && !reachable[option],
+				) && (
+					<p className="text-[11px] text-neutral-500 leading-4">
+						{t.planner.room.shapeRefused}
 					</p>
 				)}
 			</div>
