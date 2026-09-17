@@ -8,7 +8,7 @@
 		"build": "prisma generate && next build",
 		"start": "next start",
 		"lint": "biome check .",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "next typegen && tsc --noEmit",
 		"test": "vitest run",
 		"generate:grain": "node scripts/generate-grain-texture.mjs",
 		"lalamove:ping": "node --env-file=.env.local scripts/lalamove-ping.mjs",
