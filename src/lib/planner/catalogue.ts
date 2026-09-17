@@ -209,6 +209,29 @@ export const FAMILIES: Family[] = [
 			{ widthMm: 900, priceRm: 1240 },
 		],
 	},
+	{
+		...BASE,
+		id: "corner-base",
+		label: "Corner base cabinet",
+		category: "CORNER_BASE_CABINET",
+		// PLACEHOLDER — no corner export from the client yet. An L-shaped unit
+		// is as deep as it is wide; drawn for the left-hand corner.
+		depthMm: 900,
+		drawers: 0,
+		note: "L-shaped corner unit, drawn for the left-hand corner",
+		sizes: [{ widthMm: 900, priceRm: 1150 }],
+	},
+	{
+		...WALL,
+		id: "corner-wall",
+		label: "Corner wall cabinet",
+		category: "CORNER_WALL_CABINET",
+		// PLACEHOLDER — as above.
+		depthMm: 600,
+		drawers: 0,
+		note: "L-shaped corner wall unit, drawn for the left-hand corner",
+		sizes: [{ widthMm: 600, priceRm: 680 }],
+	},
 
 	// ------------------------------------------------------- other rooms --
 	// PLACEHOLDER dimensions — no design export for these yet.
@@ -287,6 +310,17 @@ export const FAMILIES: Family[] = [
 		],
 	},
 ];
+
+/**
+ * Whether a family fills the corner of an L rather than standing in a run.
+ *
+ * Read off the design library's category, the one shape question the admin
+ * answers explicitly. A corner unit keeps its ordinary `kind` — a corner base
+ * is still a base, worktop and all — so nothing else has to learn a new kind.
+ */
+export const isCorner = (family: Pick<Family, "category">): boolean =>
+	family.category === "CORNER_BASE_CABINET" ||
+	family.category === "CORNER_WALL_CABINET";
 
 // ------------------------------------------------------------------ doors --
 
@@ -432,6 +466,8 @@ export const ROOM_TYPES: RoomType[] = [
 			"wall-cabinet",
 			"tall-cabinet",
 			"fridge-housing",
+			"corner-base",
+			"corner-wall",
 		],
 		defaultWallWidthMm: 4200,
 	},

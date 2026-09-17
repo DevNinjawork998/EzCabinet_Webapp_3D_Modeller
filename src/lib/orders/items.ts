@@ -1,6 +1,6 @@
 import type { DeliveryItem } from "@/lib/logistics/types";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
-import { type PlannerLayout, plannerEngine } from "@/lib/planner/layout";
+import { type RoomLayout, roomEngine } from "@/lib/planner/room";
 
 /**
  * What goes on the lorry for an order, as the delivery form's item rows.
@@ -14,11 +14,11 @@ import { type PlannerLayout, plannerEngine } from "@/lib/planner/layout";
  * no design describes them, so the admin adds them by hand.
  */
 export function deliveryItemsFor(
-	layout: PlannerLayout,
+	layout: RoomLayout,
 	catalogue: PlannerCatalogue,
 ): DeliveryItem[] {
 	const rows = new Map<string, DeliveryItem>();
-	for (const { family, widthMm } of plannerEngine(catalogue).allPositions(
+	for (const { family, widthMm } of roomEngine(catalogue).allPositions(
 		layout,
 	)) {
 		const key = `${family.id}:${widthMm}`;

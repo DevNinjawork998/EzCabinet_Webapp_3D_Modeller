@@ -8,7 +8,7 @@
 		"build": "prisma generate && next build",
 		"start": "next start",
 		"lint": "biome check .",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "next typegen && tsc --noEmit",
 		"test": "vitest run",
 		"generate:grain": "node scripts/generate-grain-texture.mjs",
 		"lalamove:ping": "node --env-file=.env.local scripts/lalamove-ping.mjs",
@@ -38,7 +38,7 @@
 		"react-dom": "19.2.8",
 		"server-only": "^0.0.1",
 		"three": "^0.185.1",
-		"zod": "^4.6.2"
+		"zod": "^4.6.5"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.13",

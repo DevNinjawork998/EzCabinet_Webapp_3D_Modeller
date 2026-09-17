@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { PlannerLayout } from "@/lib/planner/layout";
+import { asRoom, type RoomLayout } from "@/lib/planner/room";
 
 /**
  * The layout document as it arrives from a customer's browser at checkout.
@@ -22,7 +23,7 @@ const placedModuleSchema = z.object({
 	rotationDeg: z.number().int().min(-360).max(360).optional(),
 });
 
-export const plannerLayoutSchema = z.object({
+const settings = {
 	wallWidthMm: z.number().positive(),
 	roomDepthMm: z.number().positive(),
 	ceilingHeightMm: z.number().positive(),
@@ -30,23 +31,56 @@ export const plannerLayoutSchema = z.object({
 	wallToCeiling: z.boolean(),
 	baseSkirting: z.boolean(),
 	wallToWall: z.boolean(),
+};
+
+/** One wall, as orders stored it before L-shapes (design v1). */
+export const plannerLayoutSchema = z.object({
+	...settings,
 	floor: z.array(placedModuleSchema).max(60),
 	wall: z.array(placedModuleSchema).max(60),
 }) satisfies z.ZodType<PlannerLayout>;
 
+const runSchema = z.object({
+	floor: z.array(placedModuleSchema).max(60),
+	wall: z.array(placedModuleSchema).max(60),
+});
+
+/** The room document: one wall, or two meeting at a corner. */
+export const roomLayoutSchema = z
+	.object({
+		...settings,
+		runs: z.array(runSchema).min(1).max(2),
+		corner: z
+			.object({
+				side: z.enum(["left", "right"]),
+				floor: placedModuleSchema.nullable(),
+				wall: placedModuleSchema.nullable(),
+			})
+			.nullable(),
+	})
+	.refine((room) => (room.runs.length === 2) === (room.corner !== null), {
+		message: "a side wall and a corner come together",
+	}) satisfies z.ZodType<RoomLayout>;
+
 /**
  * What an order stores. The version is the promise that an order placed today
- * still reads after `PlannerLayout` changes shape — CLAUDE.md's `schemaVersion`
- * rule.
+ * still reads after the layout changes shape — CLAUDE.md's `schemaVersion`
+ * rule. Version 1 stored one wall's rows at the top level; it is read as a
+ * one-wall room, so every reader downstream only ever sees version 2.
  */
-export const ORDER_DESIGN_VERSION = 1;
+export const ORDER_DESIGN_VERSION = 2;
 
 export type OrderDesign = {
 	schemaVersion: typeof ORDER_DESIGN_VERSION;
-	layout: PlannerLayout;
+	layout: RoomLayout;
 };
 
-export const orderDesignSchema = z.object({
-	schemaVersion: z.literal(ORDER_DESIGN_VERSION),
-	layout: plannerLayoutSchema,
-});
+export const orderDesignSchema = z.union([
+	z.object({ schemaVersion: z.literal(2), layout: roomLayoutSchema }),
+	z
+		.object({ schemaVersion: z.literal(1), layout: plannerLayoutSchema })
+		.transform(({ layout }) => ({
+			schemaVersion: 2 as const,
+			layout: asRoom(layout),
+		})),
+]);

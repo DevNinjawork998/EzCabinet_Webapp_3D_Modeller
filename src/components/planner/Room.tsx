@@ -64,7 +64,7 @@ const SCRIBE = WALL_GAP_MM / 1000;
  * drawn 1.2m wider with the run centred in it, which left bare wall past each
  * end and made a run built wall to wall impossible to show.
  *
- * The side walls follow `sideWalls` rather than always being drawn, because
+ * The side walls follow `walls` rather than always being drawn, because
  * whether they exist is exactly what decides if the run's end cabinets need a
  * finished panel — see `exposure.ts`. A room that shows walls the price does
  * not believe in is worse than a room with none.
@@ -73,13 +73,14 @@ export function Room({
 	width,
 	depth,
 	height,
-	sideWalls = false,
+	walls = { left: false, right: false },
 }: {
 	width: number;
 	depth: number;
 	height: number;
-	/** Return walls at both ends of the run. */
-	sideWalls?: boolean;
+	/** Which side walls stand: both for a run built wall to wall, the corner's
+	 * side for an L. */
+	walls?: { left: boolean; right: boolean };
 }) {
 	const floorWidth = width + SCRIBE * 2;
 	const floorMap = useMemo(() => {
@@ -111,23 +112,23 @@ export function Room({
 				<meshStandardMaterial color="#edebe7" roughness={0.95} />
 			</mesh>
 
-			{sideWalls && (
-				<>
-					<mesh
-						position={[-width / 2 - SCRIBE, height / 2, 0]}
-						rotation={[0, Math.PI / 2, 0]}
-					>
-						<planeGeometry args={[depth, height]} />
-						<meshStandardMaterial color="#e1dfda" roughness={0.95} />
-					</mesh>
-					<mesh
-						position={[width / 2 + SCRIBE, height / 2, 0]}
-						rotation={[0, -Math.PI / 2, 0]}
-					>
-						<planeGeometry args={[depth, height]} />
-						<meshStandardMaterial color="#e1dfda" roughness={0.95} />
-					</mesh>
-				</>
+			{walls.left && (
+				<mesh
+					position={[-width / 2 - SCRIBE, height / 2, 0]}
+					rotation={[0, Math.PI / 2, 0]}
+				>
+					<planeGeometry args={[depth, height]} />
+					<meshStandardMaterial color="#e1dfda" roughness={0.95} />
+				</mesh>
+			)}
+			{walls.right && (
+				<mesh
+					position={[width / 2 + SCRIBE, height / 2, 0]}
+					rotation={[0, -Math.PI / 2, 0]}
+				>
+					<planeGeometry args={[depth, height]} />
+					<meshStandardMaterial color="#e1dfda" roughness={0.95} />
+				</mesh>
 			)}
 		</group>
 	);

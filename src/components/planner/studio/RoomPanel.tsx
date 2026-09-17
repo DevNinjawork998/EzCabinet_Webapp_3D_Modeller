@@ -7,7 +7,8 @@ import {
 	type RoomTypeId,
 } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
-import { type PlannerLayout, WALL_LIMITS } from "@/lib/planner/layout";
+import { WALL_LIMITS } from "@/lib/planner/layout";
+import type { RoomLayout, RoomShape } from "@/lib/planner/room";
 import { useCopy } from "../CopyContext";
 import { DimensionField } from "../DimensionField";
 import { chip } from "./chrome";
@@ -33,6 +34,10 @@ export function RoomPanel({
 	minWallMm,
 	freeMm,
 	overhangMm,
+	shape,
+	reachable,
+	minDepthMm,
+	onShapeAction,
 	onChangeRoomAction,
 	onWallWidthAction,
 	onCeilingAction,
@@ -41,12 +46,21 @@ export function RoomPanel({
 }: {
 	catalogue: PlannerCatalogue;
 	roomId: RoomTypeId;
-	layout: PlannerLayout;
+	layout: RoomLayout;
 	/** The shortest wall the placed run fits on — the slider's real floor. */
 	minWallMm: number;
 	/** Wall left over, negative when the run is longer than the wall. */
 	freeMm: number;
 	overhangMm: number;
+	/** One wall, or which side the corner of an L is on. */
+	shape: RoomShape;
+	/** Which shapes a press would actually reach. One wall is refused while the
+	 * side wall or corner holds anything; an L while the main run fills the end
+	 * its corner would take. */
+	reachable: Record<RoomShape, boolean>;
+	/** The shortest room the side wall's cabinets fit in. */
+	minDepthMm: number;
+	onShapeAction: (shape: RoomShape) => void;
 	onChangeRoomAction: (id: RoomTypeId) => void;
 	onWallWidthAction: (mm: number) => void;
 	onCeilingAction: (mm: number) => void;
@@ -74,6 +88,42 @@ export function RoomPanel({
 				))}
 			</div>
 
+			<div className="flex flex-col gap-1.5">
+				<p className="text-[12px] text-neutral-600">{t.planner.room.shape}</p>
+				<div className="flex flex-wrap gap-1">
+					{(
+						[
+							["straight", t.planner.room.shapeStraight],
+							["left", t.planner.room.shapeLeft],
+							["right", t.planner.room.shapeRight],
+						] as const
+					).map(([option, label]) => (
+						<button
+							key={option}
+							type="button"
+							aria-pressed={shape === option}
+							disabled={option !== shape && !reachable[option]}
+							onClick={() => onShapeAction(option)}
+							className={`${chip(shape === option)} disabled:cursor-not-allowed disabled:text-neutral-300`}
+						>
+							{label}
+						</button>
+					))}
+				</div>
+				{shape !== "straight" && !reachable.straight && (
+					<p className="text-[11px] text-neutral-500 leading-4">
+						{t.planner.room.shapeLocked}
+					</p>
+				)}
+				{(["left", "right"] as const).some(
+					(option) => option !== shape && !reachable[option],
+				) && (
+					<p className="text-[11px] text-neutral-500 leading-4">
+						{t.planner.room.shapeRefused}
+					</p>
+				)}
+			</div>
+
 			<DimensionField
 				label={t.planner.room.wallLength}
 				valueMm={layout.wallWidthMm}
@@ -98,9 +148,13 @@ export function RoomPanel({
 			/>
 
 			<DimensionField
-				label={t.planner.room.roomDepth}
+				label={
+					shape === "straight"
+						? t.planner.room.roomDepth
+						: t.planner.room.sideWallLength
+				}
 				valueMm={layout.roomDepthMm}
-				minMm={ROOM_DEPTH_LIMITS.minMm}
+				minMm={minDepthMm}
 				maxMm={ROOM_DEPTH_LIMITS.maxMm}
 				stepMm={50}
 				onChangeAction={onDepthAction}

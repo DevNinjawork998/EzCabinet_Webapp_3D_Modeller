@@ -15,10 +15,12 @@ import type {
 	Vector3 as Vector3Type,
 } from "three";
 import {
+	Matrix4,
 	type Mesh,
 	type MeshBasicMaterial,
 	Plane,
 	type PlaneGeometry,
+	Ray,
 	Raycaster,
 	Vector2,
 	Vector3,
@@ -35,7 +37,11 @@ import {
 	WORKTOP_COLOR,
 } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
-import { type SideGaps, sideGapsMm } from "@/lib/planner/exposure";
+import {
+	type ExposedSides,
+	type SideGaps,
+	sideGapsMm,
+} from "@/lib/planner/exposure";
 import {
 	canHangAt,
 	inRun,
@@ -51,8 +57,14 @@ import {
 	snapToCabinet,
 	type Vec3Mm,
 } from "@/lib/planner/measure";
+import {
+	type RoomLayout,
+	runView,
+	runYawRad,
+	withRun,
+} from "@/lib/planner/room";
 import { Cabinet } from "./Cabinet";
-import { useCatalogue, useEngine } from "./CatalogueContext";
+import { useCatalogue, useEngine, useRoomEngine } from "./CatalogueContext";
 import { designPartBoxes, peekDesignMesh } from "./DesignedCabinet";
 import { useFrontSurface, useGrain } from "./grain";
 import { MeasureOverlay } from "./MeasureOverlay";
@@ -60,6 +72,9 @@ import { PositionDimensions } from "./PositionDimensions";
 import { Room } from "./Room";
 
 const m = (mm: number) => mm / 1000;
+
+/** How far a worktop stands proud of the carcass fronts under it. */
+const WORKTOP_OVERHANG_MM = 20;
 
 /**
  * The three ways to look at a run. `3d` is the selling angle; the other two
@@ -70,7 +85,7 @@ const m = (mm: number) => mm / 1000;
  * They are camera positions only. The geometry is identical in all three, so
  * nothing here can disagree with what gets quoted.
  */
-export type PlannerView = "3d" | "elevation" | "plan";
+export type PlannerView = "3d" | "elevation" | "plan" | "side";
 
 /** Looking into the corner, the angle a kitchen elevation is usually sold at. */
 const VIEW_DIRECTION: Record<PlannerView, Vector3> = {
@@ -79,7 +94,11 @@ const VIEW_DIRECTION: Record<PlannerView, Vector3> = {
 	// Not exactly straight down: OrbitControls gimbal-locks looking along its
 	// own up axis, and a hair of tilt is cheaper than a custom controls rig.
 	plan: new Vector3(0, 1, 0.02).normalize(),
+	/** Facing a left-hand side wall; a right-hand one is looked at from the other side. */
+	side: new Vector3(1, 0, 0),
 };
+
+const SIDE_RIGHT_DIRECTION = new Vector3(-1, 0, 0);
 
 /**
  * Where this pointer ray crosses the vertical plane the cabinet stands in.
@@ -95,21 +114,60 @@ const VIEW_DIRECTION: Record<PlannerView, Vector3> = {
  * Read off the ray rather than `e.point`, which is wherever the ray happened
  * to strike a mesh and would offset the grab by the height of the door it hit.
  */
+/** A ray this close to parallel with a drag plane (the component of its unit
+ * direction along the plane's normal)… */
+const GRAZING_DIRECTION = 0.25;
+/** …or an eye this close to the plane, in metres, crosses it too unsteadily
+ * to drag against. Shared by the cabinet's own plane and the level fallback. */
+const GRAZING_DISTANCE_M = 0.3;
+
 function runPointFromRay(
-	e: ThreeEvent<PointerEvent>,
+	ray: Ray,
 	planeZ: number,
 	runWidthMm: number,
-): { xMm: number; yMm: number } {
-	const { origin, direction } = e.ray;
-	// Looking straight along the wall there is no crossing to find; the last
-	// known position is better than a divide by zero.
-	const t =
-		Math.abs(direction.z) < 1e-6 ? 0 : (planeZ - origin.z) / direction.z;
+	/** Solve against the level plane at this height (m) instead — see
+	 * `seenEdgeOn`. `null` for the cabinet's own vertical plane. */
+	levelY: number | null,
+): { xMm: number; yMm: number } | null {
+	const { origin, direction } = ray;
+	// No usable crossing — parallel, or behind the eye — keeps the cabinet where
+	// it last was rather than throwing it across the room.
+	const [along, from, to] =
+		levelY === null
+			? [direction.z, origin.z, planeZ]
+			: [direction.y, origin.y, levelY];
+	if (Math.abs(along) < 1e-6) return null;
+	// The level plane is only a fallback, and it can be as badly placed as the
+	// plane it stands in for: in the side view the eye sits about at grab
+	// height, so a grazing crossing turns a pixel into a metre of run.
+	if (
+		levelY !== null &&
+		(Math.abs(direction.y) < GRAZING_DIRECTION ||
+			Math.abs(origin.y - levelY) < GRAZING_DISTANCE_M)
+	) {
+		return null;
+	}
+	const t = (to - from) / along;
+	if (t <= 0) return null;
 	return {
 		xMm: (origin.x + direction.x * t) * 1000 + runWidthMm / 2,
-		yMm: (origin.y + direction.y * t) * 1000,
+		yMm: (levelY ?? origin.y + direction.y * t) * 1000,
 	};
 }
+
+/**
+ * Whether a run's drag plane is seen too nearly edge-on to solve against.
+ *
+ * The default 3D camera stands a few centimetres from a right-hand side run's
+ * plane, and there every crossing collapses onto the eye's own position: the
+ * cabinet jumped to the open front of the room. The same happens to any run
+ * whose plane the ray grazes. Then the drag reads the level plane through the
+ * point grabbed — it loses the lift, which an edge-on view cannot show anyway.
+ * Decided once per grab, so a drag never switches planes mid-gesture.
+ */
+const seenEdgeOn = (ray: Ray, planeZ: number) =>
+	Math.abs(ray.origin.z - planeZ) < GRAZING_DISTANCE_M ||
+	Math.abs(ray.direction.z) < GRAZING_DIRECTION;
 
 /**
  * The same solve turned on its side: where the pointer's ray crosses a
@@ -120,10 +178,10 @@ function runPointFromRay(
  * gesture in the scene that reads the pointer's z.
  */
 function planPointFromRay(
-	e: ThreeEvent<PointerEvent>,
+	ray: Ray,
 	planeY: number,
 ): { xMm: number; zMm: number } {
-	const { origin, direction } = e.ray;
+	const { origin, direction } = ray;
 	// Looking level along the floor there is no crossing to find.
 	const t =
 		Math.abs(direction.y) < 1e-6 ? 0 : (planeY - origin.y) / direction.y;
@@ -131,6 +189,39 @@ function planPointFromRay(
 		xMm: (origin.x + direction.x * t) * 1000,
 		zMm: (origin.z + direction.z * t) * 1000,
 	};
+}
+
+/** Scratch for a drag's pointer moves — see `onDragMove` in `Run`. */
+const DRAG_RAYCASTER = new Raycaster();
+const DRAG_NDC = new Vector2();
+
+/** Scratch for `localRay`: a pointer move must not allocate. */
+const LOCAL_RAY = new Ray();
+const UNTURN = new Matrix4();
+
+/**
+ * A world ray expressed in a run's own frame.
+ *
+ * A run's group is only ever turned about the room's vertical axis, never
+ * moved — `runView` swaps the room's axes so the turn alone puts the side wall
+ * in place — so undoing the turn is the whole transform. The main wall's yaw is
+ * zero and its ray is returned as is.
+ *
+ * The turned ray is a shared scratch, valid until the next call: read it
+ * straight away, never keep it.
+ */
+function localRay(ray: Ray, yaw: number): Ray {
+	return yaw === 0
+		? ray
+		: LOCAL_RAY.copy(ray).applyMatrix4(UNTURN.makeRotationY(-yaw));
+}
+
+/** A millimetre point turned about the room's vertical axis. */
+function turnMm(p: Vec3Mm, yaw: number): Vec3Mm {
+	if (yaw === 0) return p;
+	const cos = Math.cos(yaw);
+	const sin = Math.sin(yaw);
+	return { x: p.x * cos + p.z * sin, y: p.y, z: -p.x * sin + p.z * cos };
 }
 
 /**
@@ -146,12 +237,15 @@ function FitCamera({
 	roomDepthMm,
 	ceilingHeightMm,
 	view,
+	cornerSide,
 	refitKey,
 }: {
 	runWidthMm: number;
 	roomDepthMm: number;
 	ceilingHeightMm: number;
 	view: PlannerView;
+	/** Which side wall the side view faces. */
+	cornerSide: "left" | "right" | null;
 	/** Bumped to re-frame on demand — what "reset view" does. */
 	refitKey: number;
 }) {
@@ -181,10 +275,18 @@ function FitCamera({
 		// pushes the run off the top edge — in a one-wall planner everything is
 		// at the back — and aiming at the wall itself spends the frame on floor
 		// nobody is looking at.
+		// The side view frames the side wall itself, not the room's middle — from
+		// there the wall is half a room away and draws small.
 		const centre =
 			view === "plan"
 				? new Vector3(0, 0, -depth / 4)
-				: new Vector3(0, height / 2.2, 0);
+				: view === "side"
+					? new Vector3(
+							cornerSide === "right" ? width / 2 : -width / 2,
+							height / 2.2,
+							0,
+						)
+					: new Vector3(0, height / 2.2, 0);
 		const halfFovV = (camera.fov * Math.PI) / 360;
 		const halfFovH = Math.atan(Math.tan(halfFovV) * aspect);
 		// Only the axes actually facing the camera should decide the zoom.
@@ -196,12 +298,16 @@ function FitCamera({
 				? Math.hypot(width, depth) / 2
 				: view === "elevation"
 					? Math.hypot(width, height) / 2
-					: Math.hypot(width, height, depth) / 2;
+					: view === "side"
+						? Math.hypot(depth, height) / 2
+						: Math.hypot(width, height, depth) / 2;
 		const distance = (radius / Math.sin(Math.min(halfFovV, halfFovH))) * 0.95;
 
-		camera.position
-			.copy(centre)
-			.addScaledVector(VIEW_DIRECTION[view], distance);
+		const direction =
+			view === "side" && cornerSide === "right"
+				? SIDE_RIGHT_DIRECTION
+				: VIEW_DIRECTION[view];
+		camera.position.copy(centre).addScaledVector(direction, distance);
 		camera.near = 0.1;
 		camera.far = distance * 6;
 		camera.updateProjectionMatrix();
@@ -210,7 +316,7 @@ function FitCamera({
 			controls.target.copy(centre);
 			controls.update();
 		}
-	}, [view, refitKey, camera, controls]);
+	}, [view, cornerSide, refitKey, camera, controls]);
 
 	return null;
 }
@@ -234,7 +340,7 @@ const GLIDE_RATE = 9;
  * plane of the run instead.
  */
 function panAnchor(target: Vector3Type, view: PlannerView, out: Vector3) {
-	return view === "elevation"
+	return view === "elevation" || view === "side"
 		? out.copy(target)
 		: out.set(target.x, PUCK_LIFT, target.z);
 }
@@ -261,14 +367,17 @@ const PAN_AXES: Record<PlannerView, { x: boolean; y: boolean; z: boolean }> = {
 	"3d": { x: true, y: false, z: true },
 	elevation: { x: true, y: true, z: false },
 	plan: { x: true, y: false, z: true },
+	side: { x: false, y: true, z: true },
 };
 
 /** The surface the puck slides on, which is the same choice again: the floor,
  * or the run's own vertical plane in elevation. */
 const panPlane = (target: Vector3Type, view: PlannerView) =>
-	view === "elevation"
-		? new Plane(new Vector3(0, 0, 1), -target.z)
-		: new Plane(new Vector3(0, 1, 0), -PUCK_LIFT);
+	view === "side"
+		? new Plane(new Vector3(1, 0, 0), -target.x)
+		: view === "elevation"
+			? new Plane(new Vector3(0, 0, 1), -target.z)
+			: new Plane(new Vector3(0, 1, 0), -PUCK_LIFT);
 
 /** Scratch vectors for the glide and the drag below. Allocating one per frame
  * is how a scene starts stuttering on the phones this app targets. */
@@ -303,10 +412,13 @@ const PUCK_ANCHOR = new Vector3();
 function PanGizmo({
 	bounds,
 	view,
+	cornerSide,
 	refitKey,
 }: {
 	bounds: RoomBoundsMm;
 	view: PlannerView;
+	/** Which way the side view looks, so the single-sided puck faces it. */
+	cornerSide: "left" | "right" | null;
 	/** Same trigger `FitCamera` refits on. Watched here only to abandon a
 	 * journey the refit has just overruled. */
 	refitKey: number;
@@ -492,8 +604,15 @@ function PanGizmo({
 		<group
 			ref={ref}
 			onPointerDown={grab}
-			// Lying on the floor, except in elevation, where it faces the room.
-			rotation={view === "elevation" ? [0, 0, 0] : [-Math.PI / 2, 0, 0]}
+			// Lying on the floor, except in the flat wall views, where it faces
+			// the camera.
+			rotation={
+				view === "elevation"
+					? [0, 0, 0]
+					: view === "side"
+						? [0, cornerSide === "right" ? -Math.PI / 2 : Math.PI / 2, 0]
+						: [-Math.PI / 2, 0, 0]
+			}
 		>
 			<mesh renderOrder={20}>
 				<circleGeometry args={[0.115, 32]} />
@@ -540,19 +659,20 @@ function PanGizmo({
  * is the one bridge between the two.
  */
 function DropPicker({
-	runWidthMm,
+	runs,
 	pickerRef,
 }: {
-	runWidthMm: number;
+	/** Per run: its yaw and its length, in `layout.runs` order. */
+	runs: { yaw: number; lengthMm: number }[];
 	pickerRef: React.RefObject<
-		((clientX: number, clientY: number) => number) | null
+		((clientX: number, clientY: number, run: number) => number) | null
 	>;
 }) {
 	const camera = useThree((s) => s.camera);
 	const gl = useThree((s) => s.gl);
 
 	useEffect(() => {
-		pickerRef.current = (clientX, clientY) => {
+		pickerRef.current = (clientX, clientY, run) => {
 			const rect = gl.domElement.getBoundingClientRect();
 			const ndc = new Vector3(
 				((clientX - rect.left) / rect.width) * 2 - 1,
@@ -561,17 +681,21 @@ function DropPicker({
 			);
 			const point = ndc.unproject(camera);
 			const direction = point.sub(camera.position).normalize();
-			// Read against the floor: only the horizontal position matters, and
-			// which row the cabinet joins is decided by what was dragged.
+			// Read against the floor: only the position along the wall matters,
+			// and which row the cabinet joins is decided by what was dragged.
 			const t =
 				Math.abs(direction.y) < 1e-6 ? 0 : -camera.position.y / direction.y;
 			const worldX = camera.position.x + direction.x * t;
-			return worldX * 1000 + runWidthMm / 2;
+			const worldZ = camera.position.z + direction.z * t;
+			const { yaw, lengthMm } = runs[run] ?? runs[0];
+			// The floor point in the run's own frame: undo its turn.
+			const localX = worldX * Math.cos(yaw) - worldZ * Math.sin(yaw);
+			return localX * 1000 + lengthMm / 2;
 		};
 		return () => {
 			pickerRef.current = null;
 		};
-	}, [camera, gl, runWidthMm, pickerRef]);
+	}, [camera, gl, runs, pickerRef]);
 
 	return null;
 }
@@ -640,6 +764,11 @@ function CabinetHitTest({
  */
 function Run({
 	layout,
+	yaw,
+	corners,
+	cornerFilled,
+	exposure,
+	cornerWorktop,
 	catalogue,
 	engine,
 	finishHex,
@@ -658,6 +787,18 @@ function Run({
 	construction,
 }: {
 	layout: PlannerLayout;
+	/** How far this run's group is turned — see `localRay`. */
+	yaw: number;
+	/** Corner units to draw with this run. Selectable, never dragged: a corner
+	 * unit's place is the corner. Empty for every run but the main wall. */
+	corners: Positioned[];
+	/** Whether each row's corner slot holds a unit. A filled square is a
+	 * neighbour a door beside it must not swing into. */
+	cornerFilled: { floor: boolean; wall: boolean };
+	/** The room's answer, not this run's: a corner unit covers the end beside it. */
+	exposure: Map<string, ExposedSides>;
+	/** The worktop square over the corner, drawn with the main wall. */
+	cornerWorktop: { sizeMm: number; topMm: number } | null;
 	/** The published catalogue, resolved outside the canvas: `Run` renders
 	 * inside `<Canvas>`, a separate reconciler root the outer React context
 	 * does not reach. */
@@ -697,6 +838,7 @@ function Run({
 }) {
 	const controls = useThree((s) => s.controls) as { enabled: boolean } | null;
 	const camera = useThree((s) => s.camera);
+	const gl = useThree((s) => s.gl);
 	const viewportHeightPx = useThree((s) => s.size.height);
 	const {
 		allPositions,
@@ -704,7 +846,6 @@ function Run({
 		dropModule,
 		floorHeightMmOf,
 		overhangingIds,
-		exposureOf,
 		positionsOf,
 		setRotation,
 	} = engine;
@@ -727,11 +868,12 @@ function Run({
 		e: ThreeEvent<PointerEvent>,
 		position: Positioned,
 	): SnapPoint => {
-		const hitMm: Vec3Mm = {
-			x: e.point.x * 1000,
-			y: e.point.y * 1000,
-			z: e.point.z * 1000,
-		};
+		// Snapped in the run's own frame, where the part boxes are, and handed
+		// back in the world's, where the picked points are drawn.
+		const hitMm: Vec3Mm = turnMm(
+			{ x: e.point.x * 1000, y: e.point.y * 1000, z: e.point.z * 1000 },
+			-yaw,
+		);
 		const fov = (camera as PerspectiveCamera).fov ?? 45;
 		// A turned cabinet gets no snap targets at all — the point follows the
 		// pointer instead. `cabinetBoundsMm` and every part box behind the snap
@@ -745,7 +887,7 @@ function Run({
 			// "Face", "carcass": the ray did hit the cabinet, we simply cannot say
 			// which board — the same report an unsnapped surface point makes.
 			const free: SnapPoint = {
-				point: hitMm,
+				point: turnMm(hitMm, yaw),
 				kind: "surface",
 				role: "carcass",
 			};
@@ -777,16 +919,17 @@ function Run({
 			design,
 			construction,
 		);
+		const worldSnap = { ...snap, point: turnMm(snap.point, yaw) };
 
 		// The lock is applied after the snap, not instead of it: you snap to the
 		// corner you meant, then the constraint slides that point onto the axis
 		// you are measuring along. Same order as picking a point with ORTHO on.
 		return measureAnchor
 			? {
-					...snap,
-					point: constrainToAxis(measureAnchor, snap.point, measureAxis),
+					...worldSnap,
+					point: constrainToAxis(measureAnchor, worldSnap.point, measureAxis),
 				}
-			: snap;
+			: worldSnap;
 	};
 	/**
 	 * The live drag: which cabinet, and where on it the pointer took hold.
@@ -819,8 +962,11 @@ function Run({
 				 * pointer wobbled.
 				 */
 				vertical: boolean;
-				/** World z of the plane this cabinet lives in — see runPointFromRay. */
+				/** Run-frame z of the plane this cabinet lives in — see runPointFromRay. */
 				planeZ: number;
+				/** The level plane's height when the wall plane is seen edge-on, else
+				 * `null` — see `seenEdgeOn`. */
+				levelY: number | null;
 		  }
 		| {
 				/** Turning: the pointer's bearing round the cabinet is the angle. */
@@ -860,7 +1006,17 @@ function Run({
 		planeZ: number,
 		vertical = false,
 	) => {
-		const pointer = runPointFromRay(e, planeZ, runWidthMm);
+		const ray = localRay(e.ray, yaw);
+		const levelY = seenEdgeOn(ray, planeZ) ? e.point.y : null;
+		// No crossing at all: the point the press landed on is the grab.
+		const hit = turnMm(
+			{ x: e.point.x * 1000, y: e.point.y * 1000, z: e.point.z * 1000 },
+			-yaw,
+		);
+		const pointer = runPointFromRay(ray, planeZ, runWidthMm, levelY) ?? {
+			xMm: hit.x + runWidthMm / 2,
+			yMm: hit.y,
+		};
 		dragRef.current = {
 			mode: "move",
 			id: position.placed.id,
@@ -868,6 +1024,7 @@ function Run({
 			grabYMm: pointer.yMm - floorHeightMmOf(position, layout),
 			vertical,
 			planeZ,
+			levelY,
 		};
 		setDragging(true);
 		if (controls) controls.enabled = false;
@@ -888,7 +1045,7 @@ function Run({
 		const centreZMm =
 			-layout.roomDepthMm / 2 + WALL_GAP_MM + position.family.depthMm / 2;
 
-		const pointer = planPointFromRay(e, planeY);
+		const pointer = planPointFromRay(localRay(e.ray, yaw), planeY);
 		dragRef.current = {
 			mode: "rotate",
 			id: position.placed.id,
@@ -932,15 +1089,83 @@ function Run({
 
 	// A drag can end anywhere — off the plane, outside the canvas, or with this
 	// unmounting mid-gesture. All of them have to give orbiting back.
+	// Read through a ref: `onLayoutChange` is a fresh arrow per render (one per
+	// run), and re-running this effect on it gave orbiting back mid-drag — the
+	// press that selected a cabinet re-rendered, and the camera swung round
+	// while the cabinet slid.
+	const endDragRef = useRef(endDrag);
+	endDragRef.current = endDrag;
 	useEffect(() => {
-		window.addEventListener("pointerup", endDrag);
-		window.addEventListener("pointercancel", endDrag);
+		const end = () => endDragRef.current();
+		window.addEventListener("pointerup", end);
+		window.addEventListener("pointercancel", end);
 		return () => {
-			window.removeEventListener("pointerup", endDrag);
-			window.removeEventListener("pointercancel", endDrag);
+			window.removeEventListener("pointerup", end);
+			window.removeEventListener("pointercancel", end);
 			if (controls) controls.enabled = true;
 		};
-	}, [endDrag, controls]);
+	}, [controls]);
+
+	/**
+	 * A drag's pointer moves, read off the window and cast from the camera.
+	 *
+	 * They used to arrive through a catch mesh standing in the run's wall plane,
+	 * which a side run seen edge-on shows as a line: the moves missed it and
+	 * the drag stalled. The window sees every move wherever the pointer is.
+	 * Assigned each render and read through a ref, so the listener below is
+	 * attached once rather than on every re-render a drag causes.
+	 */
+	const onDragMove = useRef<(event: PointerEvent) => void>(() => {});
+	onDragMove.current = (event) => {
+		const drag = dragRef.current;
+		if (!drag) return;
+		const rect = gl.domElement.getBoundingClientRect();
+		DRAG_NDC.set(
+			((event.clientX - rect.left) / rect.width) * 2 - 1,
+			-((event.clientY - rect.top) / rect.height) * 2 + 1,
+		);
+		// Off the canvas — over the sidebar, say — the ray means nothing on
+		// screen, so the cabinet stays where the pointer last left the scene.
+		if (Math.abs(DRAG_NDC.x) > 1 || Math.abs(DRAG_NDC.y) > 1) return;
+		DRAG_RAYCASTER.setFromCamera(DRAG_NDC, camera);
+		const ray = localRay(DRAG_RAYCASTER.ray, yaw);
+
+		if (drag.mode === "rotate") {
+			const plan = planPointFromRay(ray, drag.planeY);
+			const turned = setRotation(
+				layoutRef.current,
+				drag.id,
+				bearingDeg(plan.xMm - drag.centreXMm, plan.zMm - drag.centreZMm) -
+					drag.grabDeg,
+				// Dragged, so let it land on square when it is near it.
+				true,
+			);
+			if (turned !== layoutRef.current) onLayoutChange(turned);
+			return;
+		}
+
+		const pointer = runPointFromRay(ray, drag.planeZ, runWidthMm, drag.levelY);
+		if (!pointer) return;
+		const next = dragModule(layoutRef.current, drag.id, {
+			xMm: pointer.xMm - drag.grabMm,
+			hangAtMm: drag.vertical ? pointer.yMm - drag.grabYMm : undefined,
+		});
+		if (next === layoutRef.current) return;
+
+		// Re-anchor to where the cabinet actually ended up, so one held
+		// against its neighbour starts moving the instant you reverse.
+		const settled = [...next.floor, ...next.wall].find(
+			(placed) => placed.id === drag.id,
+		);
+		if (settled) drag.grabMm = pointer.xMm - settled.xMm;
+		onLayoutChange(next);
+	};
+
+	useEffect(() => {
+		const move = (event: PointerEvent) => onDragMove.current(event);
+		window.addEventListener("pointermove", move);
+		return () => window.removeEventListener("pointermove", move);
+	}, []);
 
 	useEffect(() => {
 		document.body.style.cursor = dragging ? "grabbing" : "auto";
@@ -960,79 +1185,62 @@ function Run({
 		[layout, overhangingIds],
 	);
 
-	const { map: exposure, gaps: sideGaps } = useMemo(() => {
+	const sideGaps = useMemo(() => {
 		// A return wall buries an end as surely as a neighbour does, so a run
 		// built into an alcove must not veneer the two faces inside the walls.
 		const walls = {
 			wallWidthMm: layout.wallWidthMm,
 			enclosed: layout.wallToWall,
 		};
-		// Which sides wear a veneered end panel: the engine's answer, the same
-		// one `pricing.ts` charges from, so a panel drawn is a panel paid for.
-		const map = exposureOf(layout);
 		// The distance as well as the yes/no: an end panel only needs to know
 		// whether a side is buried, but a door needs to know how far away the
 		// neighbour is before it can decide how far to swing. Per row, as before.
 		const gaps = new Map<string, SideGaps>();
 		for (const row of ["floor", "wall"] as const) {
-			const positions = positionsOf(layout, row);
+			// The corner units stand in the main run, so they are its neighbours
+			// and get gaps of their own.
+			const positions = [
+				...positionsOf(layout, row),
+				...corners.filter(
+					(corner) => (corner.family.kind === "wall") === (row === "wall"),
+				),
+			];
+			const span = cornerFilled[row] ? layout.reserved?.[row] : undefined;
 			positions.forEach((position, i) => {
-				gaps.set(position.placed.id, sideGapsMm(positions, i, walls));
+				const own = sideGapsMm(positions, i, walls);
+				const end = position.xMm + position.widthMm;
+				// On the side run the corner unit is not drawn here, but its
+				// square still stands against the cabinet beside it.
+				gaps.set(
+					position.placed.id,
+					span
+						? {
+								left:
+									span.endMm <= position.xMm + 1
+										? Math.min(own.left, position.xMm - span.endMm)
+										: own.left,
+								right:
+									span.startMm >= end - 1
+										? Math.min(own.right, Math.max(0, span.startMm - end))
+										: own.right,
+							}
+						: own,
+				);
 			});
 		}
-		return { map, gaps };
-	}, [layout, positionsOf, exposureOf]);
+		return gaps;
+	}, [layout, positionsOf, corners, cornerFilled]);
 
 	// The group sits on the wall plane itself: everything in the run is placed
 	// by its back face from here, with a scribe gap so the carcasses do not
 	// z-fight with the wall they stand against.
 	return (
 		<group position={[0, 0, -m(layout.roomDepthMm) / 2 + m(WALL_GAP_MM)]}>
-			{/* Always mounted: it catches the moves during a drag, and a press on
-			    bare wall clears the selection.
-
-			    It stands upright in the wall plane rather than lying on the floor.
-			    A ray aimed at a wall cabinet is travelling downwards steeply, and
-			    crosses the floor metres behind the room — a floor-level catcher is
-			    simply not in its path, so the drag received no moves at all and the
-			    cabinet sat still while the pointer went on without it. */}
+			{/* A press on bare wall clears the selection. The moves of a drag are
+			    read off the window instead — see `onDragMove`. */}
 			<mesh
 				position={[0, m(layout.ceilingHeightMm) / 2, 0]}
 				onPointerDown={() => onSelect(null, false)}
-				onPointerMove={(e) => {
-					const drag = dragRef.current;
-					if (!drag) return;
-					e.stopPropagation();
-
-					if (drag.mode === "rotate") {
-						const plan = planPointFromRay(e, drag.planeY);
-						const turned = setRotation(
-							layoutRef.current,
-							drag.id,
-							bearingDeg(plan.xMm - drag.centreXMm, plan.zMm - drag.centreZMm) -
-								drag.grabDeg,
-							// Dragged, so let it land on square when it is near it.
-							true,
-						);
-						if (turned !== layoutRef.current) onLayoutChange(turned);
-						return;
-					}
-
-					const pointer = runPointFromRay(e, drag.planeZ, runWidthMm);
-					const next = dragModule(layoutRef.current, drag.id, {
-						xMm: pointer.xMm - drag.grabMm,
-						hangAtMm: drag.vertical ? pointer.yMm - drag.grabYMm : undefined,
-					});
-					if (next === layoutRef.current) return;
-
-					// Re-anchor to where the cabinet actually ended up, so one held
-					// against its neighbour starts moving the instant you reverse.
-					const settled = [...next.floor, ...next.wall].find(
-						(placed) => placed.id === drag.id,
-					);
-					if (settled) drag.grabMm = pointer.xMm - settled.xMm;
-					onLayoutChange(next);
-				}}
 			>
 				<planeGeometry
 					args={[m(runWidthMm) * 4, m(layout.ceilingHeightMm) * 3]}
@@ -1047,8 +1255,34 @@ function Run({
 				construction={construction}
 				engine={engine}
 			/>
+			{cornerWorktop && layout.reserved?.floor && (
+				<mesh
+					position={[
+						m(
+							layout.reserved.floor.startMm +
+								cornerWorktop.sizeMm / 2 -
+								runWidthMm / 2,
+						),
+						m(cornerWorktop.topMm + construction.worktopThicknessMm / 2),
+						m((cornerWorktop.sizeMm + WORKTOP_OVERHANG_MM) / 2),
+					]}
+				>
+					<boxGeometry
+						args={[
+							m(cornerWorktop.sizeMm),
+							m(construction.worktopThicknessMm),
+							m(cornerWorktop.sizeMm + WORKTOP_OVERHANG_MM),
+						]}
+					/>
+					<WorktopMaterial
+						width={m(cornerWorktop.sizeMm)}
+						depth={m(cornerWorktop.sizeMm + WORKTOP_OVERHANG_MM)}
+					/>
+				</mesh>
+			)}
 			<CeilingTrim
 				layout={layout}
+				corners={corners}
 				runWidthMm={runWidthMm}
 				finishHex={finishHex}
 				finishPhoto={finishPhoto}
@@ -1056,7 +1290,10 @@ function Run({
 			/>
 			<Skirting layout={layout} runWidthMm={runWidthMm} engine={engine} />
 
-			{allPositions(layout).map((position) => (
+			{/* Corner units are drawn for the left corner and turned 270° for the
+			    right, which assumes a square footprint (width = depth); a
+			    non-square one would sit off its corner. */}
+			{[...allPositions(layout), ...corners].map((position) => (
 				<Cabinet
 					key={position.placed.id}
 					moduleId={position.placed.id}
@@ -1119,14 +1356,17 @@ function Run({
 							onSelect(position.placed.id, additive);
 						}
 						// The group is on the wall plane, so the cabinet's own centre
-						// plane is half its depth in front of it.
-						beginDrag(
-							e,
-							position,
-							-m(layout.roomDepthMm) / 2 +
-								m(WALL_GAP_MM) +
-								m(position.family.depthMm) / 2,
-						);
+						// plane is half its depth in front of it. A corner unit is
+						// selected and never dragged: its place is the corner.
+						if (!corners.includes(position)) {
+							beginDrag(
+								e,
+								position,
+								-m(layout.roomDepthMm) / 2 +
+									m(WALL_GAP_MM) +
+									m(position.family.depthMm) / 2,
+							);
+						}
 					}}
 				/>
 			))}
@@ -1455,26 +1695,25 @@ function Worktop({
 		<>
 			{spans.map((span) => {
 				const widthMm = span.endMm - span.startMm;
-				const overhangMm = 20;
 				return (
 					<mesh
 						key={span.startMm}
 						position={[
 							m(span.startMm + widthMm / 2 - runWidthMm / 2),
 							m(span.topMm + construction.worktopThicknessMm / 2),
-							m((span.depthMm + overhangMm) / 2),
+							m((span.depthMm + WORKTOP_OVERHANG_MM) / 2),
 						]}
 					>
 						<boxGeometry
 							args={[
 								m(widthMm),
 								m(construction.worktopThicknessMm),
-								m(span.depthMm + overhangMm),
+								m(span.depthMm + WORKTOP_OVERHANG_MM),
 							]}
 						/>
 						<WorktopMaterial
 							width={m(widthMm)}
-							depth={m(span.depthMm + overhangMm)}
+							depth={m(span.depthMm + WORKTOP_OVERHANG_MM)}
 						/>
 					</mesh>
 				);
@@ -1545,12 +1784,16 @@ function Skirting({
  */
 function CeilingTrim({
 	layout,
+	corners,
 	runWidthMm,
 	finishHex,
 	finishPhoto,
 	engine,
 }: {
 	layout: PlannerLayout;
+	/** A corner wall unit is billed a strip like any wall unit, so it is drawn
+	 * one: its own square piece, never merged into the run's shallower one. */
+	corners: Positioned[];
 	runWidthMm: number;
 	finishHex: string;
 	finishPhoto: string | null;
@@ -1570,6 +1813,14 @@ function CeilingTrim({
 					depthMm: position.family.depthMm,
 				});
 			}
+		}
+		for (const corner of corners) {
+			if (corner.family.kind !== "wall") continue;
+			spans.push({
+				startMm: corner.xMm,
+				endMm: corner.xMm + corner.widthMm,
+				depthMm: corner.family.depthMm,
+			});
 		}
 	}
 
@@ -1645,6 +1896,7 @@ function WorktopMaterial({ width, depth }: { width: number; depth: number }) {
 
 /** Module-level so the default never changes identity between renders. */
 const EMPTY_IDS: ReadonlySet<string> = new Set();
+const NO_CORNERS: Positioned[] = [];
 
 export default function PlannerScene({
 	layout,
@@ -1666,7 +1918,7 @@ export default function PlannerScene({
 	pickerRef,
 	hitTestRef,
 }: {
-	layout: PlannerLayout;
+	layout: RoomLayout;
 	finish: FinishId;
 	/** Finish id → uploaded decor photo, for the finishes that have one.
 	 *
@@ -1702,11 +1954,11 @@ export default function PlannerScene({
 	/** Whether the Position verb is open. The offset callouts are that panel's
 	 * readout, so they come up with it and not on plain selection. */
 	positionMode?: boolean;
-	onLayoutChangeAction: (next: PlannerLayout) => void;
+	onLayoutChangeAction: (next: RoomLayout) => void;
 	onSelectAction: (id: string | null, additive: boolean) => void;
 	onMeasurePickAction?: (snap: SnapPoint) => void;
 	pickerRef: React.RefObject<
-		((clientX: number, clientY: number) => number) | null
+		((clientX: number, clientY: number, run: number) => number) | null
 	>;
 	/** Filled in by the scene: which cabinet is under this screen point. */
 	hitTestRef: React.RefObject<
@@ -1715,8 +1967,37 @@ export default function PlannerScene({
 }) {
 	const catalogue = useCatalogue();
 	const engine = useEngine();
+	const rooms = useRoomEngine();
 	const construction = constructionOf(catalogue);
-	const runWidthMm = layout.wallWidthMm;
+	const main = runView(layout, 0);
+	const runWidthMm = main.wallWidthMm;
+	// Edits land on the latest room, never one closed over at render.
+	const roomRef = useRef(layout);
+	roomRef.current = layout;
+	const exposure = useMemo(() => rooms.exposureOf(layout), [rooms, layout]);
+	const runs = useMemo(
+		() =>
+			layout.runs.map((_, i) => ({
+				view: runView(layout, i),
+				yaw: runYawRad(layout, i),
+			})),
+		[layout],
+	);
+	const corners = useMemo(() => rooms.cornerPositions(layout), [rooms, layout]);
+	const hasCornerFloor = Boolean(layout.corner?.floor);
+	const hasCornerWall = Boolean(layout.corner?.wall);
+	const cornerFilled = useMemo(
+		() => ({ floor: hasCornerFloor, wall: hasCornerWall }),
+		[hasCornerFloor, hasCornerWall],
+	);
+	const cornerWorktop = useMemo(
+		() => rooms.cornerWorktop(layout),
+		[rooms, layout],
+	);
+	const pickerRuns = useMemo(
+		() => runs.map(({ view, yaw }) => ({ yaw, lengthMm: view.wallWidthMm })),
+		[runs],
+	);
 	const finishHex =
 		catalogue.finishes.find((f) => f.id === finish)?.hex ??
 		catalogue.finishes[0].hex;
@@ -1734,10 +2015,18 @@ export default function PlannerScene({
 		positionMode && selectedIds.size === 1 && !measureMode
 			? [...selectedIds][0]
 			: null;
-	const positioned = lonelyId
-		? engine.allPositions(layout).find((p) => p.placed.id === lonelyId)
-		: undefined;
-	const offsets = lonelyId ? engine.offsetsOf(layout, lonelyId) : null;
+	const lonelyRun = lonelyId
+		? runs.findIndex(({ view }) =>
+				[...view.floor, ...view.wall].some((placed) => placed.id === lonelyId),
+			)
+		: -1;
+	const lonelyView = lonelyRun >= 0 ? runs[lonelyRun].view : null;
+	const positioned =
+		lonelyId && lonelyView
+			? engine.allPositions(lonelyView).find((p) => p.placed.id === lonelyId)
+			: undefined;
+	const offsets =
+		lonelyId && lonelyView ? engine.offsetsOf(lonelyView, lonelyId) : null;
 
 	return (
 		<Canvas
@@ -1768,43 +2057,61 @@ export default function PlannerScene({
 				width={m(layout.wallWidthMm)}
 				depth={m(layout.roomDepthMm)}
 				height={m(layout.ceilingHeightMm)}
-				sideWalls={layout.wallToWall}
+				walls={{
+					left: layout.wallToWall || layout.corner?.side === "left",
+					right: layout.wallToWall || layout.corner?.side === "right",
+				}}
 			/>
 
-			<Run
-				layout={layout}
-				catalogue={catalogue}
-				engine={engine}
-				finishHex={finishHex}
-				finishPhoto={finishPhoto}
-				selectedIds={selectedIds}
-				openIds={openIds}
-				doorsHidden={doorsHidden}
-				doorTargetId={doorTargetId}
-				measureMode={measureMode}
-				measureAxis={measureAxis}
-				measureAnchor={measureAnchor}
-				onLayoutChange={onLayoutChangeAction}
-				onSelect={onSelectAction}
-				onMeasurePick={onMeasurePickAction ?? (() => {})}
-				onMeasureHover={setHoverPoint}
-				construction={construction}
-			/>
+			{runs.map(({ view, yaw }, i) => (
+				// Index keys: a run's place in `layout.runs` is its identity.
+				// biome-ignore lint/suspicious/noArrayIndexKey: see above
+				<group key={i} rotation={[0, yaw, 0]}>
+					<Run
+						layout={view}
+						yaw={yaw}
+						corners={i === 0 ? corners : NO_CORNERS}
+						cornerFilled={cornerFilled}
+						exposure={exposure}
+						cornerWorktop={i === 0 ? cornerWorktop : null}
+						catalogue={catalogue}
+						engine={engine}
+						finishHex={finishHex}
+						finishPhoto={finishPhoto}
+						selectedIds={selectedIds}
+						openIds={openIds}
+						doorsHidden={doorsHidden}
+						doorTargetId={doorTargetId}
+						measureMode={measureMode}
+						measureAxis={measureAxis}
+						measureAnchor={measureAnchor}
+						onLayoutChange={(next) =>
+							onLayoutChangeAction(withRun(roomRef.current, i, next))
+						}
+						onSelect={onSelectAction}
+						onMeasurePick={onMeasurePickAction ?? (() => {})}
+						onMeasureHover={setHoverPoint}
+						construction={construction}
+					/>
+					{i === lonelyRun && positioned && offsets && (
+						<PositionDimensions
+							onLayoutChange={(next) =>
+								onLayoutChangeAction(withRun(roomRef.current, i, next))
+							}
+							position={positioned}
+							offsets={offsets}
+							layout={view}
+							engine={engine}
+						/>
+					)}
+				</group>
+			))}
 			<MeasureOverlay
 				points={measurePoints}
 				previewPoint={measureMode ? hoverPoint : null}
 			/>
-			{positioned && offsets && (
-				<PositionDimensions
-					onLayoutChange={onLayoutChangeAction}
-					position={positioned}
-					offsets={offsets}
-					layout={layout}
-					engine={engine}
-				/>
-			)}
 
-			<DropPicker runWidthMm={runWidthMm} pickerRef={pickerRef} />
+			<DropPicker runs={pickerRuns} pickerRef={pickerRef} />
 			<CabinetHitTest hitTestRef={hitTestRef} />
 			{/* `makeDefault` is what lets Run reach these through useThree and
 			    switch orbiting off for the duration of a cabinet drag. */}
@@ -1827,23 +2134,25 @@ export default function PlannerScene({
 			/>
 			<PanGizmo
 				bounds={{
-					runWidthMm: Math.max(runWidthMm, engine.rowEndMm(layout, "floor")),
+					runWidthMm: Math.max(runWidthMm, engine.rowEndMm(main, "floor")),
 					roomDepthMm: layout.roomDepthMm,
 					ceilingHeightMm: layout.ceilingHeightMm,
 					// The floor units only. A wall unit hangs over floor a person
 					// can stand on, and so can the puck.
 					runDepthMm: engine
-						.positionsOf(layout, "floor")
+						.positionsOf(main, "floor")
 						.reduce((deepest, p) => Math.max(deepest, p.family.depthMm), 0),
 				}}
 				view={view}
+				cornerSide={layout.corner?.side ?? null}
 				refitKey={refitKey}
 			/>
 			<FitCamera
-				runWidthMm={Math.max(runWidthMm, engine.rowEndMm(layout, "floor"))}
+				runWidthMm={Math.max(runWidthMm, engine.rowEndMm(main, "floor"))}
 				roomDepthMm={layout.roomDepthMm}
 				ceilingHeightMm={layout.ceilingHeightMm}
 				view={view}
+				cornerSide={layout.corner?.side ?? null}
 				refitKey={refitKey}
 			/>
 		</Canvas>

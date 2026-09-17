@@ -1,7 +1,7 @@
 import { type FinishId, ratesOf } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
-import type { PlannerLayout } from "@/lib/planner/layout";
 import { computePlannerPrice } from "@/lib/planner/pricing";
+import type { RoomLayout } from "@/lib/planner/room";
 
 const sen = (rm: number) => Math.round(rm * 100) / 100;
 
@@ -12,7 +12,7 @@ const sen = (rm: number) => Math.round(rm * 100) / 100;
  * a figure.
  */
 export function priceOrder(
-	layout: PlannerLayout,
+	layout: RoomLayout,
 	finishId: string,
 	catalogue: PlannerCatalogue,
 ) {

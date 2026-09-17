@@ -68,8 +68,8 @@ importers:
         specifier: ^0.185.1
         version: 0.185.1
       zod:
-        specifier: ^4.6.2
-        version: 4.6.2
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.5.13
@@ -700,11 +700,11 @@ packages:
   '@posthog/browser-common@0.8.3':
     resolution: {integrity: sha512-4Hlbwyn+Hioc2+pjqSGWMTDrA5XsDshssPnGfv34khPKoJaeBe2YvPvsEPoH78jezOS6Wo3LJvCPhqyolg3S8w==}
 
-  '@posthog/core@1.53.2':
-    resolution: {integrity: sha512-Knx8442G2LyPVIzLvhcBX/TIdeHpZhrYrtZou3Uw8FWfbr9gQtQeOZDCog3MWcDxJ+4vAnMAAOzf5cYpc7Gxyw==}
+  '@posthog/core@1.54.2':
+    resolution: {integrity: sha512-p0NuMjiZkploKG/aASj4nw4QDuhF87SIFWkelaFRrr3G0Myb7KWWUZot2hm5qXpPx7zKozVZJrJkGzC2kGBqbg==}
 
-  '@posthog/types@1.411.1':
-    resolution: {integrity: sha512-Gd7tnSYctcSXup3naVlAgavvenByRao6rsSYdMgWgP35KE9jFn+rMHNRJeI5LNjJuLzMXHEVcgzAN7xcATefdw==}
+  '@posthog/types@1.412.1':
+    resolution: {integrity: sha512-FxXsb9YOOME8bJI5K09qKeSvLjnZQ2dPV7wZpI7a8sERQtXkAuhBcPB/balCnVE7TYwhgtHj5NQss9BgQ5bAfQ==}
 
   '@prisma/adapter-pg@7.10.0':
     resolution: {integrity: sha512-N7nwSor0HO1Kz6xBv0TPAjAPysKK0fac6p4fVN3ensLOuzc/83Fgmln5k92eK/cvzqdkSR/2kkAqlbcdwVrwpw==}
@@ -1082,6 +1082,9 @@ packages:
   '@types/d3-color@3.1.0':
     resolution: {integrity: sha512-HKuicPHJuvPgCD+np6Se9MQvS6OCbJmOjGvylzMJRlDwUXjKTTXs6Pwgk79O09Vj/ho3u1ofXnhFOaEWWPrlwA==}
 
+  '@types/d3-color@3.1.3':
+    resolution: {integrity: sha512-iO90scth9WAbmgv7ogoq57O9YpKmFBbmoEoCHDB2xMBY0+/KVrqAaCDyCE16dUspeOvIxFFRI+0sEtqDqy2b4A==}
+
   '@types/d3-delaunay@6.0.1':
     resolution: {integrity: sha512-tLxQ2sfT0p6sxdG75c6f/ekqxjyYR0+LwPrsO1mbC9YDBzPJhs2HbJJRrn8Ez1DBoHRo2yx7YEATI+8V1nGMnQ==}
 
@@ -1108,6 +1111,9 @@ packages:
 
   '@types/d3-time@3.0.0':
     resolution: {integrity: sha512-sZLCdHvBUcNby1cB6Fd3ZBrABbjz3v1Vm90nysCQ6Vt7vd6e/h9Lt7SiJUoEX0l4Dzc7P5llKyhqSi1ycSf1Hg==}
+
+  '@types/d3-time@3.0.4':
+    resolution: {integrity: sha512-yuzZug1nkAAaBlBBikKZTgzCeA+k1uy4ZFwWANOfKw5z5LRhV0gNA7gNkKm7HoK+HRN0wX3EkxGk0fpbWhmB7g==}
 
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
@@ -1270,6 +1276,11 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
+  baseline-browser-mapping@2.11.23:
+    resolution: {integrity: sha512-le521dGVfxM7yRX0EikCoSz+rOK+hHzdDt/E7mG1jOJB/6WAAUuwVroLwaB7ApaUsz5Q0kFlDXLSA9MheUIfRQ==}
+    engines: {node: '>=6.0.0'}
+    hasBin: true
+
   better-result@2.10.0:
     resolution: {integrity: sha512-oQhh0y1qo2/ZKdAAEvHZAqKKiHOFU5k/bW96fE2ScgQOVkJRiHwB+nOS1SgFsYqRlxMDWvefXi9Q3px7QvgNDw==}
 
@@ -1381,6 +1392,10 @@ packages:
     resolution: {integrity: sha512-YyUI6AEuY/Wpt8KWLgZHsIU86atmikuoOmCfommt0LYHiQSPjvX2AcFc38PX0CBpr2RCyZhjex+NS/LPOv6YqA==}
     engines: {node: '>=12'}
 
+  d3-format@3.1.2:
+    resolution: {integrity: sha512-AJDdYOdnyRDV5b6ArilzCPPwc1ejkHcoyFarqlPqT7zRYjhavcT3uSrqcMvsgh2CgoPbK3RCwyHaVyxYcP2Arg==}
+    engines: {node: '>=12'}
+
   d3-geo@3.1.0:
     resolution: {integrity: sha512-JEo5HxXDdDYXCaWdwLRt79y7giK8SbhZJbFWXqbRTolCHFI5jRqteLzCsq51NKbUoX0PjBVSohxrx+NoOUujYA==}
     engines: {node: '>=12'}
@@ -1464,8 +1479,8 @@ packages:
     resolution: {integrity: sha512-i6UzDscO/XfAcNYD75CfICkmfLedpyPDdozrLMmQc5ORaQcdMoc21OnlEylMIqI7U8eniKrPMxxtj8k0vhmJhA==}
     engines: {node: '>=14'}
 
-  enhanced-resolve@5.24.5:
-    resolution: {integrity: sha512-L1l8TNvomm6UVW5B253AGxQagSQr+vGwhMlrrfRS2qmhx46AMpMVJKQYLvWYbysTMY8VoicOvzHzoHMbyzB+4A==}
+  enhanced-resolve@5.25.1:
+    resolution: {integrity: sha512-nGXts5znJzmWPu+mIE9izCOzdg63oJca2mDzGWWTth7sr4aCToKcoyFVBQwN75Ij5Pf6p510EwkTqViTRzDV+w==}
     engines: {node: '>=10.13.0'}
 
   env-paths@3.0.0:
@@ -1515,8 +1530,8 @@ packages:
   fast-querystring@1.1.2:
     resolution: {integrity: sha512-g6KuKWmFXc0fID8WWH0jit4g0AGBoJhCkJMb1RmbsSEUNvQ+ZC8D6CUZ+GtF8nMzSPXnhiePyyqqipzNNEnHjg==}
 
-  fast-uri@3.1.7:
-    resolution: {integrity: sha512-dOvZVzjdZdz7phd9v6jCbwxrBW3fK6n8Rc0CtdmM4bumzMnxywBYhuph6J819RRw/ku+rLbelwfMunktuzVVHg==}
+  fast-uri@3.1.8:
+    resolution: {integrity: sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==}
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
@@ -2192,8 +2207,8 @@ packages:
     resolution: {integrity: sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==}
     engines: {node: '>= 10.x'}
 
-  sql-escaper@1.5.1:
-    resolution: {integrity: sha512-4toX5E1fQbBrpfXidaHnF0669nkAdETeIPTs2SUjxxD7RRIs9ICG4gtpmfc68JCEKehsdwLFqBu9VlQqZ1P1gg==}
+  sql-escaper@1.5.2:
+    resolution: {integrity: sha512-6CKD38c31SENivxOADeMNLdukOnUxUcflKtzVWzace7Riv1v7cAEym5Cx9Q7gYZ3ezIJI7ZpqecQq8cqNeSSFg==}
     engines: {bun: '>=1.0.0', deno: '>=2.0.0', node: '>=12.0.0'}
 
   stackback@0.0.2:
@@ -2425,6 +2440,9 @@ packages:
   web-vitals@6.2.1:
     resolution: {integrity: sha512-rLcLXA2sx6+9dE88NHFubwTtGxpK4yYBLj6qHPdFoCaLr0cXGb4efOqtKLlm4loGA4OEKHIQKMKzZkKyOh5ctw==}
 
+  web-vitals@6.2.2:
+    resolution: {integrity: sha512-oto5x6dLEgrRqfcWed+pZEUb2q6ikbFmqF54CRDhI/QGbn+qxC49b4C4OkbH+kb9C3a8shpFD3SgR9kRcs80ZQ==}
+
   webgl-constants@1.1.1:
     resolution: {integrity: sha512-LkBXKjU5r9vAW7Gcu3T5u+5cvSvh5WwINdr0C+9jpzVB41cjQAP5ePArDtk/WHYdVj0GefCgM73BA7FlIiNtdg==}
 
@@ -2470,8 +2488,8 @@ packages:
   zod@4.1.11:
     resolution: {integrity: sha512-WPsqwxITS2tzx1bzhIKsEs19ABD5vmCVa4xBo2tq/SrV4RNZtfws1EnCWQXM6yh8bD08a1idvkB5MZSBiZsjwg==}
 
-  zod@4.6.2:
-    resolution: {integrity: sha512-lh5RCAGFa1Cm2hjtNwLQhSs/AsqdWnTQaBER9fEwN/88pSh7KOtJavtBx/0VlkN/uFd61SwYmljLMDAsHlvzBQ==}
+  zod@4.6.5:
+    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
   zustand@4.5.7:
     resolution: {integrity: sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw==}
@@ -2966,14 +2984,14 @@ snapshots:
 
   '@posthog/browser-common@0.8.3':
     dependencies:
-      '@posthog/core': 1.53.2
-      '@posthog/types': 1.411.1
+      '@posthog/core': 1.54.2
+      '@posthog/types': 1.412.1
 
-  '@posthog/core@1.53.2':
+  '@posthog/core@1.54.2':
     dependencies:
-      '@posthog/types': 1.411.1
+      '@posthog/types': 1.412.1
 
-  '@posthog/types@1.411.1': {}
+  '@posthog/types@1.412.1': {}
 
   '@prisma/adapter-pg@7.10.0':
     dependencies:
@@ -3243,7 +3261,7 @@ snapshots:
   '@tailwindcss/node@4.3.3':
     dependencies:
       '@jridgewell/remapping': 2.3.5
-      enhanced-resolve: 5.24.5
+      enhanced-resolve: 5.25.1
       jiti: 2.7.0
       lightningcss: 1.32.0
       magic-string: 0.30.21
@@ -3320,6 +3338,8 @@ snapshots:
 
   '@types/d3-color@3.1.0': {}
 
+  '@types/d3-color@3.1.3': {}
+
   '@types/d3-delaunay@6.0.1': {}
 
   '@types/d3-format@3.0.1': {}
@@ -3330,13 +3350,13 @@ snapshots:
 
   '@types/d3-interpolate@3.0.1':
     dependencies:
-      '@types/d3-color': 3.1.0
+      '@types/d3-color': 3.1.3
 
   '@types/d3-path@3.1.1': {}
 
   '@types/d3-scale@4.0.2':
     dependencies:
-      '@types/d3-time': 3.0.0
+      '@types/d3-time': 3.0.4
 
   '@types/d3-shape@3.1.7':
     dependencies:
@@ -3345,6 +3365,8 @@ snapshots:
   '@types/d3-time-format@2.1.0': {}
 
   '@types/d3-time@3.0.0': {}
+
+  '@types/d3-time@3.0.4': {}
 
   '@types/deep-eql@4.0.2': {}
 
@@ -3550,7 +3572,7 @@ snapshots:
   ajv@8.20.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.7
+      fast-uri: 3.1.8
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -3564,7 +3586,10 @@ snapshots:
 
   base64-js@1.5.1: {}
 
-  baseline-browser-mapping@2.11.22: {}
+  baseline-browser-mapping@2.11.22:
+    optional: true
+
+  baseline-browser-mapping@2.11.23: {}
 
   better-result@2.10.0: {}
 
@@ -3670,6 +3695,8 @@ snapshots:
 
   d3-format@3.1.0: {}
 
+  d3-format@3.1.2: {}
+
   d3-geo@3.1.0:
     dependencies:
       d3-array: 3.2.4
@@ -3683,7 +3710,7 @@ snapshots:
   d3-scale@4.0.2:
     dependencies:
       d3-array: 3.2.4
-      d3-format: 3.1.0
+      d3-format: 3.1.2
       d3-interpolate: 3.0.1
       d3-time: 3.1.0
       d3-time-format: 4.1.0
@@ -3745,7 +3772,7 @@ snapshots:
 
   empathic@2.0.0: {}
 
-  enhanced-resolve@5.24.5:
+  enhanced-resolve@5.25.1:
     dependencies:
       graceful-fs: 4.2.11
       tapable: 2.3.3
@@ -3820,7 +3847,7 @@ snapshots:
     dependencies:
       fast-decode-uri-component: 1.0.1
 
-  fast-uri@3.1.7: {}
+  fast-uri@3.1.8: {}
 
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
@@ -4095,7 +4122,7 @@ snapshots:
       long: 5.3.2
       lru.min: 1.1.5
       named-placeholders: 1.1.6
-      sql-escaper: 1.5.1
+      sql-escaper: 1.5.2
 
   named-placeholders@1.1.6:
     dependencies:
@@ -4107,7 +4134,7 @@ snapshots:
     dependencies:
       '@next/env': 16.3.4
       '@swc/helpers': 0.5.23
-      baseline-browser-mapping: 2.11.22
+      baseline-browser-mapping: 2.11.23
       caniuse-lite: 1.0.30001810
       postcss: 8.5.23
       react: 19.2.8
@@ -4235,14 +4262,14 @@ snapshots:
   posthog-js@1.430.3(@types/react@19.3.0)(react@19.2.8):
     dependencies:
       '@posthog/browser-common': 0.8.3
-      '@posthog/core': 1.53.2
-      '@posthog/types': 1.411.1
+      '@posthog/core': 1.54.2
+      '@posthog/types': 1.412.1
       core-js: 3.50.0
       dompurify: 3.4.15
       fflate: 0.4.9
       preact: 10.29.8
       query-selector-shadow-dom: 1.0.1
-      web-vitals: 6.2.1
+      web-vitals: 6.2.2
       web-vitals-soft-navs: web-vitals@6.2.1
     optionalDependencies:
       '@types/react': 19.3.0
@@ -4415,7 +4442,7 @@ snapshots:
 
   split2@4.2.0: {}
 
-  sql-escaper@1.5.1: {}
+  sql-escaper@1.5.2: {}
 
   stackback@0.0.2: {}
 
@@ -4578,6 +4605,8 @@ snapshots:
 
   web-vitals@6.2.1: {}
 
+  web-vitals@6.2.2: {}
+
   webgl-constants@1.1.1: {}
 
   webgl-sdf-generator@1.1.1: {}
@@ -4622,7 +4651,7 @@ snapshots:
 
   zod@4.1.11: {}
 
-  zod@4.6.2: {}
+  zod@4.6.5: {}
 
   zustand@4.5.7(@types/react@19.3.0)(react@19.2.8):
     dependencies:

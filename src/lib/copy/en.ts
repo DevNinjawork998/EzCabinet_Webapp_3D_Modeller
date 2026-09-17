@@ -141,6 +141,7 @@ export const en = {
 			defaultsTitle: "Defaults for the whole run",
 		},
 		panel: {
+			sideHint: "Flat onto the side wall.",
 			close: "Close panel",
 			addTitle: "Add a cabinet",
 			addHint:
@@ -160,8 +161,7 @@ export const en = {
 		},
 		start: {
 			heading: "What room are you planning?",
-			subtitle:
-				"Pick one to start on an empty wall with real EzCabinet sizes.",
+			subtitle: "Pick one to start on an empty wall with real EzCabinet sizes.",
 			roomIconAlt: "{room} icon",
 			roomSubtitle: {
 				kitchen: "Real EzCabinet sizes",
@@ -181,6 +181,13 @@ export const en = {
 			wallLength: "Wall length",
 			ceiling: "Ceiling",
 			roomDepth: "Room depth",
+			shape: "Layout",
+			shapeStraight: "One wall",
+			shapeLeft: "L, corner on the left",
+			shapeRight: "L, corner on the right",
+			shapeLocked: "Clear the side wall and corner to go back to one wall.",
+			shapeRefused: "Make room at that end of the wall to turn this into an L.",
+			sideWallLength: "Side wall length",
 			wallUnitsHangAt: "Wall units hang at",
 			narrowWallNote:
 				"Your {min}mm run sets the shortest wall it fits on. Remove or resize a cabinet to go narrower.",
@@ -217,12 +224,16 @@ export const en = {
 				"The run overhangs this wall by {overhang}mm — close the gaps below, or remove a cabinet.",
 		},
 		view: {
+			side: "Side wall",
 			ariaLabel: "View",
 			threeD: "3D",
 			elevation: "Elevation",
 			plan: "Plan",
 		},
 		addCabinets: {
+			targetWall: "Add to",
+			mainWall: "Main wall",
+			sideWall: "Side wall",
 			heading: "Add cabinets",
 			subtitle: "Drag onto the wall. Size and front come after.",
 			sizeRange: "{min}–{max}mm · from {price}",
@@ -233,6 +244,8 @@ export const en = {
 				TALL_CABINET: "Tall cabinets",
 				DRAWER_BASE: "Drawer bases",
 				FRIDGE_HOUSING: "Fridge housings",
+				CORNER_BASE_CABINET: "Corner base cabinets",
+				CORNER_WALL_CABINET: "Corner wall cabinets",
 			},
 		},
 		canvas: {

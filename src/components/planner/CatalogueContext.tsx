@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo } from "react";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
 import { type PlannerEngine, plannerEngine } from "@/lib/planner/layout";
+import { type RoomEngine, roomEngine } from "@/lib/planner/room";
 
 /**
  * The published catalogue, handed down instead of installed into a module
@@ -16,7 +17,11 @@ import { type PlannerEngine, plannerEngine } from "@/lib/planner/layout";
  * catalogue it was not built from — because "which catalogue is live" was
  * ambient rather than passed. Here it is a value with one owner.
  */
-type CatalogueValue = { catalogue: PlannerCatalogue; engine: PlannerEngine };
+type CatalogueValue = {
+	catalogue: PlannerCatalogue;
+	engine: PlannerEngine;
+	rooms: RoomEngine;
+};
 
 const CatalogueContext = createContext<CatalogueValue | null>(null);
 
@@ -30,7 +35,11 @@ export function CatalogueProvider({
 	// One engine per catalogue, not one per consumer: the closures it returns
 	// end up in hook dependency arrays downstream.
 	const value = useMemo(
-		() => ({ catalogue, engine: plannerEngine(catalogue) }),
+		() => ({
+			catalogue,
+			engine: plannerEngine(catalogue),
+			rooms: roomEngine(catalogue),
+		}),
 		[catalogue],
 	);
 	return (
@@ -51,4 +60,7 @@ function useCatalogueValue(): CatalogueValue {
 
 export const useCatalogue = (): PlannerCatalogue =>
 	useCatalogueValue().catalogue;
+/** The one-wall engine: what the scene's `Run` places a single wall with. */
 export const useEngine = (): PlannerEngine => useCatalogueValue().engine;
+/** The room engine: what everything holding the stored document uses. */
+export const useRoomEngine = (): RoomEngine => useCatalogueValue().rooms;

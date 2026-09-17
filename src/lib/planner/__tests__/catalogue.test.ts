@@ -4,12 +4,13 @@ import {
 	constructionOf,
 	defaultWidthMmIn,
 	familyIn,
+	isCorner,
 	PLANNER_CATALOGUE,
 	RATES,
 	ratesOf,
 	roomTypeIn,
 } from "../catalogue";
-import { plannerCatalogueSchema } from "../catalogueSchema";
+import { familySchema, plannerCatalogueSchema } from "../catalogueSchema";
 
 describe("the seed catalogue is one consistent document", () => {
 	it("satisfies its own schema", () => {
@@ -129,5 +130,25 @@ describe("ratesOf", () => {
 	it("does not mutate the seed", () => {
 		ratesOf({ ...PLANNER_CATALOGUE, rates: { worktopRmPerFt: 275 } });
 		expect(RATES.worktopRmPerFt).toBe(200);
+	});
+});
+
+describe("isCorner", () => {
+	it("recognises the two corner categories and nothing else", () => {
+		expect(isCorner({ category: "CORNER_BASE_CABINET" })).toBe(true);
+		expect(isCorner({ category: "CORNER_WALL_CABINET" })).toBe(true);
+		expect(isCorner({ category: "BASE_CABINET" })).toBe(false);
+		expect(isCorner({ category: undefined })).toBe(false);
+	});
+
+	it("parses a family filed under a corner category", () => {
+		const corner = PLANNER_CATALOGUE.families.find(
+			(family) => family.id === "base-cabinet",
+		);
+		if (!corner) throw new Error("seed lost base-cabinet");
+		expect(
+			familySchema.safeParse({ ...corner, category: "CORNER_BASE_CABINET" })
+				.success,
+		).toBe(true);
 	});
 });

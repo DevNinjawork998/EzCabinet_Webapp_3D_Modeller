@@ -120,13 +120,42 @@ const spanOf = (parts: MeshPart[], axis: 0 | 1 | 2) =>
 const CEILING_MM = 3000;
 
 /**
+ * Two extents within this fraction of each other are the same extent.
+ *
+ * A corner unit's footprint is drawn square on purpose — 900 by 900 — so the
+ * two are equal to the drafter's precision. Tight enough that a BC 600 (600
+ * wide, 588 deep) still reads as two different sizes.
+ */
+const SAME_EXTENT = 0.005;
+
+const sameExtent = (a: number, b: number) =>
+	Math.abs(a - b) <= Math.max(a, b) * SAME_EXTENT;
+
+/**
  * Which axis points at the ceiling, in two steps that have to happen in this
  * order.
  *
- * **Depth first.** This product plans one wall, so depth is always the model's
- * smallest extent — a 600mm carcass against a 3.8m run 2.4m tall. Even a lone
- * tall cabinet is deeper-than-nothing but narrower in depth than in width or
- * height.
+ * **Depth first — usually.** This product plans one wall, so depth is normally
+ * the model's smallest extent — a 600mm carcass against a 3.8m run 2.4m tall.
+ * Even a lone tall cabinet is deeper-than-nothing but narrower in depth than in
+ * width or height.
+ *
+ * **Except a square footprint.** A corner unit is drawn square on purpose and
+ * is often no taller than it is deep, so its smallest extent is its *height*,
+ * not its depth — "depth first" would lay it on its back. But a square-*fronted*
+ * wall unit (width tied with height, both bigger than depth) ties the same two
+ * extents without being a corner at all, and "depth first" is exactly right for
+ * it. The two cases are told apart by the same evidence the plate vote below
+ * already gathers: a corner's horizontal boards — bottoms, tops, the adjustable
+ * shelf — are thin along its short *height* axis, so that axis only wins the
+ * plate vote when it genuinely is the up axis. When the smallest axis does not
+ * win that vote outright, the tie is a coincidence of the model's proportions
+ * — an ordinary square-fronted cabinet — *or* a genuinely ambiguous corner
+ * whose named boards do not settle it either way, and there is no way from
+ * extents and votes alone to tell those two apart. Depth-first proceeds, but
+ * `confident` comes back `false` whenever the footprint was tied and the vote
+ * did not win it outright, so the caller is warned rather than shown a
+ * guess dressed up as a reading.
  *
  * **Then vote between the two that are left.** The up axis is the one most
  * panels are thin on: shelves, tops and bottoms are horizontal and outnumber
@@ -150,32 +179,78 @@ export function inferUpAxis(
 } {
 	const axes = [0, 1, 2] as const;
 	const spans = axes.map((axis) => spanOf(parts, axis));
-	const depthAxis = spans.indexOf(Math.min(...spans)) as 0 | 1 | 2;
+	const [low, mid, high] = [...axes].sort((a, b) => spans[a] - spans[b]);
 
 	// Panels only. Hardware is not a board and has no grain direction to read.
+	// Gathered before depth is decided, because telling a corner unit from an
+	// ordinary square-fronted cabinet needs this same evidence.
 	const plates = parts.filter(isPlate);
 	const voters = plates.length > 0 ? plates : parts;
 
-	const votes = [0, 0, 0];
+	const thinAxisVotes = [0, 0, 0];
 	for (const part of voters) {
 		const thin = smallest(part);
 		if (!Number.isFinite(thin)) continue;
 		const axis = part.sizeMm.indexOf(thin);
-		if (axis >= 0 && axis !== depthAxis) votes[axis] += 1;
+		if (axis >= 0) thinAxisVotes[axis] += 1;
 	}
+
+	// A corner unit: its footprint is square and it is no taller than it is
+	// deep, so the smallest extent could be its *height* — but a square-fronted
+	// wall unit ties the same two extents without being a corner. Only trust
+	// the corner reading when the smallest axis strictly wins the plate vote:
+	// a corner's bottom, top and adjustable shelf are thin along it, and
+	// nothing else is, so the vote is lopsided when it really is up.
+	const footprintTie =
+		sameExtent(spans[mid], spans[high]) && !sameExtent(spans[low], spans[mid]);
+
+	if (
+		footprintTie &&
+		thinAxisVotes[low] > thinAxisVotes[mid] &&
+		thinAxisVotes[low] > thinAxisVotes[high]
+	) {
+		const second = Math.max(thinAxisVotes[mid], thinAxisVotes[high]);
+		return {
+			upAxis: low,
+			// Of the two equal floor axes, the later one is depth: every exporter
+			// seen so far runs along the wall on x, and taking x for depth would
+			// turn the axis permutation into a mirror image.
+			depthAxis: Math.max(mid, high) as 0 | 1 | 2,
+			confident:
+				spans[low] * scaleFactor <= CEILING_MM &&
+				thinAxisVotes[low] >= Math.max(1, second * 1.5),
+		};
+	}
+
+	// Width and depth tied (a square wall corner): same rule, later axis is depth.
+	const depthAxis = (
+		sameExtent(spans[low], spans[mid]) ? Math.max(low, mid) : low
+	) as 0 | 1 | 2;
 
 	const candidates = axes.filter((axis) => axis !== depthAxis);
 	const [a, b] = candidates;
-	const upAxis = votes[a] >= votes[b] ? a : b;
+	const upAxis = thinAxisVotes[a] >= thinAxisVotes[b] ? a : b;
 	const other = upAxis === a ? b : a;
 
 	// Two corroborations, both of which have to hold before we stop asking the
 	// reviewer to check: the vote was not a near-tie, and the height we picked
 	// fits under a ceiling.
-	const decisiveVote = votes[upAxis] >= Math.max(1, votes[other] * 1.5);
+	const decisiveVote =
+		thinAxisVotes[upAxis] >= Math.max(1, thinAxisVotes[other] * 1.5);
 	const fitsARoom = spans[upAxis] * scaleFactor <= CEILING_MM;
 
-	return { upAxis, depthAxis, confident: decisiveVote && fitsARoom };
+	// A tied footprint that the plate vote could not confidently hand to the
+	// corner reading above is not confidently anything else either: this
+	// depth-first reading might be right (an ordinary square-fronted cabinet)
+	// or might be a corner read lying on its back with too few named boards to
+	// tell. Flag it instead of asserting either silently — the vote margin
+	// below would otherwise happily call a 3-votes-to-2 split "decisive" on a
+	// tie it was never entitled to settle.
+	return {
+		upAxis,
+		depthAxis,
+		confident: footprintTie ? false : decisiveVote && fitsARoom,
+	};
 }
 
 export function normalise(parts: MeshPart[]): Normalised {

@@ -14,19 +14,12 @@ import {
 	constructionOf,
 	type FinishId,
 	familyIn,
+	isCorner,
 	type RoomTypeId,
 	roomTypeIn,
 	WALL_HANG_LIMITS,
 } from "@/lib/planner/catalogue";
-import {
-	emptyLayout,
-	type HingeSide,
-	type PlannerLayout,
-	type Positioned,
-	rowFor,
-	setDoors,
-	setHinge,
-} from "@/lib/planner/layout";
+import { type HingeSide, type Positioned, rowFor } from "@/lib/planner/layout";
 import {
 	AXIS_COLOR,
 	AXIS_LABEL,
@@ -39,7 +32,17 @@ import {
 } from "@/lib/planner/measure";
 import { fitOutOf } from "@/lib/planner/parts";
 import { computePlannerPrice } from "@/lib/planner/pricing";
-import { useCatalogue, useEngine } from "./CatalogueContext";
+import {
+	emptyRoom,
+	nearCornerMm,
+	type RoomLayout,
+	runIndexOf,
+	runView,
+	setDoors,
+	setHinge,
+	shapeOf,
+} from "@/lib/planner/room";
+import { useCatalogue, useRoomEngine } from "./CatalogueContext";
 import { useCopy, useLocale } from "./CopyContext";
 import { peekDesignMesh } from "./DesignedCabinet";
 import { DimensionField } from "./DimensionField";
@@ -47,6 +50,7 @@ import { AdminLink, PlannerHeader } from "./PlannerHeader";
 import type { PlannerView } from "./PlannerScene";
 import { priceLineDetail, priceLineLabel } from "./priceLineCopy";
 import { CabinetMenu } from "./studio/CabinetMenu";
+import { chip } from "./studio/chrome";
 import { DesignRecap } from "./studio/DesignRecap";
 import { PriceFooter } from "./studio/PriceFooter";
 import { RoomPanel } from "./studio/RoomPanel";
@@ -78,9 +82,13 @@ const PlannerScene = dynamic(() => import("./PlannerScene"), {
 });
 
 /** Labels for the view toggle, in the order a fitter reads them. */
-const views = (t: Dictionary): { id: PlannerView; label: string }[] => [
+const views = (
+	t: Dictionary,
+	hasSide: boolean,
+): { id: PlannerView; label: string }[] => [
 	{ id: "3d", label: t.planner.view.threeD },
 	{ id: "elevation", label: t.planner.view.elevation },
+	...(hasSide ? [{ id: "side" as const, label: t.planner.view.side }] : []),
 	{ id: "plan", label: t.planner.view.plan },
 ];
 
@@ -199,9 +207,9 @@ export function StudioScreen({
 }: {
 	roomId: RoomTypeId;
 	onChangeRoomAction: (id: RoomTypeId) => void;
-	layout: PlannerLayout;
+	layout: RoomLayout;
 	setLayoutAction: (
-		next: PlannerLayout | ((prev: PlannerLayout) => PlannerLayout),
+		next: RoomLayout | ((prev: RoomLayout) => RoomLayout),
 	) => void;
 	finish: FinishId;
 	/** Finish id → uploaded decor photo. Passed straight through to the scene. */
@@ -237,6 +245,7 @@ export function StudioScreen({
 		flushWallToTallTops,
 		freeSpans,
 		hangingHeightMmOf,
+		minRoomDepthMm,
 		minWallWidthMm,
 		overhangMm,
 		positionsOf,
@@ -252,23 +261,33 @@ export function StudioScreen({
 		setHangingHeight,
 		setRoomDepth,
 		setRotation,
+		setShape,
 		setWallToCeiling,
 		setWallToWall,
 		setWallWidth,
 		setWidth,
 		swapWithNeighbour,
 		widthOptionsFor,
-	} = useEngine();
+	} = useRoomEngine();
 	const room = roomTypeIn(catalogue, roomId);
 	const selectedSet = new Set(selectedIds);
 
 	// Filled in by the scene: screen-point → run position / cabinet under it.
-	const pickerRef = useRef<((x: number, y: number) => number) | null>(null);
+	const pickerRef = useRef<
+		((x: number, y: number, run: number) => number) | null
+	>(null);
 	const hitTestRef = useRef<((x: number, y: number) => string | null) | null>(
 		null,
 	);
 	const [dragFamilyId, setDragFamilyId] = useState<string | null>(null);
 	const [view, setView] = useState<PlannerView>("3d");
+	// A straightened room has no side wall to look at. Derived rather than
+	// reset in an effect, so no frame ever draws a side view with no side.
+	const shownView: PlannerView =
+		view === "side" && !layout.corner ? "elevation" : view;
+	// Which wall the add menu places on. Only an L has a choice.
+	const [targetRun, setTargetRun] = useState(0);
+	const run = layout.corner ? targetRun : 0;
 	// A pan now survives a layout change, so something has to be able to put
 	// the framing back. Bumping this is the only thing that refits the camera.
 	const [refitKey, setRefitKey] = useState(0);
@@ -287,7 +306,7 @@ export function StudioScreen({
 	// An empty wall opens on the cabinet menu: a bare room gives no clue where
 	// cabinets come from, and adding one is the only useful first move.
 	const [tool, setTool] = useState<StudioTool>(() =>
-		layout.floor.length + layout.wall.length === 0 ? "add" : "select",
+		allPositions(layout).length === 0 ? "add" : "select",
 	);
 	const panel = tool === "select" || tool === "measure" ? null : tool;
 	const measureMode = tool === "measure";
@@ -331,18 +350,23 @@ export function StudioScreen({
 
 	/** Whether this cabinet has anything to trade places with, each way. */
 	const neighboursOf = (position: Positioned) => {
-		const row = positionsOf(layout, rowFor(position.family.kind));
+		const at = Math.max(0, runIndexOf(layout, position.placed.id));
+		const row = positionsOf(layout, rowFor(position.family.kind), at);
 		const index = row.findIndex(
 			(other) => other.placed.id === position.placed.id,
 		);
 		return { left: index > 0, right: index >= 0 && index < row.length - 1 };
 	};
 
-	/** The families this cabinet could become — same row, offered in this room. */
+	/** The families this cabinet could become — same row, offered in this room.
+	 * A run cabinet may never be swapped into a corner design, nor a corner unit
+	 * into an ordinary one: the one-wall `replaceFamily` knows nothing of
+	 * corners, and checkout would refuse the result. */
 	const replaceOptionsFor = (position: Positioned) =>
 		catalogue.families
 			.filter(
 				(family) =>
+					isCorner(family) === isCorner(position.family) &&
 					rowFor(family.kind) === rowFor(position.family.kind) &&
 					room.familyIds.includes(family.id),
 			)
@@ -382,14 +406,28 @@ export function StudioScreen({
 	const selected: Positioned | undefined =
 		selection.length === 1 ? selection[0] : undefined;
 
-	const floorEnd = rowEndMm(layout, "floor");
 	const overhang = overhangMm(layout);
 	// Usually the run rather than the catalogue floor — worth naming which,
 	// because a slider that stops for no visible reason reads as broken.
 	const minWallMm = minWallWidthMm(layout);
 	// Whole millimetres: a dragged cabinet lands on a fractional x, and the
 	// customer measures with a tape, not a micrometer.
-	const freeMm = Math.round(layout.wallWidthMm - runExtentMm(layout));
+	// In an L the corner square is not free wall. `runExtentMm` measures from
+	// the corner end, whichever end of the main wall that is, so the free wall
+	// is what lies past the longer of the run and the square.
+	const cornerMm = Math.max(
+		0,
+		...Object.values(runView(layout, 0).reserved ?? {}).map(
+			(span) => span.endMm - span.startMm,
+		),
+	);
+	const freeMm = Math.round(
+		layout.wallWidthMm - Math.max(cornerMm, runExtentMm(layout)),
+	);
+	// Each wall's run, from its corner: an L has two.
+	const runMetres = layout.runs
+		.map((_, i) => `${(runExtentMm(layout, i) / 1000).toFixed(2)} m`)
+		.join(" + ");
 	const construction = constructionOf(catalogue);
 	const price = computePlannerPrice(layout, finish, catalogue);
 	// Named so the customer knows what the extra lines are for. Both are added
@@ -401,19 +439,26 @@ export function StudioScreen({
 		price.endPanelCount > 0 && t.planner.price.endPanels,
 	].filter((piece): piece is string => typeof piece === "string");
 
-	const gapCount = (["floor", "wall"] as const).reduce(
-		(total, row) =>
+	const gapCount = layout.runs.reduce(
+		(total, _, run) =>
 			total +
-			freeSpans(layout, row).filter(
-				(gap) => gap.endMm < rowEndMm(layout, row) && gap.startMm > 0,
-			).length,
+			(["floor", "wall"] as const).reduce(
+				(sum, row) =>
+					sum +
+					freeSpans(layout, row, run).filter(
+						(gap) => gap.endMm < rowEndMm(layout, row, run) && gap.startMm > 0,
+					).length,
+				0,
+			),
 		0,
 	);
 
 	const dropCarcass = (familyId: string, clientX: number, clientY: number) => {
-		const runXMm = pickerRef.current?.(clientX, clientY) ?? 0;
+		const runXMm = pickerRef.current?.(clientX, clientY, run) ?? 0;
 		track("cabinet_added", { family: familyId, via: "drag" });
-		setLayoutAction((prev) => addModule(prev, familyId, runXMm));
+		setLayoutAction((prev) =>
+			addModule(prev, familyId, runXMm, undefined, undefined, run),
+		);
 	};
 
 	// A third click starts a fresh measurement rather than adding a third
@@ -430,6 +475,10 @@ export function StudioScreen({
 		? Math.max(measurement.widthMm, measurement.heightMm, measurement.depthMm)
 		: 0;
 
+	const menuFamily = menu
+		? placed.find((position) => position.placed.id === menu.id)?.family
+		: undefined;
+
 	const canFlush = placed.some((position) => position.family.kind === "tall");
 
 	const roomBody = (
@@ -440,6 +489,19 @@ export function StudioScreen({
 			minWallMm={minWallMm}
 			freeMm={freeMm}
 			overhangMm={overhang}
+			shape={shapeOf(layout)}
+			reachable={{
+				straight: setShape(layout, "straight") !== layout,
+				left: setShape(layout, "left") !== layout,
+				right: setShape(layout, "right") !== layout,
+			}}
+			minDepthMm={minRoomDepthMm(layout)}
+			onShapeAction={(shape) => {
+				// Only a change that lands: a re-press or a refused L is not one.
+				if (setShape(layout, shape) === layout) return;
+				track("room_shape_changed", { shape });
+				setLayoutAction((prev) => setShape(prev, shape));
+			}}
 			onChangeRoomAction={onChangeRoomAction}
 			onWallWidthAction={(mm) =>
 				setLayoutAction((prev) => setWallWidth(prev, mm))
@@ -461,7 +523,32 @@ export function StudioScreen({
 	});
 	const addBody = (
 		<div className="flex flex-col gap-3">
+			{layout.corner && (
+				<div className="flex flex-col gap-1.5">
+					<p className="font-semibold text-[11px] text-neutral-600 uppercase tracking-[0.06em]">
+						{t.planner.addCabinets.targetWall}
+					</p>
+					<div className="flex gap-1">
+						{[
+							t.planner.addCabinets.mainWall,
+							t.planner.addCabinets.sideWall,
+						].map((label, index) => (
+							<button
+								key={label}
+								type="button"
+								aria-pressed={run === index}
+								onClick={() => setTargetRun(index)}
+								className={chip(run === index)}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+				</div>
+			)}
 			{CATEGORIES.map((category) => {
+				// A corner unit has nowhere to go until there is a corner.
+				if (category.startsWith("CORNER_") && !layout.corner) return null;
 				const shelf = offered.filter(
 					(family) =>
 						(family.category ?? KIND_CATEGORY[family.kind]) === category,
@@ -475,7 +562,7 @@ export function StudioScreen({
 						<div className="grid grid-cols-2 gap-2">
 							{shelf.map((option) => {
 								const familyId = option.id;
-								const canFit = fits(layout, familyId);
+								const canFit = fits(layout, familyId, undefined, run);
 								const price = formatRm(option.sizes[0].priceRm, {
 									maximumFractionDigits: 0,
 								});
@@ -498,7 +585,16 @@ export function StudioScreen({
 												family: familyId,
 												via: "click",
 											});
-											setLayoutAction((prev) => addModule(prev, familyId, 0));
+											setLayoutAction((prev) =>
+												addModule(
+													prev,
+													familyId,
+													nearCornerMm(prev, run),
+													undefined,
+													undefined,
+													run,
+												),
+											);
 										}}
 										disabled={!canFit}
 										className={`rounded-lg border p-2 text-left transition ${
@@ -535,7 +631,7 @@ export function StudioScreen({
 
 	const viewBody = (
 		<div className="flex flex-col gap-1.5">
-			{views(t).map((option) => (
+			{views(t, layout.corner !== null).map((option) => (
 				<PanelOption
 					key={option.id}
 					label={option.label}
@@ -544,9 +640,11 @@ export function StudioScreen({
 							? t.planner.panel.threeDHint
 							: option.id === "elevation"
 								? t.planner.panel.elevationHint
-								: t.planner.panel.planHint
+								: option.id === "side"
+									? t.planner.panel.sideHint
+									: t.planner.panel.planHint
 					}
-					pressed={view === option.id}
+					pressed={shownView === option.id}
 					onPressAction={() => {
 						track("view_changed", { view: option.id });
 						setView(option.id);
@@ -787,7 +885,7 @@ export function StudioScreen({
 						measurePoints={measurePoints}
 						measureAxis={measureAxis}
 						positionMode={verb === "move"}
-						view={view}
+						view={shownView}
 						refitKey={refitKey}
 						onLayoutChangeAction={setLayoutAction}
 						onSelectAction={select}
@@ -802,8 +900,7 @@ export function StudioScreen({
 							y={menu.y}
 							onDismissAction={() => setMenu(null)}
 							items={[
-								...((placed.find((p) => p.placed.id === menu.id)?.family.sizes
-									.length ?? 0) > 1
+								...((menuFamily?.sizes.length ?? 0) > 1
 									? [
 											{
 												key: "resize",
@@ -812,22 +909,29 @@ export function StudioScreen({
 											},
 										]
 									: []),
-								{
-									key: "replace",
-									label: t.planner.selection.verbReplace,
-									press: () => setVerb("replace"),
-								},
-								{
-									key: "move",
-									label: t.planner.selection.verbMove,
-									press: () => setVerb("move"),
-								},
-								{
-									key: "duplicate",
-									label: t.planner.selection.duplicate,
-									press: () =>
-										setLayoutAction((prev) => duplicateModule(prev, menu.id)),
-								},
+								// A corner unit stays in its corner — see SelectionPanel.
+								...(menuFamily && isCorner(menuFamily)
+									? []
+									: [
+											{
+												key: "replace",
+												label: t.planner.selection.verbReplace,
+												press: () => setVerb("replace"),
+											},
+											{
+												key: "move",
+												label: t.planner.selection.verbMove,
+												press: () => setVerb("move"),
+											},
+											{
+												key: "duplicate",
+												label: t.planner.selection.duplicate,
+												press: () =>
+													setLayoutAction((prev) =>
+														duplicateModule(prev, menu.id),
+													),
+											},
+										]),
 								{
 									key: "remove",
 									label: t.planner.selection.remove,
@@ -841,14 +945,20 @@ export function StudioScreen({
 					<div className="absolute top-3 left-3.5 z-[6] flex flex-wrap items-center gap-2">
 						<span className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[12px] text-neutral-700 shadow-[0_1px_2px_rgba(0,0,0,.04)]">
 							{fill(t.planner.canvas.runOfWall, {
-								run: (floorEnd / 1000).toFixed(2),
+								// The main wall's run, from its corner: the chip names the
+								// main wall's length, and the sidebar lists both runs.
+								run: (runExtentMm(layout) / 1000).toFixed(2),
 								wall: (layout.wallWidthMm / 1000).toFixed(2),
 							})}{" "}
 							· {placed.length}{" "}
 							{placed.length === 1 ? t.planner.unit : t.planner.units}
 						</span>
 						<span className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[12px] text-[#8a857c] shadow-[0_1px_2px_rgba(0,0,0,.04)]">
-							{views(t).find((option) => option.id === view)?.label}
+							{
+								views(t, layout.corner !== null).find(
+									(option) => option.id === shownView,
+								)?.label
+							}
 						</span>
 					</div>
 
@@ -953,7 +1063,7 @@ export function StudioScreen({
 									},
 									{
 										label: t.planner.design.run,
-										value: `${(runExtentMm(layout) / 1000).toFixed(2)} m · ${
+										value: `${runMetres} · ${
 											placed.length
 										} ${placed.length === 1 ? t.planner.unit : t.planner.units}`,
 									},
@@ -1122,7 +1232,7 @@ export function StudioScreen({
 								setLayoutAction((prev) => closeGaps(prev))
 							}
 							onResetAction={() => {
-								setLayoutAction(emptyLayout(room.defaultWallWidthMm));
+								setLayoutAction(emptyRoom(room.defaultWallWidthMm));
 								setSelectedIdsAction([]);
 							}}
 						/>

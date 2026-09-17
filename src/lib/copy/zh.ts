@@ -59,8 +59,7 @@ export const zh: Dictionary = {
 		},
 		gallery: {
 			heading: "按房间浏览",
-			subtitle:
-				"每个房间都以真实的 EzCabinet 尺寸和现成的布局开始设计。",
+			subtitle: "每个房间都以真实的 EzCabinet 尺寸和现成的布局开始设计。",
 			roomAlt: "{room}橱柜",
 			roomSubtitle: {
 				kitchen: "真实的 EzCabinet 尺寸",
@@ -135,6 +134,7 @@ export const zh: Dictionary = {
 			defaultsTitle: "整排的默认设置",
 		},
 		panel: {
+			sideHint: "正对侧墙的立面图。",
 			close: "关闭面板",
 			addTitle: "添加柜子",
 			addHint: "点击即可加到整排末端，也可以拖到墙上。",
@@ -172,6 +172,13 @@ export const zh: Dictionary = {
 			wallLength: "墙面长度",
 			ceiling: "天花板高度",
 			roomDepth: "房间深度",
+			shape: "布局",
+			shapeStraight: "一字型",
+			shapeLeft: "L型，转角在左",
+			shapeRight: "L型，转角在右",
+			shapeLocked: "清空侧墙和转角后，才能改回一字型。",
+			shapeRefused: "请先腾出墙那一端的空间，才能改成L型。",
+			sideWallLength: "侧墙长度",
 			wallUnitsHangAt: "吊柜悬挂高度",
 			narrowWallNote:
 				"您 {min} 毫米长的布局决定了它能容纳的最短墙面。请移除或缩小某个橱柜以缩短长度。",
@@ -204,12 +211,16 @@ export const zh: Dictionary = {
 				"此布局超出墙面 {overhang} 毫米——请先缩小下方的间隙，或移除一个橱柜。",
 		},
 		view: {
+			side: "侧墙",
 			ariaLabel: "视图",
 			threeD: "3D 视图",
 			elevation: "立面图",
 			plan: "平面图",
 		},
 		addCabinets: {
+			targetWall: "添加到",
+			mainWall: "主墙",
+			sideWall: "侧墙",
 			heading: "添加橱柜",
 			subtitle: "拖曳到墙面上。稍后再选择尺寸与门板。",
 			sizeRange: "{min}–{max} 毫米 · 起价 {price}",
@@ -220,6 +231,8 @@ export const zh: Dictionary = {
 				TALL_CABINET: "高柜",
 				DRAWER_BASE: "抽屉地柜",
 				FRIDGE_HOUSING: "冰箱柜",
+				CORNER_BASE_CABINET: "转角地柜",
+				CORNER_WALL_CABINET: "转角吊柜",
 			},
 		},
 		canvas: {
