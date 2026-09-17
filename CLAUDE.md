@@ -36,13 +36,12 @@ The dependency list is `package.json`. The two that need saying:
 A design is a set of cabinets placed in rows against one wall. Each placed cabinet references a **family** — one uploaded design — and its width. Everything else — 3D geometry, price, quote, and eventually the cutting list — is **derived** from that JSON. Nothing is stored twice.
 
 ```
-Layout document (JSON)
+Room document (JSON) — RoomLayout, src/lib/planner/room.ts
   ├─ roomId:     kitchen | living | bedroom | foyer
-  ├─ roomDepthMm
-  ├─ rows[]:     floor and wall runs
-  └─ modules[]:  familyId, widthMm, xMm, doorStyleId
-        ↓
-  cabinet meshes (fetched)  ·  price (server)  ·  share link  ·  SKU list (Phase 4)
+  ├─ wallWidthMm, roomDepthMm, ceilingHeightMm, …   shared settings
+  ├─ runs[]:     one per wall — [main] or [main, side]; each { floor[], wall[] }
+  │                modules: familyId, widthMm, xMm, doorStyleId
+  └─ corner:     { side: left|right, floor, wall } | null — the L's corner units
 ```
 
 ### One design, one cabinet
@@ -57,12 +56,29 @@ An earlier design grouped the widths into one family with a ladder, matched by s
 
 `familySchema.sizes` is still an array and `layout.ts` still places against it, so a multi-width family (the seed, older published versions) still works; the resize control only shows when a family has more than one size. The add-cabinet menu groups cabinets by the design library's category.
 
+### One wall or an L
+
+A room is **runs**. Each run is still the one-dimensional thing `layout.ts`
+places: `runView` hands a run to that engine as an ordinary `PlannerLayout`,
+with the corner square as a `reserved` span, and `withRun` writes its rows back.
+No placement rule knows about corners — a corner is one more neighbour in
+`occupiedSpans`. A run's `xMm` reads left to right facing that wall from inside
+the room, which is what lets the scene draw the side wall with the same `Run`
+turned ±90°.
+
+A **corner unit** is an uploaded design filed as `CORNER_BASE_CABINET` or
+`CORNER_WALL_CABINET` (`isCorner`), drawn for the **left-hand** corner. The right
+corner turns it 270°, never mirrors it. An empty corner still reserves 607 mm
+(floor) / 397 mm (wall), so an L is usable before any corner design exists.
+Stored orders are design v2; v1 reads as a one-wall room.
+
 ### Directory layout
 
 ```text
 src/
   lib/planner/           ← PURE TypeScript. No React, no three.js imports.
     layout.ts            ← placement, collision, snapping
+    room.ts              ← the stored document: runs + corner; each run placed by layout.ts
     parts.ts             ← every box a cabinet is drawn from, as numbers
     exposure.ts          ← which outer sides of a cabinet nothing sits against
   lib/catalogue/         ← DB-backed catalogue: read path, versions, diffs, blob
@@ -393,7 +409,7 @@ Separate Postgres database from Factory Tracker.
 | 0 | Catalogue + pricing spec workshop with client, including the design-intake process |
 | 1 | Layout schema, rules, pricing — headless, tested against fixtures ✅ |
 | 2 | Planner UI + 3D scene ✅ |
-| 3 | Lead capture, share links, admin inbox (admin catalogue + designs ✅; paid checkout, orders admin, order → delivery pre-fill ✅; share links and a real payment gateway not started) |
+| 3 | Lead capture, share links, admin inbox (admin catalogue + designs ✅; paid checkout, orders admin, order → delivery pre-fill ✅; share links and a real payment gateway not started); L-shaped kitchens ✅ |
 | 4 | Approved quote → **SKU list** → production job in Factory Tracker |
 
 **Phase 4 changed shape when the planner started rendering the drafted model.** A derived cut list is no longer available, because the app no longer derives the cabinet — it draws the one the client already drew. What Factory Tracker receives is a SKU list (`1× BC 800mm`). For a factory that manufactures to standard modules that is arguably the more useful payload, but it is a change to the contract and **the client should hear it**.
@@ -409,6 +425,12 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
 
 ## Open questions — resolve before trusting pricing.ts
 
+- **Are a corner unit's ends charged as end panels?** The engine assumes not —
+  its ends are part of the drawing (`exposureOf` in `room.ts`). Confirm with
+  EzCabinet, and ask whether a kick board runs along a corner unit's faces
+  (not drawn or charged yet). Mock corner OBJs for browser testing can be
+  generated with `pnpm tsx scripts/generate-corner-mock.ts <dir>`, for upload
+  once a safe (non-production) Blob store is available.
 - **How does EzCabinet actually price cabinets?** The engine models it **per design, all-in** — each uploaded design carries its own price with its door included, door styles add a per-width surcharge, worktop by the running foot. A customer cannot take a door off to pay less. Confirm that matches their price list.
 - **Does the public tool show a firm price or an indicative range?** Sales teams often resist public exact pricing. This is a business decision and it changes the UI.
 - **Their real module range** — which widths exist for each cabinet — which is now simply which designs they upload.
