@@ -34,6 +34,7 @@ import { fitOutOf } from "@/lib/planner/parts";
 import { computePlannerPrice } from "@/lib/planner/pricing";
 import {
 	emptyRoom,
+	nearCornerMm,
 	type RoomLayout,
 	runIndexOf,
 	runView,
@@ -405,29 +406,28 @@ export function StudioScreen({
 	const selected: Positioned | undefined =
 		selection.length === 1 ? selection[0] : undefined;
 
-	const floorEnd = rowEndMm(layout, "floor");
 	const overhang = overhangMm(layout);
 	// Usually the run rather than the catalogue floor — worth naming which,
 	// because a slider that stops for no visible reason reads as broken.
 	const minWallMm = minWallWidthMm(layout);
 	// Whole millimetres: a dragged cabinet lands on a fractional x, and the
 	// customer measures with a tape, not a micrometer.
-	// In an L the corner square is not free wall: count from where the main
-	// run's reserved span ends (corner on the left) to where it starts (on the
-	// right). `runExtentMm` alone missed a right-hand corner, and a left-hand
-	// one whenever the main wall was empty.
-	const reserved = Object.values(runView(layout, 0).reserved ?? {});
-	const usableStartMm = Math.max(
+	// In an L the corner square is not free wall. `runExtentMm` measures from
+	// the corner end, whichever end of the main wall that is, so the free wall
+	// is what lies past the longer of the run and the square.
+	const cornerMm = Math.max(
 		0,
-		...reserved.filter((span) => span.startMm === 0).map((span) => span.endMm),
-	);
-	const usableEndMm = Math.min(
-		layout.wallWidthMm,
-		...reserved.filter((span) => span.startMm > 0).map((span) => span.startMm),
+		...Object.values(runView(layout, 0).reserved ?? {}).map(
+			(span) => span.endMm - span.startMm,
+		),
 	);
 	const freeMm = Math.round(
-		usableEndMm - Math.max(usableStartMm, runExtentMm(layout)),
+		layout.wallWidthMm - Math.max(cornerMm, runExtentMm(layout)),
 	);
+	// Each wall's run, from its corner: an L has two.
+	const runMetres = layout.runs
+		.map((_, i) => `${(runExtentMm(layout, i) / 1000).toFixed(2)} m`)
+		.join(" + ");
 	const construction = constructionOf(catalogue);
 	const price = computePlannerPrice(layout, finish, catalogue);
 	// Named so the customer knows what the extra lines are for. Both are added
@@ -586,7 +586,14 @@ export function StudioScreen({
 												via: "click",
 											});
 											setLayoutAction((prev) =>
-												addModule(prev, familyId, 0, undefined, undefined, run),
+												addModule(
+													prev,
+													familyId,
+													nearCornerMm(prev, run),
+													undefined,
+													undefined,
+													run,
+												),
 											);
 										}}
 										disabled={!canFit}
@@ -938,7 +945,9 @@ export function StudioScreen({
 					<div className="absolute top-3 left-3.5 z-[6] flex flex-wrap items-center gap-2">
 						<span className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[12px] text-neutral-700 shadow-[0_1px_2px_rgba(0,0,0,.04)]">
 							{fill(t.planner.canvas.runOfWall, {
-								run: (floorEnd / 1000).toFixed(2),
+								// The main wall's run, from its corner: the chip names the
+								// main wall's length, and the sidebar lists both runs.
+								run: (runExtentMm(layout) / 1000).toFixed(2),
 								wall: (layout.wallWidthMm / 1000).toFixed(2),
 							})}{" "}
 							· {placed.length}{" "}
@@ -1054,7 +1063,7 @@ export function StudioScreen({
 									},
 									{
 										label: t.planner.design.run,
-										value: `${(runExtentMm(layout) / 1000).toFixed(2)} m · ${
+										value: `${runMetres} · ${
 											placed.length
 										} ${placed.length === 1 ? t.planner.unit : t.planner.units}`,
 									},

@@ -766,6 +766,7 @@ function Run({
 	layout,
 	yaw,
 	corners,
+	cornerFilled,
 	exposure,
 	cornerWorktop,
 	catalogue,
@@ -791,6 +792,9 @@ function Run({
 	/** Corner units to draw with this run. Selectable, never dragged: a corner
 	 * unit's place is the corner. Empty for every run but the main wall. */
 	corners: Positioned[];
+	/** Whether each row's corner slot holds a unit. A filled square is a
+	 * neighbour a door beside it must not swing into. */
+	cornerFilled: { floor: boolean; wall: boolean };
 	/** The room's answer, not this run's: a corner unit covers the end beside it. */
 	exposure: Map<string, ExposedSides>;
 	/** The worktop square over the corner, drawn with the main wall. */
@@ -1193,13 +1197,39 @@ function Run({
 		// neighbour is before it can decide how far to swing. Per row, as before.
 		const gaps = new Map<string, SideGaps>();
 		for (const row of ["floor", "wall"] as const) {
-			const positions = positionsOf(layout, row);
+			// The corner units stand in the main run, so they are its neighbours
+			// and get gaps of their own.
+			const positions = [
+				...positionsOf(layout, row),
+				...corners.filter(
+					(corner) => (corner.family.kind === "wall") === (row === "wall"),
+				),
+			];
+			const span = cornerFilled[row] ? layout.reserved?.[row] : undefined;
 			positions.forEach((position, i) => {
-				gaps.set(position.placed.id, sideGapsMm(positions, i, walls));
+				const own = sideGapsMm(positions, i, walls);
+				const end = position.xMm + position.widthMm;
+				// On the side run the corner unit is not drawn here, but its
+				// square still stands against the cabinet beside it.
+				gaps.set(
+					position.placed.id,
+					span
+						? {
+								left:
+									span.endMm <= position.xMm + 1
+										? Math.min(own.left, position.xMm - span.endMm)
+										: own.left,
+								right:
+									span.startMm >= end - 1
+										? Math.min(own.right, Math.max(0, span.startMm - end))
+										: own.right,
+							}
+						: own,
+				);
 			});
 		}
 		return gaps;
-	}, [layout, positionsOf]);
+	}, [layout, positionsOf, corners, cornerFilled]);
 
 	// The group sits on the wall plane itself: everything in the run is placed
 	// by its back face from here, with a scribe gap so the carcasses do not
@@ -1252,6 +1282,7 @@ function Run({
 			)}
 			<CeilingTrim
 				layout={layout}
+				corners={corners}
 				runWidthMm={runWidthMm}
 				finishHex={finishHex}
 				finishPhoto={finishPhoto}
@@ -1753,12 +1784,16 @@ function Skirting({
  */
 function CeilingTrim({
 	layout,
+	corners,
 	runWidthMm,
 	finishHex,
 	finishPhoto,
 	engine,
 }: {
 	layout: PlannerLayout;
+	/** A corner wall unit is billed a strip like any wall unit, so it is drawn
+	 * one: its own square piece, never merged into the run's shallower one. */
+	corners: Positioned[];
 	runWidthMm: number;
 	finishHex: string;
 	finishPhoto: string | null;
@@ -1778,6 +1813,14 @@ function CeilingTrim({
 					depthMm: position.family.depthMm,
 				});
 			}
+		}
+		for (const corner of corners) {
+			if (corner.family.kind !== "wall") continue;
+			spans.push({
+				startMm: corner.xMm,
+				endMm: corner.xMm + corner.widthMm,
+				depthMm: corner.family.depthMm,
+			});
 		}
 	}
 
@@ -1941,6 +1984,12 @@ export default function PlannerScene({
 		[layout],
 	);
 	const corners = useMemo(() => rooms.cornerPositions(layout), [rooms, layout]);
+	const hasCornerFloor = Boolean(layout.corner?.floor);
+	const hasCornerWall = Boolean(layout.corner?.wall);
+	const cornerFilled = useMemo(
+		() => ({ floor: hasCornerFloor, wall: hasCornerWall }),
+		[hasCornerFloor, hasCornerWall],
+	);
 	const cornerWorktop = useMemo(
 		() => rooms.cornerWorktop(layout),
 		[rooms, layout],
@@ -2022,6 +2071,7 @@ export default function PlannerScene({
 						layout={view}
 						yaw={yaw}
 						corners={i === 0 ? corners : NO_CORNERS}
+						cornerFilled={cornerFilled}
 						exposure={exposure}
 						cornerWorktop={i === 0 ? cornerWorktop : null}
 						catalogue={catalogue}

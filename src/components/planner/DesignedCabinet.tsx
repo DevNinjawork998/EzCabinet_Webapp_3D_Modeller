@@ -543,8 +543,18 @@ export function DesignedCabinet({
 					side,
 					gaps[side],
 				);
+				// A leaf deeper than half its width is not a flat door facing +z —
+				// an L corner unit's two leaves merged into one, or a door on its
+				// return face — and `swingOf` would pivot it through the carcass.
+				// Kept shut like a suspected flap. See CLAUDE.md, known issues.
+				const flat =
+					(leafMm.max.z - leafMm.min.z) * 2 < leafMm.max.x - leafMm.min.x;
 				return (
-					<Hinge key={key} spec={spec} open={open}>
+					<Hinge
+						key={key}
+						spec={flat ? spec : { ...spec, suspectFlap: true }}
+						open={open}
+					>
 						{rendered}
 					</Hinge>
 				);

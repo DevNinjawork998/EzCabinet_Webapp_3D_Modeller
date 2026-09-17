@@ -10,6 +10,7 @@ import {
 	type Family,
 	GLASS_COLOR,
 	HARDWARE_COLOR,
+	isCorner,
 } from "@/lib/planner/catalogue";
 import type { ExposedSides } from "@/lib/planner/exposure";
 import {
@@ -297,6 +298,12 @@ export function Cabinet({
 		family.sizes.find((size) => size.widthMm === widthMm)?.meshDesignId,
 	);
 
+	// A corner unit is turned for the right-hand corner because its drawing is
+	// L-shaped. The fallback is a plain box with its doors on +z, which turned
+	// would face its doors into the neighbour's side — and a square box needs
+	// no turn to fill the corner.
+	const turnDeg = designGroups || !isCorner(family) ? rotationDeg : 0;
+
 	return (
 		<group
 			position={[centreX, base, backToCentre]}
@@ -304,7 +311,7 @@ export function Cabinet({
 			// that is what `backToCentre` buys — so a yaw here spins it on the spot
 			// with no pivot correction. Everything below is drawn in the cabinet's
 			// own frame, the drafted mesh included, so it all turns together.
-			rotation={[0, (rotationDeg * Math.PI) / 180, 0]}
+			rotation={[0, (turnDeg * Math.PI) / 180, 0]}
 			userData={{ moduleId }}
 			onPointerDown={onPointerDown}
 			onPointerMove={onPointerMove}
@@ -395,7 +402,9 @@ export function Cabinet({
 								finishPhoto={finishPhoto}
 								door={door}
 								hinge={hinge}
-								open={doorsOpen}
+								// A corner box's doors stay shut: the side run stands in
+								// front of half its front, so any swing is through it.
+								open={doorsOpen && !isCorner(family)}
 								finishHex={finishHex}
 								emissive={emissive}
 								emphasis={emphasis}
