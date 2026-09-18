@@ -44,6 +44,7 @@ import {
 } from "@/lib/planner/exposure";
 import {
 	canHangAt,
+	type HingeSide,
 	inRun,
 	type PlannerEngine,
 	type PlannerLayout,
@@ -67,6 +68,12 @@ import { Cabinet } from "./Cabinet";
 import { useCatalogue, useEngine, useRoomEngine } from "./CatalogueContext";
 import { designPartBoxes, peekDesignMesh } from "./DesignedCabinet";
 import { useFrontSurface, useGrain } from "./grain";
+import {
+	HANDLE_HEAD_R,
+	HANDLE_HEAD_TIP,
+	handleCentreM,
+	PUCK_LIFT,
+} from "./handle";
 import { MeasureOverlay } from "./MeasureOverlay";
 import { PositionDimensions } from "./PositionDimensions";
 import { Room } from "./Room";
@@ -320,9 +327,6 @@ function FitCamera({
 
 	return null;
 }
-
-/** A hair above the floor, so the puck sits on it rather than in it. */
-const PUCK_LIFT = 0.012;
 
 /** How fast the camera closes on a released puck. Higher is snappier; this is
  * roughly a quarter-second glide, long enough to read as travel and short
@@ -768,6 +772,7 @@ function Run({
 	corners,
 	cornerFilled,
 	exposure,
+	shutSides,
 	cornerWorktop,
 	catalogue,
 	engine,
@@ -797,6 +802,10 @@ function Run({
 	cornerFilled: { floor: boolean; wall: boolean };
 	/** The room's answer, not this run's: a corner unit covers the end beside it. */
 	exposure: Map<string, ExposedSides>;
+	/** Which cabinets have a leaf that cannot open, and on which side, because
+	 * the other run hinges a leaf into the same corner. The room's answer too —
+	 * a run cannot see the wall it meets. */
+	shutSides: Map<string, HingeSide>;
 	/** The worktop square over the corner, drawn with the main wall. */
 	cornerWorktop: { sizeMm: number; topMm: number } | null;
 	/** The published catalogue, resolved outside the canvas: `Run` renders
@@ -1255,6 +1264,11 @@ function Run({
 				construction={construction}
 				engine={engine}
 			/>
+			{/* The corner square is filled flush — square, no overhang of its own.
+			    Both its open sides are bounded by the runs, whose slabs already
+			    carry the front lip, so an overhang here is a ledge standing proud
+			    of them and a strip overlapping the side run's slab at the same
+			    height. */}
 			{cornerWorktop && layout.reserved?.floor && (
 				<mesh
 					position={[
@@ -1264,19 +1278,19 @@ function Run({
 								runWidthMm / 2,
 						),
 						m(cornerWorktop.topMm + construction.worktopThicknessMm / 2),
-						m((cornerWorktop.sizeMm + WORKTOP_OVERHANG_MM) / 2),
+						m(cornerWorktop.sizeMm / 2),
 					]}
 				>
 					<boxGeometry
 						args={[
 							m(cornerWorktop.sizeMm),
 							m(construction.worktopThicknessMm),
-							m(cornerWorktop.sizeMm + WORKTOP_OVERHANG_MM),
+							m(cornerWorktop.sizeMm),
 						]}
 					/>
 					<WorktopMaterial
 						width={m(cornerWorktop.sizeMm)}
-						depth={m(cornerWorktop.sizeMm + WORKTOP_OVERHANG_MM)}
+						depth={m(cornerWorktop.sizeMm)}
 					/>
 				</mesh>
 			)}
@@ -1302,6 +1316,7 @@ function Run({
 					construction={construction}
 					exposed={exposure.get(position.placed.id)}
 					gaps={sideGaps.get(position.placed.id)}
+					shutSide={shutSides.get(position.placed.id) ?? null}
 					overhanging={overhanging.has(position.placed.id)}
 					door={
 						position.placed.doorStyleId
@@ -1450,9 +1465,11 @@ function MoveHandle({
 	// under a cabinet two feet above it belongs to neither.
 	const hangs = floorHeightMm > 0;
 	// A cabinet on the floor gets its handle on the floor in front of it; one
-	// off the floor gets it just below its own underside, where it reads as
-	// belonging to that cabinet rather than to whatever stands beneath it.
-	const y = hangs ? m(floorHeightMm) - 0.14 : 0.012;
+	// off the floor gets it below its own underside, where it reads as belonging
+	// to that cabinet rather than to whatever stands beneath it — clamped clear
+	// of the floor, which is what a small lift used to bury it under. See
+	// `handleCentreM`.
+	const y = handleCentreM(floorHeightMm);
 	// The plane the ring's bearing is solved against. The handle's own y in
 	// world terms — the group is only ever translated, never lifted by a parent.
 	const planeY = y;
@@ -1479,11 +1496,18 @@ function MoveHandle({
 			{[Math.PI / 2, -Math.PI / 2].map((angle) => (
 				<mesh
 					key={angle}
-					position={[Math.cos(angle) * 0.165, Math.sin(angle) * 0.165, 0.001]}
+					position={[
+						Math.cos(angle) * HANDLE_HEAD_R,
+						Math.sin(angle) * HANDLE_HEAD_R,
+						0.001,
+					]}
 					rotation={[0, 0, angle]}
 					onPointerDown={(e) => onRotate(e, planeY)}
 				>
-					<circleGeometry args={[0.03, 3]} />
+					{/* Turned to face radially outward, so its tip lands
+					    `HANDLE_HEAD_TIP` past the orbit — that sum is `HANDLE_REACH`,
+					    and it is what has to clear the floor. */}
+					<circleGeometry args={[HANDLE_HEAD_TIP, 3]} />
 					<meshBasicMaterial color="#1f5138" />
 				</mesh>
 			))}
@@ -1994,6 +2018,10 @@ export default function PlannerScene({
 		() => rooms.cornerWorktop(layout),
 		[rooms, layout],
 	);
+	const shutSides = useMemo(
+		() => rooms.cornerShutSides(layout),
+		[rooms, layout],
+	);
 	const pickerRuns = useMemo(
 		() => runs.map(({ view, yaw }) => ({ yaw, lengthMm: view.wallWidthMm })),
 		[runs],
@@ -2073,6 +2101,7 @@ export default function PlannerScene({
 						corners={i === 0 ? corners : NO_CORNERS}
 						cornerFilled={cornerFilled}
 						exposure={exposure}
+						shutSides={shutSides}
 						cornerWorktop={i === 0 ? cornerWorktop : null}
 						catalogue={catalogue}
 						engine={engine}

@@ -110,6 +110,7 @@ export function Cabinet({
 	overhanging = false,
 	exposed = FULLY_EXPOSED,
 	gaps = UNBOUNDED_GAPS,
+	shutSide = null,
 	onPointerDown,
 	onPointerMove,
 	onPointerOut,
@@ -159,6 +160,11 @@ export function Cabinet({
 	exposed?: ExposedSides;
 	/** Clear space each side, so a door knows how far it may swing. */
 	gaps?: SideGaps;
+	/** A side whose leaf must not open at all, because the other run's leaf
+	 * swings through the same space — see `cornerShutSides` in `room.ts`. A
+	 * clearance cannot say this: `swingOf` floors every leaf at a right angle,
+	 * and at a right angle these two still cross. */
+	shutSide?: HingeSide | null;
 	onPointerDown: (e: ThreeEvent<PointerEvent>) => void;
 	onPointerMove?: (e: ThreeEvent<PointerEvent>) => void;
 	onPointerOut?: (e: ThreeEvent<PointerEvent>) => void;
@@ -323,6 +329,7 @@ export function Cabinet({
 					door={door}
 					hinge={hinge}
 					gaps={gaps}
+					shutSide={shutSide}
 					open={doorsOpen}
 					doorsHidden={doorsHidden}
 					finishHex={finishHex}
@@ -399,6 +406,7 @@ export function Cabinet({
 								parts={leaves}
 								carcassMm={carcassMm}
 								gaps={gaps}
+								shutSide={shutSide}
 								finishPhoto={finishPhoto}
 								door={door}
 								hinge={hinge}
@@ -724,6 +732,7 @@ function Doors({
 	parts,
 	carcassMm,
 	gaps,
+	shutSide,
 	door,
 	hinge,
 	open,
@@ -739,6 +748,8 @@ function Doors({
 	/** Clear space beside the cabinet — decides how far a leaf may open before
 	 * it would reach into the neighbour. */
 	gaps: SideGaps;
+	/** The side whose leaf cannot open, or null. */
+	shutSide: HingeSide | null;
 	door: DoorStyle;
 	hinge: HingeSide;
 	open: boolean;
@@ -776,7 +787,13 @@ function Doors({
 				const y = m(leaf.centreMm.y);
 				const z = m(leaf.centreMm.z);
 				const leafW = m(leaf.sizeMm.x);
-				const spec = { ...specs[i], maxRad };
+				// A leaf facing an L's inner corner is drawn shut the same way a
+				// suspected flap is: there is no angle it can reach that the other
+				// run's leaf is not already in.
+				const spec =
+					side === shutSide
+						? { ...specs[i], maxRad, suspectFlap: true }
+						: { ...specs[i], maxRad };
 
 				return (
 					<Hinge key={leaf.index} spec={spec} open={open}>

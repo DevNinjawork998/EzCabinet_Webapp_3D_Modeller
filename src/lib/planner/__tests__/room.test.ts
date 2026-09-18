@@ -597,3 +597,102 @@ describe("cornerPositions", () => {
 		expect(right.placed.xMm).toBe(3300);
 	});
 });
+
+describe("cornerShutSides", () => {
+	// A left corner puts the square at the start of the main wall and at the far
+	// end of the side wall, so these two sit either side of it. The side run is
+	// as long as the room is deep: 3600.
+	const pair = (mainMm: number, sideEndMm: number) =>
+		lRoom("left", [base("a", mainMm)], [base("b", sideEndMm - 600)]);
+
+	const both = new Map([
+		["a", "left"],
+		["b", "right"],
+	]);
+
+	it("shuts the leaf each run hinges onto the corner", () => {
+		expect(engine.cornerShutSides(pair(607, 2993))).toEqual(both);
+	});
+
+	it("still shuts them when a cabinet is nudged a few mm off the square", () => {
+		// The bug this replaces: the rule asked whether a cabinet sat against the
+		// square within a millimetre, so a 4mm nudge turned it off while the
+		// leaves still swung through each other.
+		expect(engine.cornerShutSides(pair(611, 2993))).toEqual(both);
+		expect(engine.cornerShutSides(pair(750, 2993))).toEqual(both);
+	});
+
+	it("lets them open once both are out of each other's reach", () => {
+		// These fixtures are a 600 leaf on a 607-deep carcass, so a leaf sweeps
+		// to 1207 from its own wall and back to 205 behind its stile: it clears
+		// the other run's sweep from about 1412 off the corner. Well past that,
+		// nothing is shut.
+		expect(engine.cornerShutSides(pair(1600, 2000))).toEqual(new Map());
+		// Still shut just inside it — the boxes are bounding boxes, so the edge
+		// of the window errs towards shut.
+		expect(engine.cornerShutSides(pair(1400, 2200))).toEqual(both);
+	});
+
+	it("still shuts them when a cabinet is lifted off the floor", () => {
+		// A base carcass is 870 tall, so a 40mm lift still leaves 830mm of shared
+		// height. The bug this replaces skipped every lifted cabinet — `inRun`
+		// bundles lifted in with turned — so hanging one a hair off the floor
+		// switched the rule off while its doors still swung.
+		const lifted = lRoom(
+			"left",
+			[{ ...base("a", 607), hangAtMm: 40 }],
+			[base("b", 2393)],
+		);
+		expect(engine.cornerShutSides(lifted)).toEqual(both);
+	});
+
+	it("lets them open when a lift clears the other run's doors", () => {
+		// Lifted past the other cabinet's top: the two leaves never share a
+		// height, so they cannot meet whatever they do in plan.
+		const hoisted = lRoom(
+			"left",
+			[{ ...base("a", 607), hangAtMm: 1500 }],
+			[base("b", 2393)],
+		);
+		expect(engine.cornerShutSides(hoisted)).toEqual(new Map());
+	});
+
+	it("ignores a turned cabinet, whose front no longer faces out", () => {
+		const turned = lRoom(
+			"left",
+			[{ ...base("a", 607), rotationDeg: 30 }],
+			[base("b", 2393)],
+		);
+		expect(engine.cornerShutSides(turned)).toEqual(new Map());
+	});
+
+	it("leaves a lone cabinet's leaf swinging into the empty corner", () => {
+		expect(engine.cornerShutSides(lRoom("left", [base("a", 607)]))).toEqual(
+			new Map(),
+		);
+	});
+
+	it("shuts nothing on a straight wall", () => {
+		expect(engine.cornerShutSides(asRoom(emptyLayout(4200)))).toEqual(
+			new Map(),
+		);
+	});
+
+	it("opens both once the corner square is deeper than the leaves reach", () => {
+		// Same L, cabinets hard against the square, two square sizes. A filled
+		// corner sets the square to the unit's width.
+		const filled = (squareMm: number): RoomLayout => ({
+			...lRoom(
+				"left",
+				[base("a", squareMm)],
+				[base("b", 3600 - squareMm - 600)],
+			),
+			corner: { side: "left", floor: base("corner", 0, squareMm), wall: null },
+		});
+
+		// 900 against a 607 carcass: the leaves still reach across each other.
+		expect(engine.cornerShutSides(filled(900))).toEqual(both);
+		// 2600 puts the far corner of the square out of either leaf's reach.
+		expect(engine.cornerShutSides(filled(2600))).toEqual(new Map());
+	});
+});

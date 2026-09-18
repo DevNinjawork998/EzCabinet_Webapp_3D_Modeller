@@ -21,6 +21,7 @@ import {
 	spreadMm,
 	WALL_LIMITS,
 } from "./layout";
+import { OVERLAY_OPEN_RAD } from "./swing";
 
 /**
  * A room: one wall, or two meeting at a corner.
@@ -65,7 +66,15 @@ export type RoomLayout = Settings & {
 export type RoomShape = "straight" | CornerSide;
 
 /** How much of each row an empty corner keeps: the depth of the cabinets that
- * meet there, so each run stops where the other run's carcasses end. */
+ * meet there, so each run stops where the other run's carcasses end.
+ *
+ * These are the seed's depths, not the live catalogue's — `cornerSquareMm` is
+ * pure and `runView` is called from the scene without a catalogue to hand, so
+ * a published design of another depth leaves the square a little over- or
+ * under-sized. Everything that draws or measures the corner reads the same
+ * `cornerSquareMm`, so the pieces stay flush with each other either way; what
+ * drifts is only how much dead space the corner keeps. Derive them from the
+ * catalogue's base depth if that gap ever becomes visible. */
 export const EMPTY_CORNER_MM: Record<Row, number> = { floor: 607, wall: 397 };
 
 export function asRoom(layout: PlannerLayout): RoomLayout {
@@ -530,6 +539,114 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		return null;
 	}
 
+	/**
+	 * The leaf that has to stay shut on each side of an L's inner corner.
+	 *
+	 * Two cabinets on perpendicular walls each hinge a leaf toward the corner
+	 * they share, and both leaves swing through the same space: each stands in
+	 * the other's frontage, and at full open one of them reaches back across the
+	 * other run's carcass. This is not a rendering artefact — those two doors
+	 * foul in a real kitchen too, which is why a fitter hinges a corner-adjacent
+	 * door away from the corner, or specifies a blind corner deep enough to
+	 * swallow both.
+	 *
+	 * **It is a reach, not a touch.** The first version of this asked whether a
+	 * cabinet sat against the corner square, within a millimetre, and nudging
+	 * one a few millimetres along the wall turned the whole rule off while the
+	 * doors still went through each other. `swingOf` already carries the warning
+	 * this ignored: a boolean can only ask "touching?", and that flips to
+	 * "clear" the moment a cabinet is slid over while the leaves still collide.
+	 * So each leaf is measured by how far it actually sweeps.
+	 *
+	 * A leaf hinged `d` from the corner, on a carcass `depth` deep, sweeps a
+	 * quarter disc of its own width: out to `d + width` along its wall, back to
+	 * `d - width·|cos(max angle)|` past its own stile, and from its front face
+	 * to one width beyond. Two such boxes — one per run, in the same room frame
+	 * with the corner at the origin — either overlap or they do not. Bounding
+	 * boxes rather than the swept arcs: the error is towards shutting a leaf
+	 * that might just have cleared, which is the safe direction when the
+	 * alternative is a door drawn through a cabinet.
+	 *
+	 * `swingOf` cannot answer this. Its clearance is a distance *along* one run
+	 * and it floors every leaf at a right angle by design; this constraint is
+	 * perpendicular to that run, so it is settled here and the leaf renders
+	 * shut — the same answer `suspectFlap` already gives a leaf that cannot
+	 * swing.
+	 */
+	function cornerShutSides(room: RoomLayout): Map<string, HingeSide> {
+		const shut = new Map<string, HingeSide>();
+		if (!room.corner) return shut;
+		// How far a leaf swings back past its own hinge stile at full open.
+		const backReach = Math.max(0, -Math.cos(OVERLAY_OPEN_RAD));
+		for (const row of ["floor", "wall"] as const) {
+			// The cabinet nearest the corner on each run, and the box its
+			// corner-facing leaf sweeps. Nearest and not adjacent: a leaf reaches
+			// the same distance whether or not it starts against the square.
+			const facing = [];
+			for (const view of views(room)) {
+				const span = view.reserved?.[row];
+				if (!span) continue;
+				// A run's corner is at x = 0 or at its far end; distance from it is
+				// measured from whichever end that is.
+				const atStart = span.startMm < 1;
+				const lengthMm = view.wallWidthMm;
+				const distanceOf = (p: Positioned) =>
+					atStart ? p.xMm : lengthMm - (p.xMm + p.widthMm);
+				let nearest: Positioned | null = null;
+				for (const p of wall.positionsOf(view, row)) {
+					// A *turned* cabinet is skipped: its front no longer faces out
+					// from its wall, so the sweep below is not the box it sweeps. A
+					// *lifted* one is not — `inRun` bundles the two together, and
+					// using it here meant hanging a cabinet a few millimetres off the
+					// floor switched the rule off while its doors still swung.
+					if (p.placed.rotationDeg) continue;
+					if (!nearest || distanceOf(p) < distanceOf(nearest)) nearest = p;
+				}
+				if (!nearest) continue;
+				// An unrecorded leaf count reads as one full-width leaf: the widest
+				// a front could be, so the doubtful case errs towards shut.
+				const leafMm =
+					nearest.widthMm / (nearest.family.geometry?.doorLeaves || 1);
+				const dMm = distanceOf(nearest);
+				// Two leaves at different heights pass each other. Lifting is what
+				// a customer reaches for to clear a corner, so the band has to be
+				// read per cabinet rather than per row.
+				const bottomMm = wall.floorHeightMmOf(nearest, view);
+				const upMm = [bottomMm, bottomMm + nearest.family.heightMm] as const;
+				facing.push({
+					position: nearest,
+					side: (atStart ? "left" : "right") as HingeSide,
+					upMm,
+					// Along this run's own wall, measured from the corner.
+					alongMm: [dMm - leafMm * backReach, dMm + leafMm] as const,
+					// Out from this run's own wall: the front face, plus the leaf.
+					outMm: [
+						nearest.family.depthMm,
+						nearest.family.depthMm + leafMm,
+					] as const,
+				});
+			}
+			// One run with nothing near the corner is a leaf swinging into empty
+			// space, which is fine.
+			if (facing.length < 2) continue;
+			const [main, side] = facing;
+			// One run's "along" is the other's "out": they share the corner, and
+			// their walls are each other's depth axis. The third pair is plain
+			// height — leaves that never share a height cannot meet whatever they
+			// do in plan.
+			const overlaps =
+				main.upMm[1] > side.upMm[0] &&
+				main.upMm[0] < side.upMm[1] &&
+				main.alongMm[1] > side.outMm[0] &&
+				main.alongMm[0] < side.outMm[1] &&
+				side.alongMm[1] > main.outMm[0] &&
+				side.alongMm[0] < main.outMm[1];
+			if (!overlaps) continue;
+			for (const f of facing) shut.set(f.position.placed.id, f.side);
+		}
+		return shut;
+	}
+
 	function addModule(
 		room: RoomLayout,
 		familyId: string,
@@ -769,6 +886,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		exposureOf,
 		endPanels,
 		cornerWorktop,
+		cornerShutSides,
 	};
 }
 

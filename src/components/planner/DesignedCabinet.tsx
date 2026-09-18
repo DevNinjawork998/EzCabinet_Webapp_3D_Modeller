@@ -395,6 +395,7 @@ export function DesignedCabinet({
 	door,
 	hinge,
 	gaps = UNBOUNDED_GAPS,
+	shutSide = null,
 	doorsHidden = false,
 	open,
 	finishHex,
@@ -413,6 +414,11 @@ export function DesignedCabinet({
 	 * this is what decides how far it may swing before it reaches the
 	 * neighbour. */
 	gaps?: SideGaps;
+	/** A side whose leaf must stay shut because the other run's leaf swings
+	 * through the same space — see `cornerShutSides` in `room.ts`. Not
+	 * expressible as a clearance: `swingOf` floors every leaf at a right angle,
+	 * and at a right angle these two still cross. */
+	shutSide?: HingeSide | null;
 	/** Draw no fronts at all, so the interior is unobstructed. */
 	doorsHidden?: boolean;
 	/** Swing the doors open. */
@@ -549,10 +555,15 @@ export function DesignedCabinet({
 				// Kept shut like a suspected flap. See CLAUDE.md, known issues.
 				const flat =
 					(leafMm.max.z - leafMm.min.z) * 2 < leafMm.max.x - leafMm.min.x;
+				// A leaf facing an L's inner corner is kept shut the same way: the
+				// cabinet on the other wall hinges a leaf into the same space, and
+				// there is no angle either can reach that the other is not in.
 				return (
 					<Hinge
 						key={key}
-						spec={flat ? spec : { ...spec, suspectFlap: true }}
+						spec={
+							flat && side !== shutSide ? spec : { ...spec, suspectFlap: true }
+						}
 						open={open}
 					>
 						{rendered}
