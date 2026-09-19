@@ -386,7 +386,7 @@ export const en = {
 		subtotal: "Cabinets",
 		delivery: "Delivery",
 		total: "Total",
-		summary: "{room} · {wall} m wall · {count} {unit}",
+		summary: "{room} · {runs} run · {count} {unit}",
 		noFrontsYet: "no fronts chosen yet",
 		frontsLabel: "{label} fronts",
 		mixedFronts: "mixed fronts",

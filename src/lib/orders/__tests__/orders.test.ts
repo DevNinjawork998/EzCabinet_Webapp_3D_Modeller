@@ -423,3 +423,84 @@ describe("a free-standing order", () => {
 		expect(roomLayoutSchema.safeParse(room).success).toBe(true);
 	});
 });
+
+describe("a v2 order after migration", () => {
+	// Priced by the v2 engine at 9a3fcac, the branch's merge base, on these
+	// exact fixtures. Neither run reaches a wall end, so v3's walls all round
+	// (which bury a flush end v2 would have panelled) change nothing here.
+	const cabinet = {
+		familyId: "base-cabinet",
+		widthMm: 600,
+		doorStyleId: null,
+		hinge: "left" as const,
+	};
+	const settings = {
+		wallWidthMm: 4200,
+		roomDepthMm: 3600,
+		wallToWall: false,
+		ceilingHeightMm: 2400,
+		hangingHeightMm: 1450,
+		wallToCeiling: false,
+		baseSkirting: true,
+	};
+	const priceOf = (design: unknown) =>
+		computePlannerPrice(
+			orderDesignSchema.parse(design).layout,
+			finishId,
+			catalogue,
+		);
+
+	it("prices a straight room as v2 did", () => {
+		const price = priceOf({
+			schemaVersion: 2,
+			layout: {
+				...settings,
+				runs: [
+					{
+						floor: [
+							{ ...cabinet, id: "a", xMm: 1200 },
+							{ ...cabinet, id: "b", xMm: 1800 },
+						],
+						wall: [],
+					},
+				],
+				corner: null,
+			},
+		});
+		expect(price.totalRm).toBeCloseTo(2292.755905511811, 6);
+		expect(price.endPanelCount).toBe(2);
+	});
+
+	it("prices an L with a corner unit as v2 did", () => {
+		const price = priceOf({
+			schemaVersion: 2,
+			layout: {
+				...settings,
+				runs: [
+					{
+						floor: [
+							{ ...cabinet, id: "a", xMm: 607 },
+							{ ...cabinet, id: "b", xMm: 1207 },
+						],
+						wall: [],
+					},
+					{ floor: [{ ...cabinet, id: "s", xMm: 2393 }], wall: [] },
+				],
+				corner: {
+					side: "left",
+					floor: {
+						...cabinet,
+						id: "c",
+						familyId: "corner-base",
+						widthMm: 900,
+						xMm: 0,
+					},
+					wall: null,
+				},
+			},
+		});
+		expect(price.totalRm).toBeCloseTo(5329.685039370079, 6);
+		expect(price.endPanelCount).toBe(4);
+		expect(price.cabinets).toHaveLength(4);
+	});
+});

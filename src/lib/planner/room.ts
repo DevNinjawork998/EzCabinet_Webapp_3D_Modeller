@@ -1335,6 +1335,10 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		freeSpans: (room: RoomLayout, row: Row, run = 0) =>
 			wall.freeSpans(runView(room, run), row),
 		runExtentMm,
+		/** Every wall with a run on it, from its corner, in wall order — what
+		 * the studio's summary and the quote both read. */
+		runExtentsMm: (room: RoomLayout): number[] =>
+			room.runs.map((_, i) => runExtentMm(room, i)).filter((mm) => mm > 0),
 		fits,
 		addModule,
 		offsetsOf: (room: RoomLayout, id: string) => {

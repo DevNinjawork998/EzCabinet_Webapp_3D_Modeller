@@ -243,6 +243,7 @@ export function StudioScreen({
 		rotateFree,
 		rowEndMm,
 		runExtentMm,
+		runExtentsMm,
 		offsetsOf,
 		setGap,
 		setBaseSkirting,
@@ -399,9 +400,7 @@ export function StudioScreen({
 	// packs against, so it misses the far square. `freeWallMm` reads both.
 	const freeMm = Math.round(freeWallMm(layout, run));
 	// Every wall with a run on it, from its corner.
-	const runMetres = layout.runs
-		.map((_, i) => runExtentMm(layout, i))
-		.filter((mm) => mm > 0)
+	const runMetres = runExtentsMm(layout)
 		.map((mm) => `${(mm / 1000).toFixed(2)} m`)
 		.join(" + ");
 	const construction = constructionOf(catalogue);
@@ -465,11 +464,17 @@ export function StudioScreen({
 
 	const canFlush = placed.some((position) => position.family.kind === "tall");
 
+	// Twelve `setWallLength` bisections per wall, so only while the Room panel
+	// is open — otherwise every pointer move of a drag would pay for them. The
+	// panel body (and its three `setShape` probes) is built only then too.
 	const wallRanges = useMemo(
-		() => layout.runs.map((_, i) => wallLengthRangeMm(layout, i)),
-		[layout, wallLengthRangeMm],
+		() =>
+			panel === "room"
+				? layout.runs.map((_, i) => wallLengthRangeMm(layout, i))
+				: [],
+		[panel, layout, wallLengthRangeMm],
 	);
-	const roomBody = (
+	const roomBody = panel === "room" && (
 		<RoomPanel
 			catalogue={catalogue}
 			roomId={roomId}

@@ -369,4 +369,17 @@ describe("clampIntoPlan", () => {
 		expect(c.zMm).toBeCloseTo(-462.5 - 290);
 		expect(footprintInPlan(l, rectCorners(c, 600, 580, 0))).toBe(true);
 	});
+
+	it("pushes one out of a mirrored L's notch, front-left", () => {
+		// Notch: x −2750…−1250, z −462.5…2537.5.
+		const back = clampIntoPlan(lMirror, { xMm: -2300, zMm: -380 }, 600, 580, 0);
+		expect(back.xMm).toBeCloseTo(-2300);
+		expect(back.zMm).toBeCloseTo(-462.5 - 290);
+		expect(footprintInPlan(lMirror, rectCorners(back, 600, 580, 0))).toBe(true);
+		// Deep in the notch beside its inner wall: out through that wall.
+		const side = clampIntoPlan(lMirror, { xMm: -1300, zMm: 1000 }, 600, 580, 0);
+		expect(side.xMm).toBeCloseTo(-1250 + 300);
+		expect(side.zMm).toBeCloseTo(1000);
+		expect(footprintInPlan(lMirror, rectCorners(side, 600, 580, 0))).toBe(true);
+	});
 });

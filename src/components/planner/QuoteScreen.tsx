@@ -8,7 +8,6 @@ import { fill } from "@/lib/copy/fill";
 import { htmlLang } from "@/lib/copy/locales";
 import type { FinishId, RoomTypeId } from "@/lib/planner/catalogue";
 import { doorStyleIn, ratesOf, roomTypeIn } from "@/lib/planner/catalogue";
-import { wallsOf } from "@/lib/planner/floorplan";
 import { computePlannerPrice } from "@/lib/planner/pricing";
 import type { RoomLayout } from "@/lib/planner/room";
 import { useCatalogue, useRoomEngine } from "./CatalogueContext";
@@ -62,7 +61,7 @@ export function QuoteScreen({
 	const locale = useLocale();
 	const router = useRouter();
 	const catalogue = useCatalogue();
-	const { allPositions } = useRoomEngine();
+	const { allPositions, runExtentsMm } = useRoomEngine();
 	const room = roomTypeIn(catalogue, roomId);
 	const price = computePlannerPrice(layout, finish, catalogue);
 	const deliveryRm = ratesOf(catalogue).deliveryFlatRm;
@@ -287,6 +286,7 @@ export function QuoteScreen({
 							selectedIds={new Set()}
 							doorTargetId={null}
 							targetRun={0}
+							frameWholeRoom
 							onLayoutChangeAction={() => {}}
 							onSelectAction={() => {}}
 							pickerRef={pickerRef}
@@ -297,7 +297,11 @@ export function QuoteScreen({
 						<p className="font-semibold text-[13px]">
 							{fill(t.quote.summary, {
 								room: room.label,
-								wall: (wallsOf(layout.plan)[0].lengthMm / 1000).toFixed(2),
+								// Every wall with a run, as the studio reads it.
+								runs:
+									runExtentsMm(layout)
+										.map((mm) => `${(mm / 1000).toFixed(2)} m`)
+										.join(" + ") || "0.00 m",
 								count: placed.length,
 								unit: placed.length === 1 ? t.planner.unit : t.planner.units,
 							})}

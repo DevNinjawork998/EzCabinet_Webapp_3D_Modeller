@@ -390,7 +390,7 @@ export const ms: Dictionary = {
 		subtotal: "Kabinet",
 		delivery: "Penghantaran",
 		total: "Jumlah",
-		summary: "{room} · dinding {wall} m · {count} {unit}",
+		summary: "{room} · baris {runs} · {count} {unit}",
 		noFrontsYet: "belum pilih sebarang pintu",
 		frontsLabel: "pintu {label}",
 		mixedFronts: "pintu bercampur",

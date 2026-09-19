@@ -257,6 +257,7 @@ function FitCamera({
 	view,
 	frame,
 	refitKey,
+	wholeRoom = false,
 }: {
 	runWidthMm: number;
 	roomDepthMm: number;
@@ -269,6 +270,8 @@ function FitCamera({
 	frame: WallFrame;
 	/** Bumped to re-frame on demand — what "reset view" does. */
 	refitKey: number;
+	/** 3D over the whole floor plan rather than the targeted wall. */
+	wholeRoom?: boolean;
 }) {
 	const camera = useThree((s) => s.camera) as PerspectiveCamera;
 	const controls = useThree((s) => s.controls) as {
@@ -334,6 +337,14 @@ function FitCamera({
 			centre = new Vector3(0, 0, 0);
 			direction = VIEW_DIRECTION.plan;
 			radius = Math.hypot(m(planWidthMm), m(planDepthMm)) / 2;
+		} else if (wholeRoom) {
+			// The plan's centre, seen from the same selling angle as the target
+			// wall's 3D view, far enough back for every wall at once.
+			centre = new Vector3(0, height / 2.2, 0);
+			direction = VIEW_DIRECTION["3d"]
+				.clone()
+				.applyAxisAngle(new Vector3(0, 1, 0), frame.yawRad);
+			radius = Math.hypot(m(planWidthMm), height, m(planDepthMm)) / 2;
 		} else {
 			// Framed in the target wall's own frame, then carried into the room's.
 			const c = toWorldMm({ x: 0, y: ceilingHeightMm / 2.2, z: 0 }, frame);
@@ -357,7 +368,7 @@ function FitCamera({
 			controls.target.copy(centre);
 			controls.update();
 		}
-	}, [view, refitKey, camera, controls, elevationWall]);
+	}, [view, refitKey, camera, controls, elevationWall, wholeRoom]);
 
 	return null;
 }
@@ -953,9 +964,10 @@ function Run({
 	/**
 	 * The snap under this pointer event.
 	 *
-	 * `e.point` is already in the scene's outer world space — the same space the
-	 * picked points are stored and rendered in — so no group-offset math is
-	 * needed, only a millimetre conversion.
+	 * `e.point` is in the scene's outer world space — the space the picked
+	 * points are stored and rendered in. It is turned into this run's own frame
+	 * (`toLocalMm`) to snap against the part boxes, and the snap is turned back
+	 * into the world (`toWorldMm`) before it is handed out.
 	 *
 	 * The tolerance comes from `e.distance`, the camera's own distance to what
 	 * the ray hit, so the aperture is a constant number of *pixels* rather than
@@ -1410,13 +1422,18 @@ function Run({
 				// Back within reach of its own wall: slide along it as before.
 				if (f.centre) land(f);
 			} else if (freeStanding) return;
+			// On its own wall it stays there: a floor unit reaches another wall
+			// only by following the floor, so the drop (`dropAt`) and this tint
+			// read one rule.
+			preview(null);
 		}
 
-		// A slide or a lift, never a turn, can hand the cabinet to another wall.
-		// Read against the world ray, before `localRay` turns it into this run's
-		// own frame — the same `floorPointFromRay` `DropPicker` calls for a
-		// palette drop.
-		if (drag.mode === "move" && !drag.vertical) {
+		// A wall unit cannot stand free, so it hops wall to wall instead: a
+		// slide, never a lift or a turn, can hand it to another wall. Read
+		// against the world ray, before `localRay` turns it into this run's own
+		// frame — the same `floorPointFromRay` `DropPicker` calls for a palette
+		// drop.
+		if (drag.mode === "move" && !drag.vertical && !drag.floor) {
 			const origin = DRAG_RAYCASTER.ray.origin;
 			const direction = DRAG_RAYCASTER.ray.direction;
 			const floor = floorPointFromRay(
@@ -1439,11 +1456,11 @@ function Run({
 		}
 
 		if (drag.mode === "rotate") {
-			const plan = planPointFromRay(ray, drag.planeY);
+			const point = planPointFromRay(ray, drag.planeY);
 			const turned = setRotation(
 				layoutRef.current,
 				drag.id,
-				bearingDeg(plan.xMm - drag.centreXMm, plan.zMm - drag.centreZMm) -
+				bearingDeg(point.xMm - drag.centreXMm, point.zMm - drag.centreZMm) -
 					drag.grabDeg,
 				// Dragged, so let it land on square when it is near it.
 				true,
@@ -2235,6 +2252,7 @@ export default function PlannerScene({
 	targetRun,
 	showWallNumbers = false,
 	showPanPuck = true,
+	frameWholeRoom = false,
 	onLayoutChangeAction,
 	onSelectAction,
 	onMeasurePickAction,
@@ -2290,6 +2308,9 @@ export default function PlannerScene({
 	/** The pan gizmo, hidden while the Room panel is open so it doesn't sit on
 	 * top of the wall-length labels. Orbit and zoom stay on regardless. */
 	showPanPuck?: boolean;
+	/** Frame the whole room, not the target wall — the quote's render, which
+	 * is the picture that goes out with the lead. */
+	frameWholeRoom?: boolean;
 	onLayoutChangeAction: (next: RoomLayout) => void;
 	onSelectAction: (id: string | null, additive: boolean) => void;
 	onMeasurePickAction?: (snap: SnapPoint) => void;
@@ -2624,6 +2645,7 @@ export default function PlannerScene({
 				view={view}
 				frame={target.frame}
 				refitKey={refitKey}
+				wholeRoom={frameWholeRoom}
 			/>
 		</Canvas>
 	);

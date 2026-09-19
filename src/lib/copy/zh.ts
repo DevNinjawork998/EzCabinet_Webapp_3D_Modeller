@@ -365,7 +365,7 @@ export const zh: Dictionary = {
 		subtotal: "橱柜",
 		delivery: "运费",
 		total: "总计",
-		summary: "{room} · {wall} 米墙面 · {count} {unit}",
+		summary: "{room} · 整排 {runs} · {count} {unit}",
 		noFrontsYet: "尚未选择门板",
 		frontsLabel: "{label}门板",
 		mixedFronts: "多种门板",

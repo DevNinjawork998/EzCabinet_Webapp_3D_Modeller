@@ -137,6 +137,10 @@ export function Room({
 							((e) => {
 								// A drag that ended here was an orbit, not a tap.
 								if (e.delta > 4) return;
+								// A tap on a cabinet in front of this wall reaches it too, since
+								// R3F hands a click to everything under the ray: only the
+								// nearest hit is a pick of the wall.
+								if (e.intersections[0]?.eventObject !== e.eventObject) return;
 								e.stopPropagation();
 								onWallPick(i);
 							})

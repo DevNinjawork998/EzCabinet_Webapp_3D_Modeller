@@ -1035,3 +1035,54 @@ describe("free-standing cabinets", () => {
 		});
 	});
 });
+
+describe("runExtentsMm", () => {
+	it("reads every wall with a run, in wall order, and skips the empty ones", () => {
+		const room = lRoom([base("a", 0), base("b", 600)], [base("c", 0, 800)]);
+		expect(engine.runExtentsMm(room)).toEqual([
+			engine.runExtentMm(room, 0),
+			engine.runExtentMm(room, 3),
+		]);
+		expect(engine.runExtentsMm(room).every((mm) => mm > 0)).toBe(true);
+		expect(engine.runExtentsMm(kitchen())).toEqual([]);
+	});
+});
+
+describe("a free cabinet in the way of the runs", () => {
+	// 4200 × 3600, back wall at z = -1800. A base unit is 607 deep.
+	it("refuses the corner whose cascade would push a run cabinet into it", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		room = engine.addModule(room, "base-cabinet", 1500, "f", 600, 2);
+		// Just past "a" on the back wall (world x -2100 to -1500), where the
+		// corner square would push it to 607-1207 (x -1493 to -893).
+		const clear = engine.placeFree(room, "f", { xMm: 1200, zMm: -1800 + 400 });
+		room = engine.placeFree(room, "f", { xMm: -1200, zMm: -1800 + 400 });
+		expect(room.free).toHaveLength(1);
+		expect(engine.addModule(room, "base-cabinet", 3000, "s", 600, 3)).toBe(
+			room,
+		);
+		// The same cabinet out of the way lets the corner switch on.
+		expect(
+			isActiveCorner(
+				engine.addModule(clear, "base-cabinet", 3000, "s", 600, 3),
+				3,
+			),
+		).toBe(true);
+	});
+
+	it("stops a shrinking wall at the nearest length the free cabinet fits", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "f", 600);
+		// Right edge at x = 1800 in a room reaching 2100.
+		room = engine.placeFree(room, "f", { xMm: 1500, zMm: 0 });
+		expect(room.free).toHaveLength(1);
+		const { minMm } = engine.wallLengthRangeMm(room, 0);
+		// The room is centred on the plan's origin, so it keeps 1800 each side
+		// — to within `pointInPlan`'s on-the-wall slack.
+		expect(Math.abs(minMm - 3600)).toBeLessThanOrEqual(1);
+		const shrunk = engine.setWallLength(room, 0, 600);
+		expect(runView(shrunk, 0).wallWidthMm).toBe(minMm);
+		expect(shrunk.free).toHaveLength(1);
+		// A millimetre under that is where the cabinet stops fitting.
+		expect(engine.setWallLength(room, 0, minMm - 1)).toEqual(shrunk);
+	});
+});
