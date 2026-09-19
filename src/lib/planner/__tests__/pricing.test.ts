@@ -22,7 +22,6 @@ const {
 	setHangAt,
 	setRotation,
 	setWallToCeiling,
-	setWallToWall,
 	setWallWidth,
 	setWidth,
 } = engine;
@@ -418,10 +417,11 @@ describe("end panels", () => {
 		const result = price(run());
 		const line = result.categories.find((c) => c.id === "endPanels");
 
-		// The run is base 900 + drawers 400 + tall 600 touching from 0, plus one
-		// wall 900 on its own: 2 outer floor sides + 2 wall sides.
-		expect(result.endPanelCount).toBe(4);
-		expect(line?.detail).toEqual({ key: "endPanelsOther", vars: { count: 4 } });
+		// 2 sides: the floor run's right end, and the wall unit's right end — both
+		// runs start flush with the left wall now that every room has walls, so
+		// the wall unit at x = 0 is buried on its left too.
+		expect(result.endPanelCount).toBe(2);
+		expect(line?.detail).toEqual({ key: "endPanelsOther", vars: { count: 2 } });
 	});
 
 	it("prices a tall end above a wall end — a bigger board is a bigger panel", () => {
@@ -431,12 +431,14 @@ describe("end panels", () => {
 		expect(endPanelPriceRm(tall, PLANNER_CATALOGUE).amountRm).toBeGreaterThan(
 			endPanelPriceRm(wall, PLANNER_CATALOGUE).amountRm,
 		);
+		// Both sit at x = 0, flush with the left wall, so the tall unit's left
+		// side is buried and only its right side wears a panel now.
 		expect(endPanelPriceRm(tall, PLANNER_CATALOGUE).amountRm).toBe(
-			RATES.endPanelTallRm * 2,
+			RATES.endPanelTallRm * 1,
 		);
 	});
 
-	it("charges nothing once the run is enclosed and unbroken", () => {
+	it("charges nothing for a run built wall to wall", () => {
 		let run = addModule(
 			setWallWidth(empty(), 1800),
 			"base-cabinet",
@@ -445,28 +447,22 @@ describe("end panels", () => {
 			900,
 		);
 		run = addModule(run, "base-cabinet", 900, "b2", 900);
-		const enclosed = price(setWallToWall(run, true));
-
-		expect(enclosed.endPanelCount).toBe(0);
-		expect(enclosed.categories.some((c) => c.id === "endPanels")).toBe(false);
+		expect(price(run).endPanelCount).toBe(0);
+		expect(price(run).categories.some((c) => c.id === "endPanels")).toBe(false);
 	});
 
-	it("costs less enclosed than open, by exactly the two buried ends", () => {
-		let base = addModule(
-			setWallWidth(empty(), 1800),
+	it("charges the end that stands clear of the wall", () => {
+		// Every room has walls now, so the left end, flush with one, is buried;
+		// the right end stops 600 short of the other and is clad.
+		let run = addModule(
+			setWallWidth(empty(), 2400),
 			"base-cabinet",
 			0,
 			"b1",
 			900,
 		);
-		base = addModule(base, "base-cabinet", 900, "b2", 900);
-		const open = price(base);
-		const shut = price(setWallToWall(base, true));
-
-		expect(open.totalRm - shut.totalRm).toBeCloseTo(
-			RATES.endPanelBaseRm * 2,
-			6,
-		);
+		run = addModule(run, "base-cabinet", 900, "b2", 900);
+		expect(price(run).endPanelCount).toBe(1);
 	});
 });
 
@@ -475,10 +471,10 @@ describe("an L-shaped room", () => {
 	const finish = PLANNER_CATALOGUE.finishes[0].id;
 
 	const lWithBases = () => {
-		let room = rooms.setShape(emptyRoom(4200), "left");
+		let room = emptyRoom(4200);
 		room = rooms.addModule(room, "base-cabinet", 0, "m", 600);
-		room = rooms.addModule(room, "base-cabinet", 3600, "s", 600, 1);
-		return room;
+		// The left wall, run 3: its corner with the back wall is its far end.
+		return rooms.addModule(room, "base-cabinet", 3000, "s", 600, 3);
 	};
 
 	it("runs the worktop along both walls and across the corner once", () => {

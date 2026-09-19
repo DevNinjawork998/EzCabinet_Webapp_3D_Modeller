@@ -128,8 +128,11 @@ export function worktopFt(
 		// same slab — see `inRun`.
 		.filter(inRun)
 		.reduce((total, position) => total + position.widthMm, 0);
-	// The square where two runs meet is one piece of worktop, counted once.
-	return ftOf(mm + (engine.cornerWorktop(layout)?.sizeMm ?? 0));
+	// Each square where two runs meet is one piece of worktop, counted once.
+	const cornersMm = engine
+		.cornerWorktops(layout)
+		.reduce((total, square) => total + square.sizeMm, 0);
+	return ftOf(mm + cornersMm);
 }
 
 /**

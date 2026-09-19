@@ -1,11 +1,15 @@
-import {
-	constructionOf,
-	familyIn,
-	isCorner,
-	ROOM_DEPTH_LIMITS,
-} from "./catalogue";
+import { constructionOf, familyIn, isCorner } from "./catalogue";
 import type { PlannerCatalogue } from "./catalogueSchema";
 import type { ExposedSides } from "./exposure";
+import {
+	type FloorPlan,
+	setWallLength as planWithWallLength,
+	type RoomShape,
+	reshape,
+	shapeOf,
+	vertexKind,
+	wallsOf,
+} from "./floorplan";
 import {
 	type EndPanel,
 	emptyLayout,
@@ -19,96 +23,164 @@ import {
 	type Row,
 	type Span,
 	spreadMm,
-	WALL_LIMITS,
 } from "./layout";
 import { OVERLAY_OPEN_RAD } from "./swing";
 
 /**
- * A room: one wall, or two meeting at a corner.
+ * A room: a floor plan, and a run of cabinets along each of its walls.
  *
- * The stored document. Each wall is a **run**, and each run is still the
- * one-dimensional thing the placement engine in `layout.ts` has always
- * arranged — so rather than teaching that engine about corners, a run is handed
- * to it as an ordinary `PlannerLayout` (`runView`) with the corner square as a
- * reserved span, and the rows it hands back are written into the room
- * (`withRun`). Every clamp, snap, gap and turn rule is reused unchanged.
+ * The stored document. `plan` says what shape the room is; `runs[i]` is the
+ * run along wall i; `corners` holds the corner units, each at a vertex. Every
+ * run is still the one-dimensional thing `layout.ts` arranges — it is handed to
+ * that engine as an ordinary `PlannerLayout` (`runView`), with the corner
+ * squares as reserved spans, and the rows it hands back are written into the
+ * room (`withRun`). Every clamp, snap, gap and turn rule is reused unchanged.
  *
- * Each run's `xMm` reads left to right *facing that wall from inside the
- * room*. The corner therefore sits at the start of the main wall and the end of
- * the side wall for a left corner, and the other way round for a right one —
- * which is what lets the scene draw the side run by turning the same `Run`
- * ninety degrees, without mirroring anything.
+ * Each run's `xMm` reads left to right *facing that wall from inside the room*
+ * — the winding `floorplan.ts` guarantees — so vertex i is the right end of run
+ * i and the left end of run i+1.
+ *
+ * **A corner square is derived, never stored.** An inside corner reserves its
+ * square on both walls only when both walls hold cabinets, or it holds a corner
+ * unit. A single wall of cabinets runs right into the corner, as it would in a
+ * real kitchen with nothing on the next wall.
  *
  * Pure, like the rest of `lib/planner`.
  */
 
 export type Run = { floor: PlacedModule[]; wall: PlacedModule[] };
 
-export type CornerSide = "left" | "right";
-
-export type Corner = {
-	/** Which end of the main wall the side wall stands at. */
-	side: CornerSide;
-	/** The corner units, one per row, or `null` while a slot is empty. */
+/** The corner units at one inside corner. */
+export type CornerUnits = {
+	vertex: number;
 	floor: PlacedModule | null;
 	wall: PlacedModule | null;
 };
 
-type Settings = Omit<PlannerLayout, "floor" | "wall" | "reserved">;
+type Settings = Omit<
+	PlannerLayout,
+	| "floor"
+	| "wall"
+	| "reserved"
+	| "endWalls"
+	| "wallWidthMm"
+	| "roomDepthMm"
+	| "wallToWall"
+>;
 
 export type RoomLayout = Settings & {
-	/** `[main]` for one wall, `[main, side]` for an L. */
+	plan: FloorPlan;
+	/** One per wall of `plan`, in wall order. */
 	runs: Run[];
-	/** Present exactly when there is a side wall. */
-	corner: Corner | null;
+	corners: CornerUnits[];
 };
 
-export type RoomShape = "straight" | CornerSide;
-
 /** How much of each row an empty corner keeps: the depth of the cabinets that
- * meet there, so each run stops where the other run's carcasses end.
- *
- * These are the seed's depths, not the live catalogue's — `cornerSquareMm` is
- * pure and `runView` is called from the scene without a catalogue to hand, so
- * a published design of another depth leaves the square a little over- or
- * under-sized. Everything that draws or measures the corner reads the same
- * `cornerSquareMm`, so the pieces stay flush with each other either way; what
- * drifts is only how much dead space the corner keeps. Derive them from the
- * catalogue's base depth if that gap ever becomes visible. */
+ * meet there. The seed's depths, not the live catalogue's — see the history of
+ * this constant in git for why that is tolerable. */
 export const EMPTY_CORNER_MM: Record<Row, number> = { floor: 607, wall: 397 };
 
+const emptyRun = (): Run => ({ floor: [], wall: [] });
+
+/** One wall's layout as the back wall of a rectangular room. `wallToWall` has
+ * no meaning in a room with walls all round, so it is dropped. */
 export function asRoom(layout: PlannerLayout): RoomLayout {
-	const { floor, wall, reserved: _reserved, ...settings } = layout;
-	return { ...settings, runs: [{ floor, wall }], corner: null };
+	const {
+		floor,
+		wall,
+		reserved: _reserved,
+		endWalls: _endWalls,
+		wallWidthMm,
+		roomDepthMm,
+		wallToWall: _wallToWall,
+		...settings
+	} = layout;
+	return {
+		...settings,
+		plan: { template: "rect", widthMm: wallWidthMm, depthMm: roomDepthMm },
+		runs: [{ floor, wall }, emptyRun(), emptyRun(), emptyRun()],
+		corners: [],
+	};
 }
 
 export const emptyRoom = (
 	...args: Parameters<typeof emptyLayout>
 ): RoomLayout => asRoom(emptyLayout(...args));
 
-export const shapeOf = (room: RoomLayout): RoomShape =>
-	room.corner ? room.corner.side : "straight";
-
-/** The side of the corner square along each wall, in one row. */
-export const cornerSquareMm = (room: RoomLayout, row: Row): number =>
-	room.corner?.[row]?.widthMm ?? EMPTY_CORNER_MM[row];
-
+const countOf = (room: RoomLayout) => room.runs.length;
+const startVertexOf = (room: RoomLayout, run: number) =>
+	(run - 1 + countOf(room)) % countOf(room);
+const hasCabinets = (run: Run | undefined) =>
+	run !== undefined && run.floor.length + run.wall.length > 0;
 const lengthOf = (room: RoomLayout, run: number) =>
-	run === 0 ? room.wallWidthMm : room.roomDepthMm;
+	wallsOf(room.plan)[run].lengthMm;
 
-/** Whether this run's corner is at its far end (x = length) rather than x = 0:
- * the main wall of a right L, the side wall of a left one. */
-const cornerAtEnd = (room: RoomLayout, run: number): boolean =>
-	room.corner !== null &&
-	(run === 0 ? room.corner.side === "right" : room.corner.side === "left");
+export const cornerAt = (
+	room: RoomLayout,
+	vertex: number,
+): CornerUnits | null =>
+	room.corners.find((corner) => corner.vertex === vertex) ?? null;
 
-/** The end of a run nearest its corner — where a click-added cabinet should
- * land. The start of the wall when there is no corner. */
+export function isActiveCorner(room: RoomLayout, vertex: number): boolean {
+	if (vertexKind(room.plan, vertex) !== "inside") return false;
+	const units = cornerAt(room, vertex);
+	if (units?.floor || units?.wall) return true;
+	return (
+		hasCabinets(room.runs[vertex]) &&
+		hasCabinets(room.runs[(vertex + 1) % countOf(room)])
+	);
+}
+
+/** The side of a corner's square along each wall, in one row. */
+export const cornerSquareMm = (room: RoomLayout, vertex: number, row: Row) =>
+	cornerAt(room, vertex)?.[row]?.widthMm ?? EMPTY_CORNER_MM[row];
+
+/** The active corner squares along one run, in one row, start before end. */
+export function cornerSpans(
+	room: RoomLayout,
+	run: number,
+	row: Row,
+): { vertex: number; atStart: boolean; span: Span }[] {
+	const spans: { vertex: number; atStart: boolean; span: Span }[] = [];
+	const start = startVertexOf(room, run);
+	if (isActiveCorner(room, start)) {
+		spans.push({
+			vertex: start,
+			atStart: true,
+			span: { startMm: 0, endMm: cornerSquareMm(room, start, row) },
+		});
+	}
+	if (isActiveCorner(room, run)) {
+		const lengthMm = lengthOf(room, run);
+		spans.push({
+			vertex: run,
+			atStart: false,
+			span: {
+				startMm: lengthMm - cornerSquareMm(room, run, row),
+				endMm: lengthMm,
+			},
+		});
+	}
+	return spans;
+}
+
+/** Which corner a corner unit added from this wall goes to: its start when
+ * that is an inside corner, else its end, else none. */
+export function cornerVertexFor(room: RoomLayout, run: number): number | null {
+	const start = startVertexOf(room, run);
+	if (vertexKind(room.plan, start) === "inside") return start;
+	return vertexKind(room.plan, run) === "inside" ? run : null;
+}
+
+/** Where a click-added cabinet should land: the start of the wall, unless the
+ * start is the notch's outside corner and the end is a real one. */
 export const nearCornerMm = (room: RoomLayout, run: number): number =>
-	cornerAtEnd(room, run) ? lengthOf(room, run) : 0;
+	vertexKind(room.plan, startVertexOf(room, run)) === "outside" &&
+	vertexKind(room.plan, run) === "inside"
+		? lengthOf(room, run)
+		: 0;
 
-/** A module seen from the other end of a wall of this length. Hinge and turn
- * flip with it, so the cabinet stays the same cabinet. Its own inverse. */
+/** A module seen from the other end of a wall of this length. Its own inverse. */
 const mirrorModule =
 	(lengthMm: number) =>
 	(module: PlacedModule): PlacedModule => ({
@@ -120,12 +192,37 @@ const mirrorModule =
 			: {}),
 	});
 
-/** A run's view read from its corner end, so the one-wall engine — which only
- * knows a corner at x = 0 — packs and measures from the corner. Its own
- * inverse. */
+/** A run whose only corner is at its far end packs and measures from there. */
+const packsFromEnd = (room: RoomLayout, run: number) => {
+	const spans = cornerSpans(room, run, "floor");
+	return spans.length === 1 && !spans[0].atStart;
+};
+
+export function runView(room: RoomLayout, run: number): PlannerLayout {
+	const { plan, runs, corners: _corners, ...settings } = room;
+	const wall = wallsOf(plan)[run];
+	const floor = cornerSpans(room, run, "floor").map((c) => c.span);
+	const hung = cornerSpans(room, run, "wall").map((c) => c.span);
+	return {
+		...settings,
+		wallWidthMm: wall.lengthMm,
+		roomDepthMm: wall.depthMm,
+		wallToWall: false,
+		endWalls: {
+			left: vertexKind(plan, startVertexOf(room, run)) === "inside",
+			right: vertexKind(plan, run) === "inside",
+		},
+		floor: runs[run].floor,
+		wall: runs[run].wall,
+		...(floor.length > 0 ? { reserved: { floor, wall: hung } } : {}),
+	};
+}
+
+/** A run's view read from its far end, when that is its only corner, so the
+ * one-wall engine — which packs toward x = 0 — packs toward the corner. */
 function fromCorner(room: RoomLayout, run: number): PlannerLayout {
 	const view = runView(room, run);
-	if (!cornerAtEnd(room, run)) return view;
+	if (!packsFromEnd(room, run)) return view;
 	const L = view.wallWidthMm;
 	const flip = (span: Span): Span => ({
 		startMm: L - span.endMm,
@@ -135,53 +232,13 @@ function fromCorner(room: RoomLayout, run: number): PlannerLayout {
 		...view,
 		floor: view.floor.map(mirrorModule(L)),
 		wall: view.wall.map(mirrorModule(L)),
-		...(view.reserved
-			? {
-					reserved: {
-						floor: view.reserved.floor?.map(flip),
-						wall: view.reserved.wall?.map(flip),
-					},
-				}
-			: {}),
+		reserved: {
+			floor: view.reserved?.floor?.map(flip),
+			wall: view.reserved?.wall?.map(flip),
+		},
 	};
 }
 
-function reservedSpan(room: RoomLayout, run: number, row: Row): Span | null {
-	if (!room.corner) return null;
-	const lengthMm = lengthOf(room, run);
-	const squareMm = cornerSquareMm(room, row);
-	const atStart =
-		run === 0 ? room.corner.side === "left" : room.corner.side === "right";
-	return atStart
-		? { startMm: 0, endMm: squareMm }
-		: { startMm: lengthMm - squareMm, endMm: lengthMm };
-}
-
-/**
- * One run as the one-wall engine sees it.
- *
- * The side wall's length is the room's depth, and the room it faces is as deep
- * as the main wall is long, so the two figures swap. Its far end is the open
- * front of the room, never a wall, so it is never built wall to wall.
- */
-export function runView(room: RoomLayout, run: number): PlannerLayout {
-	const { runs, corner: _corner, ...settings } = room;
-	const isSide = run === 1;
-	const floor = reservedSpan(room, run, "floor");
-	const wall = reservedSpan(room, run, "wall");
-	return {
-		...settings,
-		wallWidthMm: isSide ? room.roomDepthMm : room.wallWidthMm,
-		roomDepthMm: isSide ? room.wallWidthMm : room.roomDepthMm,
-		wallToWall: isSide ? false : room.wallToWall,
-		floor: runs[run].floor,
-		wall: runs[run].wall,
-		...(floor && wall ? { reserved: { floor: [floor], wall: [wall] } } : {}),
-	};
-}
-
-/** Write a view's rows back. Rows only: a view's swapped axes and reserved
- * spans are derived, and must never land in the document. */
 export function withRun(
 	room: RoomLayout,
 	run: number,
@@ -204,15 +261,6 @@ export const runIndexOf = (room: RoomLayout, id: string): number =>
 			run.floor.some((m) => m.id === id) || run.wall.some((m) => m.id === id),
 	);
 
-/** How far a run's group is turned about the room's vertical axis. Counter-
- * clockwise from above, as three's `rotation.y` is. */
-export const runYawRad = (room: RoomLayout, run: number): number =>
-	run === 0 || !room.corner
-		? 0
-		: room.corner.side === "left"
-			? Math.PI / 2
-			: -Math.PI / 2;
-
 function mapModule(
 	room: RoomLayout,
 	id: string,
@@ -226,11 +274,11 @@ function mapModule(
 			floor: run.floor.map(hit),
 			wall: run.wall.map(hit),
 		})),
-		corner: room.corner && {
-			...room.corner,
-			floor: room.corner.floor && hit(room.corner.floor),
-			wall: room.corner.wall && hit(room.corner.wall),
-		},
+		corners: room.corners.map((corner) => ({
+			...corner,
+			floor: corner.floor && hit(corner.floor),
+			wall: corner.wall && hit(corner.wall),
+		})),
 	};
 }
 
@@ -238,13 +286,10 @@ export const setDoor = (
 	room: RoomLayout,
 	id: string,
 	doorStyleId: string | null,
-): RoomLayout => mapModule(room, id, (module) => ({ ...module, doorStyleId }));
+) => mapModule(room, id, (module) => ({ ...module, doorStyleId }));
 
-export const setHinge = (
-	room: RoomLayout,
-	id: string,
-	hinge: HingeSide,
-): RoomLayout => mapModule(room, id, (module) => ({ ...module, hinge }));
+export const setHinge = (room: RoomLayout, id: string, hinge: HingeSide) =>
+	mapModule(room, id, (module) => ({ ...module, hinge }));
 
 export function setDoors(
 	room: RoomLayout,
@@ -260,13 +305,14 @@ export function setDoors(
  * The placement engine for a whole room, bound to one catalogue.
  *
  * Same names and arguments as `plannerEngine`, taking a `RoomLayout`. Row
- * questions take an optional run index, defaulting to the main wall; edits
+ * questions take an optional run index, defaulting to the back wall; edits
  * addressed by id go to whichever run holds that id.
  */
 export function roomEngine(catalogue: PlannerCatalogue) {
 	const wall = plannerEngine(catalogue);
-
 	const views = (room: RoomLayout) => room.runs.map((_, i) => runView(room, i));
+	const allClear = (room: RoomLayout) =>
+		views(room).every((v) => wall.isClear(v));
 
 	/** An id-addressed edit, applied in the run that holds the id. */
 	const inRunOf =
@@ -280,129 +326,127 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 				: withRun(room, run, edit(runView(room, run), id, ...args));
 		};
 
-	/**
-	 * Every row of the room pooled into one view, for questions about height
-	 * alone. Positions along a wall mean nothing across two walls, so nothing
-	 * that reads `xMm` may be asked of this.
-	 */
+	/** Every row pooled, for questions about height alone. Nothing that reads
+	 * `xMm` may be asked of this. */
 	const pooled = (room: RoomLayout): PlannerLayout => {
 		const { reserved: _reserved, ...main } = runView(room, 0);
-		const slot = (row: Row) => (room.corner?.[row] ? [room.corner[row]] : []);
+		const units = (row: Row) =>
+			room.corners.flatMap((corner) => {
+				const unit = corner[row];
+				return unit ? [unit] : [];
+			});
 		return {
 			...main,
-			floor: [...room.runs.flatMap((run) => run.floor), ...slot("floor")],
-			wall: [...room.runs.flatMap((run) => run.wall), ...slot("wall")],
+			floor: [...room.runs.flatMap((run) => run.floor), ...units("floor")],
+			wall: [...room.runs.flatMap((run) => run.wall), ...units("wall")],
 		};
 	};
 
-	/**
-	 * The corner units, placed along the main wall so the main run's scene
-	 * draws them. Designs are drawn for the left-hand corner; the right-hand one
-	 * is the same unit turned a quarter clockwise — never mirrored, which would
-	 * flip its faces inside out.
-	 */
-	function cornerPositions(room: RoomLayout): Positioned[] {
-		const corner = room.corner;
-		if (!corner) return [];
+	/** The corner units drawn with this run: the ones at its start. Designs are
+	 * drawn for the left-hand corner, and by the winding every corner is the
+	 * left-hand corner of the wall after it — so no unit is ever turned. */
+	function cornerPositionsOf(room: RoomLayout, run: number): Positioned[] {
+		const units = cornerAt(room, startVertexOf(room, run));
+		if (!units) return [];
 		return (["floor", "wall"] as const).flatMap((row) => {
-			const placed = corner[row];
+			const placed = units[row];
 			const family = placed && familyIn(catalogue, placed.familyId);
-			const span = reservedSpan(room, 0, row);
-			if (!placed || !family || !span) return [];
-			// The corner decides both, whatever a client sent: `rotationDeg` on a
-			// stored corner unit is never trusted.
+			if (!placed || !family) return [];
+			// The corner decides where it stands, whatever a client sent.
 			const { rotationDeg: _ignored, ...rest } = placed;
-			const shown: PlacedModule = {
-				...rest,
-				xMm: span.startMm,
-				...(corner.side === "right" ? { rotationDeg: 270 } : {}),
-			};
 			return [
-				{ placed: shown, family, widthMm: placed.widthMm, xMm: span.startMm },
+				{
+					placed: { ...rest, xMm: 0 },
+					family,
+					widthMm: placed.widthMm,
+					xMm: 0,
+				},
 			];
 		});
 	}
 
+	const cornerPositions = (room: RoomLayout): Positioned[] =>
+		room.runs.flatMap((_, run) => cornerPositionsOf(room, run));
+
 	/**
-	 * Make room for the corner square by sliding cabinets, not whole rows.
-	 *
-	 * Walks each run's floor and wall cabinets together, ordered by distance
-	 * from the corner end, keeping one cursor per row for how far that row is
-	 * claimed so far — starting at the square's own edge. A cabinet moves only
-	 * if its own footprint starts before the cursor of every row it occupies:
-	 * its own row, plus the *other* row too for a tall unit, the same two-way
-	 * rule `occupiedSpans` uses, since a tall unit stands floor to ceiling. It
-	 * is pushed exactly clear and never pulled toward the corner, and the
-	 * cursors of the rows it occupies advance to its new far edge — so a
-	 * cabinet already past the square, with a free gap behind it, stays put.
-	 * A run with nowhere to slide is not refused here; `isClear` is still the
-	 * gate for that, in `placeCorner` and `setShape`.
+	 * Slide one run's cabinets clear of one corner's square. The old
+	 * `cascadeCorner` body, for one end of one run: walk both rows ordered by
+	 * distance from that end, one cursor per row, a tall unit claiming both.
 	 */
-	function cascadeCorner(room: RoomLayout): RoomLayout {
-		if (!room.corner) return room;
-		const { side } = room.corner;
-		return room.runs.reduce((next, _, run) => {
-			const view = runView(next, run);
-			if (!view.reserved) return next;
-			const atStart = run === 0 ? side === "left" : side === "right";
-			const lengthMm = lengthOf(next, run);
-
-			const entries = (["floor", "wall"] as const).flatMap((row) =>
-				wall.positionsOf(view, row).map((position) => {
-					const spread = spreadMm(position);
-					const startMm = position.xMm - spread;
-					const endMm = position.xMm + position.widthMm + spread;
-					return {
-						id: position.placed.id,
-						nearMm: atStart ? startMm : lengthMm - endMm,
-						farMm: atStart ? endMm : lengthMm - startMm,
-						rows:
-							position.family.kind === "tall"
-								? (["floor", "wall"] as const)
-								: ([row] as const),
-					};
-				}),
-			);
-			entries.sort((a, b) => a.nearMm - b.nearMm);
-
-			const cursor: Record<Row, number> = {
-				floor: cornerSquareMm(next, "floor"),
-				wall: cornerSquareMm(next, "wall"),
-			};
-			const shiftById = new Map<string, number>();
-			for (const entry of entries) {
-				const requiredMm = Math.max(...entry.rows.map((row) => cursor[row]));
-				const shiftMm = Math.max(0, requiredMm - entry.nearMm);
-				if (shiftMm > 0) shiftById.set(entry.id, shiftMm);
-				const newFarMm = entry.farMm + shiftMm;
-				for (const row of entry.rows)
-					cursor[row] = Math.max(cursor[row], newFarMm);
-			}
-			if (shiftById.size === 0) return next;
-
-			const apply = (module: PlacedModule): PlacedModule => {
-				const shiftMm = shiftById.get(module.id);
-				return shiftMm
-					? { ...module, xMm: module.xMm + (atStart ? shiftMm : -shiftMm) }
-					: module;
-			};
-			return withRun(next, run, {
-				...view,
-				floor: view.floor.map(apply),
-				wall: view.wall.map(apply),
-			});
-		}, room);
+	function cascadeRun(
+		room: RoomLayout,
+		run: number,
+		vertex: number,
+		atStart: boolean,
+	): RoomLayout {
+		const view = runView(room, run);
+		const lengthMm = view.wallWidthMm;
+		const entries = (["floor", "wall"] as const).flatMap((row) =>
+			wall.positionsOf(view, row).map((position) => {
+				const spread = spreadMm(position);
+				const startMm = position.xMm - spread;
+				const endMm = position.xMm + position.widthMm + spread;
+				return {
+					id: position.placed.id,
+					nearMm: atStart ? startMm : lengthMm - endMm,
+					farMm: atStart ? endMm : lengthMm - startMm,
+					rows:
+						position.family.kind === "tall"
+							? (["floor", "wall"] as const)
+							: ([row] as const),
+				};
+			}),
+		);
+		entries.sort((a, b) => a.nearMm - b.nearMm);
+		const cursor: Record<Row, number> = {
+			floor: cornerSquareMm(room, vertex, "floor"),
+			wall: cornerSquareMm(room, vertex, "wall"),
+		};
+		const shiftById = new Map<string, number>();
+		for (const entry of entries) {
+			const requiredMm = Math.max(...entry.rows.map((row) => cursor[row]));
+			const shiftMm = Math.max(0, requiredMm - entry.nearMm);
+			if (shiftMm > 0) shiftById.set(entry.id, shiftMm);
+			for (const row of entry.rows)
+				cursor[row] = Math.max(cursor[row], entry.farMm + shiftMm);
+		}
+		if (shiftById.size === 0) return room;
+		const apply = (module: PlacedModule): PlacedModule => {
+			const shiftMm = shiftById.get(module.id);
+			return shiftMm
+				? { ...module, xMm: module.xMm + (atStart ? shiftMm : -shiftMm) }
+				: module;
+		};
+		return withRun(room, run, {
+			...view,
+			floor: view.floor.map(apply),
+			wall: view.wall.map(apply),
+		});
 	}
+
+	/** Make room for one corner's square on both its walls. Whether the result
+	 * fits is `isClear`'s question, asked by the callers. */
+	function cascadeCorner(room: RoomLayout, vertex: number): RoomLayout {
+		if (!isActiveCorner(room, vertex)) return room;
+		const ended = cascadeRun(room, vertex, vertex, false);
+		return cascadeRun(ended, (vertex + 1) % countOf(ended), vertex, true);
+	}
+
+	const cascadeAll = (room: RoomLayout) =>
+		room.runs.reduce((next, _, vertex) => cascadeCorner(next, vertex), room);
 
 	function placeCorner(
 		room: RoomLayout,
 		familyId: string,
+		vertex: number | null,
 		id: string = newId(),
 	): RoomLayout {
 		const family = familyIn(catalogue, familyId);
-		if (!room.corner || !family || !isCorner(family)) return room;
+		if (vertex === null || !family || !isCorner(family)) return room;
+		if (vertexKind(room.plan, vertex) !== "inside") return room;
 		const row: Row = family.kind === "wall" ? "wall" : "floor";
-		if (room.corner[row]) return room;
+		const existing = cornerAt(room, vertex);
+		if (existing?.[row]) return room;
 		const placed: PlacedModule = {
 			id,
 			familyId,
@@ -410,50 +454,102 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			// Priced all-in with its door, like every cabinet — see `addModule`.
 			doorStyleId: catalogue.doorStyles[0]?.id ?? null,
 			hinge: "left",
-			// Unused: a corner unit's place is the corner. `cornerPositions` says where.
+			// Unused: a corner unit's place is its corner.
 			xMm: 0,
 		};
-		const next = cascadeCorner({
-			...room,
-			corner: { ...room.corner, [row]: placed },
-		});
-		return views(next).every((view) => wall.isClear(view)) ? next : room;
+		const slot: CornerUnits = {
+			vertex,
+			floor: row === "floor" ? placed : (existing?.floor ?? null),
+			wall: row === "wall" ? placed : (existing?.wall ?? null),
+		};
+		const next = cascadeCorner(
+			{
+				...room,
+				corners: [...room.corners.filter((c) => c.vertex !== vertex), slot],
+			},
+			vertex,
+		);
+		return allClear(next) ? next : room;
 	}
 
-	function setCornerSide(room: RoomLayout, side: CornerSide): RoomLayout {
-		if (!room.corner || room.corner.side === side) return room;
-		return {
+	/** Another template. Refused while any wall but the back wall, or any
+	 * corner, holds something — the same answer the old L → straight gave rather
+	 * than deleting what the customer placed. */
+	function setShape(room: RoomLayout, shape: RoomShape): RoomLayout {
+		if (shapeOf(room.plan) === shape) return room;
+		if (room.runs.slice(1).some(hasCabinets)) return room;
+		if (room.corners.some((c) => c.floor || c.wall)) return room;
+		const plan = reshape(room.plan, shape);
+		const next: RoomLayout = {
 			...room,
-			corner: { ...room.corner, side },
-			runs: room.runs.map((run, i) => ({
-				floor: run.floor.map(mirrorModule(lengthOf(room, i))),
-				wall: run.wall.map(mirrorModule(lengthOf(room, i))),
-			})),
+			plan,
+			runs: wallsOf(plan).map((_, i) => (i === 0 ? room.runs[0] : emptyRun())),
+			corners: [],
 		};
+		return allClear(next) ? next : room;
+	}
+
+	/** The room with a new plan of the same template, or null if a run no longer
+	 * fits. A run whose only active corner is its far end moves with it. */
+	function resizedTo(room: RoomLayout, plan: FloorPlan): RoomLayout | null {
+		if (JSON.stringify(plan) === JSON.stringify(room.plan)) return room;
+		const before = wallsOf(room.plan);
+		const after = wallsOf(plan);
+		const next: RoomLayout = {
+			...room,
+			plan,
+			runs: room.runs.map((run, i) => {
+				const shiftMm = after[i].lengthMm - before[i].lengthMm;
+				const followsEnd =
+					isActiveCorner(room, i) &&
+					!isActiveCorner(room, startVertexOf(room, i));
+				if (!followsEnd || shiftMm === 0) return run;
+				const shift = (module: PlacedModule) => ({
+					...module,
+					xMm: module.xMm + shiftMm,
+				});
+				return { floor: run.floor.map(shift), wall: run.wall.map(shift) };
+			}),
+		};
+		return allClear(next) ? next : null;
 	}
 
 	/**
-	 * One wall or an L. Going straight is refused while the side wall or the
-	 * corner holds anything — the same answer `setWallWidth` gives rather than
-	 * deleting cabinets the customer placed. Going to an L moves the main run
-	 * out of the new corner if it has the wall to, and is refused if not.
+	 * Set one wall's length, down to what its cabinets need. A wall that would
+	 * cut through a cabinet stops at the nearest length that does not — found by
+	 * bisection, so the answer is whatever `isClear` says and no second rule.
 	 */
-	function setShape(room: RoomLayout, shape: RoomShape): RoomLayout {
-		if (shape === shapeOf(room)) return room;
-		if (shape === "straight") {
-			const side = room.runs[1];
-			if (side && (side.floor.length > 0 || side.wall.length > 0)) return room;
-			if (room.corner?.floor || room.corner?.wall) return room;
-			return { ...room, runs: [room.runs[0]], corner: null };
+	function setWallLength(
+		room: RoomLayout,
+		wallIndex: number,
+		mm: number,
+	): RoomLayout {
+		const current = wallsOf(room.plan)[wallIndex]?.lengthMm;
+		if (current === undefined) return room;
+		const attempt = (lengthMm: number) =>
+			resizedTo(room, planWithWallLength(room.plan, wallIndex, lengthMm));
+		const wanted = Math.round(mm);
+		const direct = attempt(wanted);
+		if (direct) return direct;
+		// ponytail: bisection assumes "fits" is monotonic between the current
+		// length and the one asked for — true while a wall edit only stretches
+		// or squeezes runs; revisit if a template couples walls otherwise.
+		let good = current;
+		let bad = wanted;
+		while (Math.abs(bad - good) > 1) {
+			const mid = Math.round((good + bad) / 2);
+			if (attempt(mid)) good = mid;
+			else bad = mid;
 		}
-		if (room.corner) return setCornerSide(room, shape);
-		const next = cascadeCorner({
-			...room,
-			runs: [room.runs[0], { floor: [], wall: [] }],
-			corner: { side: shape, floor: null, wall: null },
-		});
-		return views(next).every((view) => wall.isClear(view)) ? next : room;
+		return good === current ? room : (attempt(good) ?? room);
 	}
+
+	/** The range `setWallLength` will actually reach, for the field's limits. */
+	const wallLengthRangeMm = (room: RoomLayout, wallIndex: number) => ({
+		minMm: wallsOf(setWallLength(room, wallIndex, 0).plan)[wallIndex].lengthMm,
+		maxMm: wallsOf(setWallLength(room, wallIndex, 1e6).plan)[wallIndex]
+			.lengthMm,
+	});
 
 	function exposureOf(room: RoomLayout): Map<string, ExposedSides> {
 		const touchingMm = constructionOf(catalogue).panelThicknessMm;
@@ -462,23 +558,24 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			const view = runView(room, run);
 			for (const [id, sides] of wall.exposureOf(view)) exposure.set(id, sides);
 			for (const row of ["floor", "wall"] as const) {
-				const span = view.reserved?.[row]?.[0];
-				// An empty corner leaves the ends beside it in the open.
-				if (!span || !room.corner?.[row]) continue;
-				for (const position of wall.positionsOf(view, row)) {
-					const sides = exposure.get(position.placed.id);
-					if (!sides) continue;
-					const spread = spreadMm(position);
-					exposure.set(position.placed.id, {
-						left:
-							sides.left &&
-							Math.abs(position.xMm - spread - span.endMm) > touchingMm,
-						right:
-							sides.right &&
-							Math.abs(
-								position.xMm + position.widthMm + spread - span.startMm,
-							) > touchingMm,
-					});
+				for (const { vertex, span } of cornerSpans(room, run, row)) {
+					// An empty corner square leaves the end beside it in the open.
+					if (!cornerAt(room, vertex)?.[row]) continue;
+					for (const position of wall.positionsOf(view, row)) {
+						const sides = exposure.get(position.placed.id);
+						if (!sides) continue;
+						const spread = spreadMm(position);
+						exposure.set(position.placed.id, {
+							left:
+								sides.left &&
+								Math.abs(position.xMm - spread - span.endMm) > touchingMm,
+							right:
+								sides.right &&
+								Math.abs(
+									position.xMm + position.widthMm + spread - span.startMm,
+								) > touchingMm,
+						});
+					}
 				}
 			}
 		});
@@ -497,51 +594,57 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			.filter((panel) => exposure.get(panel.moduleId)?.[panel.side]);
 	}
 
-	/**
-	 * The square of worktop over the corner: over a corner base unit, or closing
-	 * an empty corner when a base unit in either run meets it. Otherwise there
-	 * is no counter to join. The same answer feeds the scene and the price.
-	 */
-	function cornerWorktop(
+	/** The worktop square at each active corner: over a corner base unit, or
+	 * closing an empty square that a base unit on either wall meets. */
+	function cornerWorktops(
 		room: RoomLayout,
-	): { sizeMm: number; topMm: number } | null {
-		if (!room.corner) return null;
-		// A non-base corner unit (a tall corner, once drawn) fills the corner
-		// without closing it for a worktop — no falling through to the
-		// empty-square rule below.
-		const occupant =
-			room.corner.floor && familyIn(catalogue, room.corner.floor.familyId);
-		if (occupant && occupant.kind !== "base") return null;
-		const unit = cornerPositions(room).find((p) => p.family.kind === "base");
-		if (unit) {
-			return {
-				sizeMm: unit.widthMm,
-				topMm: unit.family.floorHeightMm + unit.family.heightMm,
-			};
-		}
-		for (const view of views(room)) {
-			const span = view.reserved?.floor?.[0];
-			if (!span) continue;
-			const meeting = wall
-				.positionsOf(view, "floor")
-				.find(
-					(p) =>
-						p.family.kind === "base" &&
-						inRun(p) &&
-						(Math.abs(p.xMm - span.endMm) < 1 ||
-							Math.abs(p.xMm + p.widthMm - span.startMm) < 1),
-				);
-			if (meeting) {
-				return {
-					sizeMm: cornerSquareMm(room, "floor"),
-					topMm: meeting.family.floorHeightMm + meeting.family.heightMm,
-				};
+	): { vertex: number; sizeMm: number; topMm: number }[] {
+		return room.runs.flatMap((_, vertex) => {
+			if (!isActiveCorner(room, vertex)) return [];
+			const unit = cornerAt(room, vertex)?.floor;
+			const occupant = unit && familyIn(catalogue, unit.familyId);
+			// A non-base corner unit fills the corner without closing it.
+			if (occupant && occupant.kind !== "base") return [];
+			if (unit && occupant) {
+				return [
+					{
+						vertex,
+						sizeMm: unit.widthMm,
+						topMm: occupant.floorHeightMm + occupant.heightMm,
+					},
+				];
 			}
-		}
-		return null;
+			for (const run of [vertex, (vertex + 1) % countOf(room)]) {
+				const entry = cornerSpans(room, run, "floor").find(
+					(c) => c.vertex === vertex,
+				);
+				if (!entry) continue;
+				const meeting = wall
+					.positionsOf(runView(room, run), "floor")
+					.find(
+						(p) =>
+							p.family.kind === "base" &&
+							inRun(p) &&
+							(Math.abs(p.xMm - entry.span.endMm) < 1 ||
+								Math.abs(p.xMm + p.widthMm - entry.span.startMm) < 1),
+					);
+				if (meeting) {
+					return [
+						{
+							vertex,
+							sizeMm: cornerSquareMm(room, vertex, "floor"),
+							topMm: meeting.family.floorHeightMm + meeting.family.heightMm,
+						},
+					];
+				}
+			}
+			return [];
+		});
 	}
 
-	/**
+	/** See the old file's comment on `cornerShutSides` — same reach rule, now
+	 * asked at every active corner rather than the one.
+	 *
 	 * The leaf that has to stay shut on each side of an L's inner corner.
 	 *
 	 * Two cabinets on perpendicular walls each hinge a leaf toward the corner
@@ -577,74 +680,75 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 	 */
 	function cornerShutSides(room: RoomLayout): Map<string, HingeSide> {
 		const shut = new Map<string, HingeSide>();
-		if (!room.corner) return shut;
 		// How far a leaf swings back past its own hinge stile at full open.
 		const backReach = Math.max(0, -Math.cos(OVERLAY_OPEN_RAD));
-		for (const row of ["floor", "wall"] as const) {
-			// The cabinet nearest the corner on each run, and the box its
-			// corner-facing leaf sweeps. Nearest and not adjacent: a leaf reaches
-			// the same distance whether or not it starts against the square.
-			const facing = [];
-			for (const view of views(room)) {
-				const span = view.reserved?.[row]?.[0];
-				if (!span) continue;
-				// A run's corner is at x = 0 or at its far end; distance from it is
-				// measured from whichever end that is.
-				const atStart = span.startMm < 1;
-				const lengthMm = view.wallWidthMm;
-				const distanceOf = (p: Positioned) =>
-					atStart ? p.xMm : lengthMm - (p.xMm + p.widthMm);
-				let nearest: Positioned | null = null;
-				for (const p of wall.positionsOf(view, row)) {
-					// A *turned* cabinet is skipped: its front no longer faces out
-					// from its wall, so the sweep below is not the box it sweeps. A
-					// *lifted* one is not — `inRun` bundles the two together, and
-					// using it here meant hanging a cabinet a few millimetres off the
-					// floor switched the rule off while its doors still swung.
-					if (p.placed.rotationDeg) continue;
-					if (!nearest || distanceOf(p) < distanceOf(nearest)) nearest = p;
+		for (let vertex = 0; vertex < countOf(room); vertex++) {
+			if (!isActiveCorner(room, vertex)) continue;
+			const sides = [
+				{ run: vertex, atStart: false },
+				{ run: (vertex + 1) % countOf(room), atStart: true },
+			];
+			for (const row of ["floor", "wall"] as const) {
+				// The cabinet nearest the corner on each run, and the box its
+				// corner-facing leaf sweeps. Nearest and not adjacent: a leaf reaches
+				// the same distance whether or not it starts against the square.
+				const facing = [];
+				for (const { run, atStart } of sides) {
+					const view = runView(room, run);
+					const lengthMm = view.wallWidthMm;
+					const distanceOf = (p: Positioned) =>
+						atStart ? p.xMm : lengthMm - (p.xMm + p.widthMm);
+					let nearest: Positioned | null = null;
+					for (const p of wall.positionsOf(view, row)) {
+						// A *turned* cabinet is skipped: its front no longer faces out
+						// from its wall, so the sweep below is not the box it sweeps. A
+						// *lifted* one is not — `inRun` bundles the two together, and
+						// using it here meant hanging a cabinet a few millimetres off the
+						// floor switched the rule off while its doors still swung.
+						if (p.placed.rotationDeg) continue;
+						if (!nearest || distanceOf(p) < distanceOf(nearest)) nearest = p;
+					}
+					if (!nearest) continue;
+					// An unrecorded leaf count reads as one full-width leaf: the widest
+					// a front could be, so the doubtful case errs towards shut.
+					const leafMm =
+						nearest.widthMm / (nearest.family.geometry?.doorLeaves || 1);
+					const dMm = distanceOf(nearest);
+					// Two leaves at different heights pass each other. Lifting is what
+					// a customer reaches for to clear a corner, so the band has to be
+					// read per cabinet rather than per row.
+					const bottomMm = wall.floorHeightMmOf(nearest, view);
+					facing.push({
+						position: nearest,
+						side: (atStart ? "left" : "right") as HingeSide,
+						upMm: [bottomMm, bottomMm + nearest.family.heightMm] as const,
+						// Along this run's own wall, measured from the corner.
+						alongMm: [dMm - leafMm * backReach, dMm + leafMm] as const,
+						// Out from this run's own wall: the front face, plus the leaf.
+						outMm: [
+							nearest.family.depthMm,
+							nearest.family.depthMm + leafMm,
+						] as const,
+					});
 				}
-				if (!nearest) continue;
-				// An unrecorded leaf count reads as one full-width leaf: the widest
-				// a front could be, so the doubtful case errs towards shut.
-				const leafMm =
-					nearest.widthMm / (nearest.family.geometry?.doorLeaves || 1);
-				const dMm = distanceOf(nearest);
-				// Two leaves at different heights pass each other. Lifting is what
-				// a customer reaches for to clear a corner, so the band has to be
-				// read per cabinet rather than per row.
-				const bottomMm = wall.floorHeightMmOf(nearest, view);
-				const upMm = [bottomMm, bottomMm + nearest.family.heightMm] as const;
-				facing.push({
-					position: nearest,
-					side: (atStart ? "left" : "right") as HingeSide,
-					upMm,
-					// Along this run's own wall, measured from the corner.
-					alongMm: [dMm - leafMm * backReach, dMm + leafMm] as const,
-					// Out from this run's own wall: the front face, plus the leaf.
-					outMm: [
-						nearest.family.depthMm,
-						nearest.family.depthMm + leafMm,
-					] as const,
-				});
+				// One run with nothing near the corner is a leaf swinging into empty
+				// space, which is fine.
+				if (facing.length < 2) continue;
+				const [a, b] = facing;
+				// One run's "along" is the other's "out": they share the corner, and
+				// their walls are each other's depth axis. The third pair is plain
+				// height — leaves that never share a height cannot meet whatever they
+				// do in plan.
+				const overlaps =
+					a.upMm[1] > b.upMm[0] &&
+					a.upMm[0] < b.upMm[1] &&
+					a.alongMm[1] > b.outMm[0] &&
+					a.alongMm[0] < b.outMm[1] &&
+					b.alongMm[1] > a.outMm[0] &&
+					b.alongMm[0] < a.outMm[1];
+				if (!overlaps) continue;
+				for (const f of facing) shut.set(f.position.placed.id, f.side);
 			}
-			// One run with nothing near the corner is a leaf swinging into empty
-			// space, which is fine.
-			if (facing.length < 2) continue;
-			const [main, side] = facing;
-			// One run's "along" is the other's "out": they share the corner, and
-			// their walls are each other's depth axis. The third pair is plain
-			// height — leaves that never share a height cannot meet whatever they
-			// do in plan.
-			const overlaps =
-				main.upMm[1] > side.upMm[0] &&
-				main.upMm[0] < side.upMm[1] &&
-				main.alongMm[1] > side.outMm[0] &&
-				main.alongMm[0] < side.outMm[1] &&
-				side.alongMm[1] > main.outMm[0] &&
-				side.alongMm[0] < main.outMm[1];
-			if (!overlaps) continue;
-			for (const f of facing) shut.set(f.position.placed.id, f.side);
 		}
 		return shut;
 	}
@@ -659,12 +763,16 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 	): RoomLayout {
 		const family = familyIn(catalogue, familyId);
 		if (!family) return room;
-		if (isCorner(family)) return placeCorner(room, familyId, id);
+		if (isCorner(family))
+			return placeCorner(room, familyId, cornerVertexFor(room, run), id);
 		if (run >= room.runs.length) return room;
 		const view = wall.addModule(runView(room, run), familyId, xMm, id, widthMm);
-		// A tall unit beside an empty floor corner can still stand under a corner
-		// wall unit wider than that square.
-		return wall.isClear(view) ? withRun(room, run, view) : room;
+		if (!wall.isClear(view)) return room;
+		const placed = withRun(room, run, view);
+		if (placed === room) return room;
+		// The first cabinet on a second wall is what switches a corner on.
+		const next = cascadeAll(placed);
+		return allClear(next) ? next : room;
 	}
 
 	function fits(
@@ -675,9 +783,23 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 	): boolean {
 		const family = familyIn(catalogue, familyId);
 		if (!family) return false;
-		if (isCorner(family)) return placeCorner(room, familyId, "probe") !== room;
-		if (run >= room.runs.length) return false;
-		return wall.fits(runView(room, run), familyId, widthMm);
+		if (isCorner(family))
+			return (
+				placeCorner(room, familyId, cornerVertexFor(room, run), "probe") !==
+				room
+			);
+		// Probed through `addModule`, because a cabinet that fits the bare wall
+		// can still be refused by the corner it switches on.
+		return (
+			addModule(
+				room,
+				familyId,
+				nearCornerMm(room, run),
+				"probe",
+				widthMm,
+				run,
+			) !== room
+		);
 	}
 
 	function removeModules(room: RoomLayout, ids: Iterable<string>): RoomLayout {
@@ -691,15 +813,17 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 				floor: run.floor.filter((module) => !gone.has(module.id)),
 				wall: run.wall.filter((module) => !gone.has(module.id)),
 			})),
-			corner: room.corner && {
-				...room.corner,
-				floor: keep(room.corner.floor),
-				wall: keep(room.corner.wall),
-			},
+			corners: room.corners
+				.map((corner) => ({
+					...corner,
+					floor: keep(corner.floor),
+					wall: keep(corner.wall),
+				}))
+				.filter((corner) => corner.floor || corner.wall),
 		};
 	}
 
-	/** A room-wide setting, set through the main wall's view so it gets the
+	/** A room-wide setting, set through the back wall's view so it gets the
 	 * one-wall engine's clamping. */
 	const setting =
 		<K extends keyof Settings, V>(
@@ -713,74 +837,20 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			return next === room[key] ? room : { ...room, [key]: next };
 		};
 
-	/** How much of a run's length its design needs, measured from the corner
-	 * end: a run shrinks and grows at its free end. */
 	const runExtentMm = (room: RoomLayout, run = 0): number =>
 		run < room.runs.length ? wall.runExtentMm(fromCorner(room, run)) : 0;
 
-	/** The squares a run must keep, as well as its cabinets. */
-	const cornerNeedMm = (room: RoomLayout) =>
-		room.corner
-			? Math.max(cornerSquareMm(room, "floor"), cornerSquareMm(room, "wall"))
-			: 0;
-
-	function minWallWidthMm(room: RoomLayout): number {
-		return Math.max(
-			wall.minWallWidthMm(fromCorner(room, 0)),
-			cornerNeedMm(room),
-		);
-	}
-
-	function minRoomDepthMm(room: RoomLayout): number {
-		if (!room.corner) return ROOM_DEPTH_LIMITS.minMm;
-		return Math.max(
-			ROOM_DEPTH_LIMITS.minMm,
-			runExtentMm(room, 1),
-			cornerNeedMm(room),
-		);
-	}
-
-	/** A run's length changed: one whose corner is at its far end moves its
-	 * cabinets with the corner, so they keep their distance from it. */
-	function resized(
-		room: RoomLayout,
-		next: RoomLayout,
-		run: number,
-	): RoomLayout {
-		const shiftMm = lengthOf(next, run) - lengthOf(room, run);
-		if (!cornerAtEnd(room, run) || shiftMm === 0 || !next.runs[run])
-			return next;
-		const shift = (module: PlacedModule) => ({
-			...module,
-			xMm: module.xMm + shiftMm,
-		});
-		return {
-			...next,
-			runs: next.runs.map((r, i) =>
-				i === run ? { floor: r.floor.map(shift), wall: r.wall.map(shift) } : r,
-			),
-		};
-	}
-
-	function setWallWidth(room: RoomLayout, wallWidthMm: number): RoomLayout {
-		const clamped = Math.max(
-			minWallWidthMm(room),
-			Math.min(WALL_LIMITS.maxMm, Math.round(wallWidthMm)),
-		);
-		return clamped === room.wallWidthMm
-			? room
-			: resized(room, { ...room, wallWidthMm: clamped }, 0);
-	}
-
-	function setRoomDepth(room: RoomLayout, roomDepthMm: number): RoomLayout {
-		const clamped = Math.max(
-			minRoomDepthMm(room),
-			Math.min(ROOM_DEPTH_LIMITS.maxMm, Math.round(roomDepthMm)),
-		);
-		return clamped === room.roomDepthMm
-			? room
-			: resized(room, { ...room, roomDepthMm: clamped }, 1);
-	}
+	const closeGaps = (room: RoomLayout) =>
+		room.runs.reduce((next, _, run) => {
+			const packed = wall.closeGaps(fromCorner(next, run));
+			if (!packsFromEnd(next, run)) return withRun(next, run, packed);
+			const L = packed.wallWidthMm;
+			return withRun(next, run, {
+				...packed,
+				floor: packed.floor.map(mirrorModule(L)),
+				wall: packed.wall.map(mirrorModule(L)),
+			});
+		}, room);
 
 	return {
 		positionsOf: (room: RoomLayout, row: Row, run = 0): Positioned[] =>
@@ -826,19 +896,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		swapWithNeighbour: inRunOf(wall.swapWithNeighbour),
 		removeModules,
 		removeModule: (room: RoomLayout, id: string) => removeModules(room, [id]),
-		// Packed toward each run's corner: `fromCorner` is its own inverse, and
-		// only the rows of the view it returns are written back.
-		closeGaps: (room: RoomLayout) =>
-			room.runs.reduce((next, _, run) => {
-				const packed = wall.closeGaps(fromCorner(next, run));
-				if (!cornerAtEnd(next, run)) return withRun(next, run, packed);
-				const L = packed.wallWidthMm;
-				return withRun(next, run, {
-					...packed,
-					floor: packed.floor.map(mirrorModule(L)),
-					wall: packed.wall.map(mirrorModule(L)),
-				});
-			}, room),
+		closeGaps,
 		setHangingHeight: setting<"hangingHeightMm", number>(
 			"hangingHeightMm",
 			wall.setHangingHeight,
@@ -846,10 +904,6 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		setWallToCeiling: setting<"wallToCeiling", boolean>(
 			"wallToCeiling",
 			wall.setWallToCeiling,
-		),
-		setWallToWall: setting<"wallToWall", boolean>(
-			"wallToWall",
-			wall.setWallToWall,
 		),
 		setBaseSkirting: setting<"baseSkirting", boolean>(
 			"baseSkirting",
@@ -877,17 +931,15 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			views(room).every((view) => wall.isClear(view)),
 		skirtingSpans: (room: RoomLayout, run = 0) =>
 			wall.skirtingSpans(runView(room, run)),
-		minWallWidthMm,
-		minRoomDepthMm,
-		setWallWidth,
-		setRoomDepth,
 		setShape,
-		setCornerSide,
+		setWallLength,
+		wallLengthRangeMm,
 		placeCorner,
 		cornerPositions,
+		cornerPositionsOf,
 		exposureOf,
 		endPanels,
-		cornerWorktop,
+		cornerWorktops,
 		cornerShutSides,
 	};
 }

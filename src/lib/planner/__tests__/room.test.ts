@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { PLANNER_CATALOGUE } from "../catalogue";
+import type { FloorPlan } from "../floorplan";
 import { emptyLayout, type PlacedModule, plannerEngine } from "../layout";
 import {
 	asRoom,
+	cornerVertexFor,
 	emptyRoom,
 	nearCornerMm,
 	type RoomLayout,
 	roomEngine,
 	runIndexOf,
 	runView,
-	runYawRad,
 	setDoor,
 	withRun,
 } from "../room";
@@ -26,31 +27,82 @@ const base = (id: string, xMm: number, widthMm = 600): PlacedModule => ({
 	xMm,
 });
 
-/** A 4200 × 3600 room turned into an L by hand, so these tests do not lean on
- * `setShape` (Task 4). */
+/** 4200 × 3600: the back wall is 4200, the left wall (run 3) 3600. */
+const kitchen = () => emptyRoom(4200);
+
+/** The old left L, by hand: the back wall and the left wall, meeting at
+ * vertex 3 — the start of the back wall and the end of the left wall. */
 const lRoom = (
-	side: "left" | "right",
 	main: PlacedModule[] = [],
-	sideRun: PlacedModule[] = [],
-): RoomLayout => ({
-	...emptyRoom(4200),
-	runs: [
-		{ floor: main, wall: [] },
-		{ floor: sideRun, wall: [] },
-	],
-	corner: { side, floor: null, wall: null },
-});
+	side: PlacedModule[] = [],
+): RoomLayout => {
+	const room = kitchen();
+	return {
+		...room,
+		runs: room.runs.map((run, i) =>
+			i === 0
+				? { floor: main, wall: [] }
+				: i === 3
+					? { floor: side, wall: [] }
+					: run,
+		),
+	};
+};
+
+const lPlan: FloorPlan = {
+	template: "l",
+	widthMm: 5500,
+	depthMm: 5075,
+	notchWidthMm: 1500,
+	notchDepthMm: 3000,
+	mirror: false,
+};
+
+const xOf = (room: RoomLayout, id: string) =>
+	room.runs.flatMap((r) => [...r.floor, ...r.wall]).find((m) => m.id === id)
+		?.xMm;
 
 describe("asRoom", () => {
-	it("makes one wall's rows the only run", () => {
+	it("makes one wall's rows the back wall of a rectangle", () => {
 		const room = asRoom(emptyLayout(3000));
-		expect(room.runs).toEqual([{ floor: [], wall: [] }]);
-		expect(room.corner).toBeNull();
-		expect(runView(room, 0)).toEqual(emptyLayout(3000));
+		expect(room.plan).toEqual({
+			template: "rect",
+			widthMm: 3000,
+			depthMm: 3600,
+		});
+		expect(room.runs).toHaveLength(4);
+		expect(room.runs[0]).toEqual({ floor: [], wall: [] });
+		expect(room.corners).toEqual([]);
+		expect("wallToWall" in room).toBe(false);
 	});
 });
 
-describe("a straight room", () => {
+describe("runView", () => {
+	it("gives each wall its own length, depth and end walls", () => {
+		expect(runView(kitchen(), 0)).toMatchObject({
+			wallWidthMm: 4200,
+			roomDepthMm: 3600,
+			endWalls: { left: true, right: true },
+		});
+		expect(runView(kitchen(), 3)).toMatchObject({
+			wallWidthMm: 3600,
+			roomDepthMm: 4200,
+		});
+		expect(runView(kitchen(), 0).reserved).toBeUndefined();
+	});
+
+	it("leaves a run ending at the notch's outside corner open at that end", () => {
+		const room: RoomLayout = {
+			...emptyRoom(5500),
+			plan: lPlan,
+			runs: Array.from({ length: 6 }, () => ({ floor: [], wall: [] })),
+		};
+		expect(runView(room, 2).endWalls).toEqual({ left: true, right: false });
+		expect(runView(room, 3).endWalls).toEqual({ left: false, right: true });
+	});
+});
+
+describe("a straight run", () => {
 	it("edits exactly as the one-wall engine does", () => {
 		const flat = oneWall.addModule(
 			emptyLayout(4200),
@@ -59,325 +111,212 @@ describe("a straight room", () => {
 			"a",
 			600,
 		);
-		const room = engine.addModule(emptyRoom(4200), "base-cabinet", 0, "a", 600);
-		expect(runView(room, 0)).toEqual(flat);
+		const room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		expect(runView(room, 0).floor).toEqual(flat.floor);
 	});
 
-	it("has no side run to add to", () => {
-		const room = emptyRoom(4200);
-		expect(engine.addModule(room, "base-cabinet", 0, "a", 600, 1)).toBe(room);
+	it("refuses a run that does not exist", () => {
+		const room = kitchen();
+		expect(engine.addModule(room, "base-cabinet", 0, "a", 600, 4)).toBe(room);
 	});
 });
 
-describe("runView", () => {
-	it("swaps the room's axes for the side wall and never encloses it", () => {
-		const room = { ...lRoom("right"), wallToWall: true };
-		expect(runView(room, 1)).toMatchObject({
-			wallWidthMm: 3600,
-			roomDepthMm: 4200,
-			wallToWall: false,
-		});
-		expect(runView(room, 0)).toMatchObject({
-			wallWidthMm: 4200,
-			wallToWall: true,
-		});
+describe("corners switch on when both walls hold cabinets", () => {
+	it("reserve nothing while only one wall is used", () => {
+		const room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		expect(runView(room, 0).reserved).toBeUndefined();
+		expect(xOf(room, "a")).toBe(0);
 	});
 
-	it("reserves the corner at the start of the main wall for a left corner", () => {
-		expect(runView(lRoom("left"), 0).reserved).toEqual({
-			floor: [{ startMm: 0, endMm: 607 }],
-			wall: [{ startMm: 0, endMm: 397 }],
-		});
-	});
-
-	it("reserves the far end of the side wall for a left corner", () => {
-		expect(runView(lRoom("left"), 1).reserved?.floor).toEqual([
-			{ startMm: 2993, endMm: 3600 },
-		]);
-	});
-
-	it("mirrors both for a right corner", () => {
-		const room = lRoom("right");
+	it("reserve the square on both walls and push both runs clear", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		room = engine.addModule(room, "base-cabinet", 3000, "s", 600, 3);
 		expect(runView(room, 0).reserved?.floor).toEqual([
-			{ startMm: 3593, endMm: 4200 },
-		]);
-		expect(runView(room, 1).reserved?.floor).toEqual([
 			{ startMm: 0, endMm: 607 },
 		]);
+		expect(runView(room, 3).reserved?.floor).toEqual([
+			{ startMm: 2993, endMm: 3600 },
+		]);
+		expect(xOf(room, "a")).toBe(607);
+		expect(xOf(room, "s")).toBe(2393);
+	});
+
+	it("refuse the cabinet that would switch one on when a wall cannot give way", () => {
+		let room = emptyRoom(4200, 2000);
+		room = engine.addModule(room, "base-cabinet", 200, "s1", 900, 3);
+		room = engine.addModule(room, "base-cabinet", 1100, "s2", 900, 3);
+		expect(engine.addModule(room, "base-cabinet", 0, "a", 600, 0)).toBe(room);
+	});
+
+	it("reserve both ends of the back wall in a U", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 1800, "b", 600);
+		room = engine.addModule(room, "base-cabinet", 0, "l", 600, 3);
+		room = engine.addModule(room, "base-cabinet", 3000, "r", 600, 1);
+		expect(runView(room, 0).reserved?.floor).toEqual([
+			{ startMm: 0, endMm: 607 },
+			{ startMm: 3593, endMm: 4200 },
+		]);
+	});
+
+	it("reserve nothing in a galley, whose walls never meet", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "b", 600);
+		room = engine.addModule(room, "base-cabinet", 0, "f", 600, 2);
+		expect(runView(room, 0).reserved).toBeUndefined();
+		expect(runView(room, 2).reserved).toBeUndefined();
+	});
+
+	it("never switch on at an outside corner", () => {
+		let room: RoomLayout = {
+			...emptyRoom(5500),
+			plan: lPlan,
+			runs: Array.from({ length: 6 }, () => ({ floor: [], wall: [] })),
+		};
+		room = engine.addModule(room, "base-cabinet", 900, "top", 600, 2);
+		room = engine.addModule(room, "base-cabinet", 0, "side", 600, 3);
+		expect(runView(room, 2).reserved).toBeUndefined();
+		expect(runView(room, 3).reserved).toBeUndefined();
+	});
+
+	it("free the square when a wall empties, and pull nothing back", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		room = engine.addModule(room, "base-cabinet", 3000, "s", 600, 3);
+		room = engine.removeModule(room, "s");
+		expect(runView(room, 0).reserved).toBeUndefined();
+		expect(xOf(room, "a")).toBe(607);
 	});
 });
-
-describe("dispatch", () => {
-	it("finds the run holding an id", () => {
-		const room = lRoom("right", [base("m", 1000)], [base("s", 1000)]);
-		expect(runIndexOf(room, "m")).toBe(0);
-		expect(runIndexOf(room, "s")).toBe(1);
-		expect(runIndexOf(room, "nope")).toBe(-1);
-	});
-
-	it("moves a side-wall cabinet against that wall's own corner", () => {
-		const room = lRoom("right", [], [base("s", 1000)]);
-		expect(engine.moveModule(room, "s", 0).runs[1].floor[0].xMm).toBe(607);
-	});
-
-	it("adds to the run it is told to", () => {
-		const room = engine.addModule(
-			lRoom("left"),
-			"base-cabinet",
-			3500,
-			"s",
-			600,
-			1,
-		);
-		expect(room.runs[1].floor[0].xMm).toBe(2393);
-		expect(room.runs[0].floor).toEqual([]);
-	});
-
-	it("leaves the room untouched for an unknown id", () => {
-		const room = lRoom("left");
-		expect(engine.moveModule(room, "nope", 10)).toBe(room);
-	});
-
-	it("withRun writes rows only, never the view's swapped axes", () => {
-		const room = lRoom("left");
-		const view = { ...runView(room, 1), floor: [base("s", 0)] };
-		const next = withRun(room, 1, view);
-		expect(next.wallWidthMm).toBe(4200);
-		expect(next.roomDepthMm).toBe(3600);
-		expect(next.runs[1].floor).toHaveLength(1);
-	});
-
-	it("lists positions of every run", () => {
-		const room = lRoom("left", [base("m", 1000)], [base("s", 1000)]);
-		expect(
-			engine
-				.allPositions(room)
-				.map((p) => p.placed.id)
-				.sort(),
-		).toEqual(["m", "s"]);
-	});
-
-	it("removes across runs", () => {
-		const room = lRoom("left", [base("m", 1000)], [base("s", 1000)]);
-		const next = engine.removeModules(room, ["m", "s"]);
-		expect(next.runs.map((r) => r.floor.length)).toEqual([0, 0]);
-	});
-});
-
-describe("room-wide settings", () => {
-	it("clamps the ceiling the way the one-wall engine does", () => {
-		expect(
-			engine.setCeilingHeight(emptyRoom(4200), 99_999).ceilingHeightMm,
-		).toBe(oneWall.setCeilingHeight(emptyLayout(4200), 99_999).ceilingHeightMm);
-	});
-
-	it("will not shorten the main wall through a right-hand corner", () => {
-		// The corner is at the far end, so the wall shrinks from the free end:
-		// what the run needs is measured from the corner, 4200 − 2000.
-		const room = lRoom("right", [base("m", 2000)]);
-		expect(engine.minWallWidthMm(room)).toBe(2200);
-		const shrunk = engine.setWallWidth(room, 1000);
-		expect(shrunk.wallWidthMm).toBe(2200);
-		expect(shrunk.runs[0].floor[0].xMm).toBe(0);
-	});
-
-	it("will not shorten the room through the side wall's cabinets", () => {
-		const room = lRoom("left", [], [base("s", 1000)]);
-		expect(engine.minRoomDepthMm(room)).toBe(3600 - 1000);
-		expect(engine.setRoomDepth(room, 100).roomDepthMm).toBe(2600);
-	});
-
-	it("will not shorten the main wall of a left corner through its cabinets", () => {
-		const room = lRoom("left", [base("m", 2000)]);
-		expect(engine.minWallWidthMm(room)).toBe(2600);
-	});
-});
-
-describe("runYawRad", () => {
-	it("turns the side wall onto the side it is on", () => {
-		expect(runYawRad(lRoom("left"), 0)).toBe(0);
-		expect(runYawRad(lRoom("left"), 1)).toBeCloseTo(Math.PI / 2);
-		expect(runYawRad(lRoom("right"), 1)).toBeCloseTo(-Math.PI / 2);
-	});
-});
-
-const kitchen = () => emptyRoom(4200);
 
 describe("setShape", () => {
-	it("an L adds an empty side wall and corner", () => {
-		const room = engine.setShape(kitchen(), "left");
-		expect(room.runs).toHaveLength(2);
-		expect(room.corner).toEqual({ side: "left", floor: null, wall: null });
+	it("turns a rectangle into an L, keeping the back wall", () => {
+		const room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		const next = engine.setShape(room, "l");
+		expect(next.plan.template).toBe("l");
+		expect(next.runs).toHaveLength(6);
+		expect(next.runs[0]).toBe(room.runs[0]);
 	});
 
-	it("moves a cabinet already in the corner out of it", () => {
-		const straight = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
-		const room = engine.setShape(straight, "left");
-		expect(room.runs[0].floor[0].xMm).toBe(607);
-	});
-
-	it("refuses to go straight while the side wall holds a cabinet", () => {
-		let room = engine.setShape(kitchen(), "left");
-		room = engine.addModule(room, "base-cabinet", 0, "s", 600, 1);
-		expect(engine.setShape(room, "straight")).toBe(room);
-		const cleared = engine.removeModule(room, "s");
-		expect(engine.setShape(cleared, "straight").runs).toHaveLength(1);
-	});
-
-	it("refuses to go straight while the corner holds a unit", () => {
-		let room = engine.setShape(kitchen(), "left");
-		room = engine.addModule(room, "corner-base", 0, "c");
-		expect(engine.setShape(room, "straight")).toBe(room);
+	it("refuses while any other wall holds a cabinet", () => {
+		const room = engine.addModule(kitchen(), "base-cabinet", 0, "s", 600, 3);
+		expect(engine.setShape(room, "l")).toBe(room);
 	});
 });
 
-describe("setCornerSide", () => {
-	it("keeps every cabinet the same distance from the corner", () => {
-		let room = engine.setShape(kitchen(), "left");
-		room = engine.addModule(room, "base-cabinet", 1000, "m", 600);
-		room = engine.addModule(room, "base-cabinet", 1000, "s", 600, 1);
-		const flipped = engine.setShape(room, "right");
-		expect(flipped.corner?.side).toBe("right");
-		expect(flipped.runs[0].floor[0].xMm).toBe(4200 - 1000 - 600);
-		expect(flipped.runs[1].floor[0].xMm).toBe(3600 - 1000 - 600);
-		expect(engine.isClear(flipped)).toBe(true);
+describe("setWallLength", () => {
+	it("moves the parameter the wall is made of", () => {
+		const next = engine.setWallLength(kitchen(), 2, 5000);
+		expect(next.plan).toMatchObject({ widthMm: 5000 });
+		expect(runView(next, 0).wallWidthMm).toBe(5000);
 	});
 
-	it("flips a turned module's rotation and mirrors a wall-row module too", () => {
-		let room = engine.setShape(kitchen(), "left");
-		room = engine.addModule(room, "base-cabinet", 1000, "a", 600);
-		room = engine.setRotation(room, "a", 90);
-		room = engine.addModule(room, "wall-cabinet", 1000, "w", 600, 0);
-		const flipped = engine.setCornerSide(room, "right");
-		expect(flipped.runs[0].floor[0].rotationDeg).toBe(270);
-		expect(flipped.runs[0].wall[0].xMm).toBe(4200 - 1000 - 600);
+	it("stops at what the wall's cabinets need", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 2400, "a", 600);
+		room = engine.setWallLength(room, 0, 1000);
+		expect(runView(room, 0).wallWidthMm).toBe(3000);
+		expect(engine.wallLengthRangeMm(room, 0)).toEqual({
+			minMm: 3000,
+			maxMm: 12000,
+		});
+	});
+
+	it("keeps a run by its far corner when only that end has one", () => {
+		// The back wall and the right wall meet at vertex 0, the back wall's end.
+		let room = engine.addModule(kitchen(), "base-cabinet", 3600, "b", 600);
+		room = engine.addModule(room, "base-cabinet", 0, "r", 600, 1);
+		const before = xOf(room, "b") ?? 0;
+		const wider = engine.setWallLength(room, 0, 4700);
+		expect(xOf(wider, "b")).toBe(before + 500);
+		expect(xOf(wider, "r")).toBe(xOf(room, "r"));
 	});
 });
 
 describe("corner units", () => {
-	it("fill their row's slot and push both runs clear of the bigger square", () => {
-		let room = engine.setShape(kitchen(), "left");
-		room = engine.addModule(room, "base-cabinet", 0, "a", 600);
+	it("go to the target wall's start corner, drawn there unturned", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
 		room = engine.addModule(room, "corner-base", 0, "c");
-		expect(room.corner?.floor?.familyId).toBe("corner-base");
-		expect(room.runs[0].floor[0].xMm).toBe(900);
-		expect(room.runs.flatMap((run) => run.floor)).toHaveLength(1);
+		expect(room.corners).toEqual([
+			expect.objectContaining({
+				vertex: 3,
+				floor: expect.objectContaining({ id: "c" }),
+			}),
+		]);
+		expect(xOf(room, "a")).toBe(900);
+		const [drawn] = engine.cornerPositionsOf(room, 0);
+		expect(drawn.xMm).toBe(0);
+		expect(drawn.placed.rotationDeg).toBeUndefined();
+		expect(engine.cornerPositionsOf(room, 3)).toEqual([]);
+	});
+
+	it("pick the end corner when the start is an outside corner", () => {
+		const room: RoomLayout = {
+			...emptyRoom(5500),
+			plan: lPlan,
+			runs: Array.from({ length: 6 }, () => ({ floor: [], wall: [] })),
+		};
+		expect(cornerVertexFor(room, 3)).toBe(3);
+		expect(cornerVertexFor(room, 2)).toBe(1);
+		expect(engine.placeCorner(room, "corner-base", 2)).toBe(room);
 	});
 
 	it("go to the wall slot when they hang", () => {
 		const room = engine.addModule(
-			engine.setShape(kitchen(), "right"),
+			kitchen(),
 			"corner-wall",
 			0,
 			"cw",
+			undefined,
+			1,
 		);
-		expect(room.corner?.wall?.familyId).toBe("corner-wall");
-		expect(room.corner?.floor).toBeNull();
+		expect(room.corners[0]).toMatchObject({ vertex: 0, floor: null });
+		expect(room.corners[0].wall?.familyId).toBe("corner-wall");
 	});
 
-	it("are refused on a straight wall and in a full slot", () => {
-		const straight = kitchen();
-		expect(engine.addModule(straight, "corner-base", 0)).toBe(straight);
-		expect(engine.fits(straight, "corner-base")).toBe(false);
-
-		const full = engine.addModule(
-			engine.setShape(kitchen(), "left"),
-			"corner-base",
-			0,
-			"c",
-		);
+	it("are refused in a full slot", () => {
+		const full = engine.addModule(kitchen(), "corner-base", 0, "c");
 		expect(engine.addModule(full, "corner-base", 0, "d")).toBe(full);
 		expect(engine.fits(full, "corner-base")).toBe(false);
 	});
 
-	it("are refused when a run cannot give way", () => {
-		// A side wall packed from the front to the corner has nowhere to slide.
-		let room = engine.setShape({ ...kitchen(), roomDepthMm: 2000 }, "right");
-		room = engine.addModule(room, "base-cabinet", 607, "s1", 900, 1);
-		room = engine.addModule(room, "base-cabinet", 1507, "s2", 400, 1);
-		expect(engine.fits(room, "corner-base")).toBe(false);
-	});
-
-	it("moves a cabinet only as far as it needs, leaving a free gap alone", () => {
-		let room = engine.setShape(kitchen(), "left");
-		room = engine.addModule(room, "base-cabinet", 700, "a", 600);
-		room = engine.addModule(room, "base-cabinet", 3600, "b", 600);
-		// 1300–3600 is free, so there is room for the 900mm corner square.
-		expect(engine.fits(room, "corner-base")).toBe(true);
-		const next = engine.addModule(room, "corner-base", 0, "c");
-		expect(next.corner?.floor?.familyId).toBe("corner-base");
-		expect(next.runs[0].floor.find((m) => m.id === "a")?.xMm).toBe(900);
-		expect(next.runs[0].floor.find((m) => m.id === "b")?.xMm).toBe(3600);
-	});
-
-	it("moves only what needs to move when going to an L", () => {
-		let room = kitchen();
-		room = engine.addModule(room, "base-cabinet", 300, "a", 600);
-		room = engine.addModule(room, "base-cabinet", 3600, "b", 600);
-		const next = engine.setShape(room, "left");
-		expect(next.corner?.side).toBe("left");
-		expect(next.runs[0].floor.find((m) => m.id === "a")?.xMm).toBe(607);
-		expect(next.runs[0].floor.find((m) => m.id === "b")?.xMm).toBe(3600);
-	});
-
-	it("clears both rows together for a tall unit, so the wall unit clears its end", () => {
-		let room = kitchen();
-		room = engine.addModule(room, "tall-cabinet", 0, "t", 600);
-		room = engine.addModule(room, "wall-cabinet", 600, "w", 400);
-		const next = engine.setShape(room, "left");
-		expect(next.corner).not.toBeNull();
-		expect(next.runs[0].floor.find((m) => m.id === "t")?.xMm).toBe(607);
-		expect(next.runs[0].wall.find((m) => m.id === "w")?.xMm).toBe(1207);
-	});
-
-	it("sit at the corner end of the main wall, turned for a right corner", () => {
-		const left = engine.addModule(
-			engine.setShape(kitchen(), "left"),
-			"corner-base",
-			0,
-			"c",
-		);
-		expect(engine.cornerPositions(left)[0]).toMatchObject({ xMm: 0 });
-		expect(engine.cornerPositions(left)[0].placed.rotationDeg).toBeUndefined();
-
-		const right = engine.setShape(left, "right");
-		expect(engine.cornerPositions(right)[0]).toMatchObject({ xMm: 3300 });
-		expect(engine.cornerPositions(right)[0].placed.rotationDeg).toBe(270);
+	it("ignore a client's own xMm and rotation", () => {
+		const room = engine.addModule(kitchen(), "corner-base", 0, "c");
+		const floor = room.corners[0].floor;
+		if (!floor) throw new Error("fixture lost its corner");
+		const tampered: RoomLayout = {
+			...room,
+			corners: [
+				{ ...room.corners[0], floor: { ...floor, xMm: 1234, rotationDeg: 90 } },
+			],
+		};
+		const [drawn] = engine.cornerPositions(tampered);
+		expect(drawn.placed.xMm).toBe(0);
+		expect(drawn.placed.rotationDeg).toBeUndefined();
 	});
 
 	it("are priced, listed and removed like any cabinet", () => {
-		const room = engine.addModule(
-			engine.setShape(kitchen(), "left"),
-			"corner-base",
-			0,
-			"c",
-		);
+		const room = engine.addModule(kitchen(), "corner-base", 0, "c");
 		expect(engine.allPositions(room).map((p) => p.placed.id)).toEqual(["c"]);
 		expect(engine.widthOptionsFor(room, "c")).toEqual([
 			{ widthMm: 900, priceRm: 1150, fits: true },
 		]);
-		expect(engine.removeModule(room, "c").corner?.floor).toBeNull();
-		expect(setDoor(room, "c", "shaker").corner?.floor?.doorStyleId).toBe(
+		expect(engine.removeModule(room, "c").corners).toEqual([]);
+		expect(setDoor(room, "c", "shaker").corners[0].floor?.doorStyleId).toBe(
 			"shaker",
 		);
 	});
 });
 
-describe("exposure beside the corner", () => {
-	it("an empty corner leaves the end beside it in the open", () => {
-		let room = engine.setShape(kitchen(), "left");
-		room = engine.addModule(room, "base-cabinet", 0, "a", 600);
-		expect(engine.exposureOf(room).get("a")?.left).toBe(true);
-		expect(
-			engine
-				.endPanels(room)
-				.some((p) => p.moduleId === "a" && p.side === "left"),
-		).toBe(true);
+describe("exposure", () => {
+	it("buries a side flush against a wall", () => {
+		const room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		expect(engine.exposureOf(room).get("a")?.left).toBe(false);
 	});
 
-	it("a corner unit covers the end beside it and wears no panels itself", () => {
-		let room = engine.setShape(kitchen(), "left");
-		room = engine.addModule(room, "base-cabinet", 0, "a", 600);
+	it("leaves the end beside an empty corner square in the open", () => {
+		const room = lRoom([base("a", 607)], [base("s", 2393)]);
+		expect(engine.exposureOf(room).get("a")?.left).toBe(true);
+	});
+
+	it("covers the end beside a corner unit, which wears no panels itself", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
 		room = engine.addModule(room, "corner-base", 0, "c");
 		expect(engine.exposureOf(room).get("a")?.left).toBe(false);
 		expect(engine.exposureOf(room).get("c")).toEqual({
@@ -388,220 +327,69 @@ describe("exposure beside the corner", () => {
 	});
 });
 
-describe("cornerWorktop", () => {
-	it("is none on a straight wall or an L with no base beside the corner", () => {
-		expect(engine.cornerWorktop(kitchen())).toBeNull();
-		expect(engine.cornerWorktop(engine.setShape(kitchen(), "left"))).toBeNull();
+describe("cornerWorktops", () => {
+	it("is empty with no active corner", () => {
+		expect(engine.cornerWorktops(kitchen())).toEqual([]);
+		expect(engine.cornerWorktops(lRoom([base("a", 0)]))).toEqual([]);
 	});
 
 	it("closes an empty corner when a base unit meets it", () => {
-		let room = engine.setShape(kitchen(), "left");
-		room = engine.addModule(room, "base-cabinet", 0, "a", 600);
-		expect(engine.cornerWorktop(room)).toEqual({ sizeMm: 607, topMm: 880 });
-	});
-
-	it("is none when the corner floor slot holds a non-base unit", () => {
-		// No non-base corner family exists in the seed yet — a corner tall
-		// unit is a future shape, per the CLAUDE.md corner-panel rules.
-		const cornerTall: (typeof PLANNER_CATALOGUE.families)[number] = {
-			id: "corner-tall",
-			label: "Corner tall cabinet",
-			category: "CORNER_BASE_CABINET",
-			kind: "tall",
-			depthMm: 900,
-			heightMm: 2380,
-			floorHeightMm: 0,
-			drawers: 0,
-			sizes: [{ widthMm: 900, priceRm: 1500 }],
-		};
-		const testCatalogue = {
-			...PLANNER_CATALOGUE,
-			families: [...PLANNER_CATALOGUE.families, cornerTall],
-		};
-		const testEngine = roomEngine(testCatalogue);
-		const room = testEngine.addModule(
-			testEngine.setShape(kitchen(), "left"),
-			"corner-tall",
-			0,
-			"c",
-		);
-		expect(room.corner?.floor?.familyId).toBe("corner-tall");
-		expect(testEngine.cornerWorktop(room)).toBeNull();
+		expect(
+			engine.cornerWorktops(lRoom([base("a", 607)], [base("s", 2393)])),
+		).toEqual([{ vertex: 3, sizeMm: 607, topMm: 880 }]);
 	});
 
 	it("covers a corner base unit", () => {
-		const room = engine.addModule(
-			engine.setShape(kitchen(), "left"),
-			"corner-base",
-			0,
-			"c",
-		);
-		expect(engine.cornerWorktop(room)).toEqual({ sizeMm: 900, topMm: 880 });
+		const room = engine.addModule(kitchen(), "corner-base", 0, "c");
+		expect(engine.cornerWorktops(room)).toEqual([
+			{ vertex: 3, sizeMm: 900, topMm: 880 },
+		]);
 	});
 });
 
-/** The left L from the review: corner base, one 900 cabinet beside it. */
-const reviewL = () => {
-	let room = engine.setShape(kitchen(), "left");
-	room = engine.addModule(room, "corner-base", 0, "c");
-	return engine.addModule(room, "base-cabinet", 900, "a", 900);
-};
-
-describe("a run whose corner is at its far end", () => {
-	it("measures its extent from the corner", () => {
-		const right = engine.setCornerSide(reviewL(), "right");
-		expect(right.runs[0].floor[0].xMm).toBe(2400);
-		expect(engine.runExtentMm(right)).toBe(1800);
-		expect(engine.runExtentMm(reviewL())).toBe(1800);
-		// A left L's side wall has its corner at the end too.
-		const side = engine.addModule(reviewL(), "base-cabinet", 0, "s", 600, 1);
-		expect(side.runs[1].floor[0].xMm).toBe(0);
-		expect(engine.runExtentMm(side, 1)).toBe(3600);
-	});
-
-	it("names the end a click-add should land against", () => {
-		expect(nearCornerMm(reviewL(), 0)).toBe(0);
-		expect(nearCornerMm(reviewL(), 1)).toBe(3600);
-		const right = engine.setCornerSide(reviewL(), "right");
-		expect(nearCornerMm(right, 0)).toBe(4200);
-		expect(nearCornerMm(right, 1)).toBe(0);
+describe("where a run starts", () => {
+	it("is the start of the wall, unless only the far end is a corner", () => {
 		expect(nearCornerMm(kitchen(), 0)).toBe(0);
-		const added = engine.addModule(
-			right,
-			"base-cabinet",
-			nearCornerMm(right, 0),
-			"b",
-			600,
-		);
-		expect(added.runs[0].floor.find((m) => m.id === "b")?.xMm).toBe(1800);
+		const room: RoomLayout = {
+			...emptyRoom(5500),
+			plan: lPlan,
+			runs: Array.from({ length: 6 }, () => ({ floor: [], wall: [] })),
+		};
+		expect(nearCornerMm(room, 3)).toBe(3000);
 	});
 
-	it("closes gaps toward the corner", () => {
-		const main = engine.closeGaps(
-			lRoom("right", [base("a", 500), base("b", 2000)]),
-		);
-		expect(main.runs[0].floor.map((m) => [m.id, m.xMm]).sort()).toEqual([
-			["a", 2393],
-			["b", 2993],
-		]);
-		const side = engine.closeGaps(
-			lRoom("left", [], [base("s", 200), base("t", 1500)]),
-		);
-		expect(side.runs[1].floor.map((m) => [m.id, m.xMm]).sort()).toEqual([
-			["s", 1793],
-			["t", 2393],
-		]);
-		// A corner at the start still packs from the start.
-		const left = engine.closeGaps(lRoom("left", [base("a", 2000)]));
-		expect(left.runs[0].floor[0].xMm).toBe(607);
+	it("packs toward a corner at the far end", () => {
+		// The left wall's only corner is its far end, vertex 3.
+		const room = engine.closeGaps(lRoom([base("a", 607)], [base("s", 1000)]));
+		expect(xOf(room, "s")).toBe(2393);
+		expect(engine.runExtentMm(room, 3)).toBe(1207);
 	});
+});
 
-	it("keeps its cabinets by the corner when its length changes", () => {
-		const deeper = engine.setRoomDepth(
-			lRoom("left", [], [base("s", 2393)]),
-			4100,
-		);
-		expect(deeper.runs[1].floor[0].xMm).toBe(2893);
-		expect(engine.endPanels(deeper).some((p) => p.moduleId === "s")).toBe(
-			engine
-				.endPanels(lRoom("left", [], [base("s", 2393)]))
-				.some((p) => p.moduleId === "s"),
-		);
-
-		const wider = engine.setWallWidth(lRoom("right", [base("m", 2993)]), 5000);
-		expect(wider.runs[0].floor[0].xMm).toBe(3793);
-		// The run whose corner is at its start does not move.
+describe("dispatch", () => {
+	it("finds, moves and removes across runs", () => {
+		const room = lRoom([base("a", 607)], [base("s", 1000)]);
+		expect(runIndexOf(room, "s")).toBe(3);
 		expect(
-			engine.setWallWidth(lRoom("left", [base("m", 607)]), 5000).runs[0]
-				.floor[0].xMm,
-		).toBe(607);
+			engine
+				.removeModules(room, ["a", "s"])
+				.runs.every((r) => r.floor.length === 0),
+		).toBe(true);
 	});
 
-	it("lets a right L's wall shrink after a flip", () => {
-		const right = engine.setCornerSide(reviewL(), "right");
-		expect(engine.minWallWidthMm(right)).toBe(1800);
-		const shrunk = engine.setWallWidth(right, 1000);
-		expect(shrunk.wallWidthMm).toBe(1800);
-		expect(shrunk.runs[0].floor[0].xMm).toBe(0);
-		expect(engine.cornerPositions(shrunk)[0].xMm).toBe(900);
-		expect(engine.isClear(shrunk)).toBe(true);
-	});
-});
-
-describe("setCornerSide mirrors hinges", () => {
-	it("swaps a lone door's hinge with the flip", () => {
-		const room = lRoom("left", [{ ...base("a", 1000), hinge: "left" }]);
-		const flipped = engine.setCornerSide(room, "right");
-		expect(flipped.runs[0].floor[0].hinge).toBe("right");
-		expect(engine.setCornerSide(flipped, "left").runs[0].floor[0].hinge).toBe(
-			"left",
-		);
-	});
-});
-
-describe("adding beside a corner", () => {
-	it("refuses a tall unit that would stand under a wide corner wall unit", () => {
-		const wide = {
-			...PLANNER_CATALOGUE,
-			families: PLANNER_CATALOGUE.families.map((f) =>
-				f.id === "corner-wall"
-					? { ...f, sizes: [{ widthMm: 900, priceRm: 900 }] }
-					: f,
-			),
-		};
-		const e = roomEngine(wide);
-		const room = e.addModule(
-			e.setShape(kitchen(), "left"),
-			"corner-wall",
-			0,
-			"cw",
-		);
-		const next = e.addModule(room, "tall-cabinet", 607, "t", 600);
-		expect(e.isClear(next)).toBe(true);
-		expect(next).toBe(room);
-	});
-});
-
-describe("cornerPositions", () => {
-	it("ignores a client's own xMm and rotation on a corner unit", () => {
-		const room = engine.addModule(
-			engine.setShape(kitchen(), "left"),
-			"corner-base",
-			0,
-			"c",
-		);
-		const floor = room.corner?.floor;
-		if (!room.corner || !floor) throw new Error("fixture lost its corner");
-		const tampered: RoomLayout = {
-			...room,
-			corner: {
-				...room.corner,
-				floor: { ...floor, xMm: 1234, rotationDeg: 90 },
-			},
-		};
-		const [left] = engine.cornerPositions(tampered);
-		expect(left.placed.xMm).toBe(0);
-		expect(left.placed.rotationDeg).toBeUndefined();
-		const right = engine.cornerPositions({
-			...tampered,
-			corner: {
-				...room.corner,
-				floor: tampered.corner?.floor ?? null,
-				side: "right",
-			},
-		})[0];
-		expect(right.placed.rotationDeg).toBe(270);
-		expect(right.placed.xMm).toBe(3300);
+	it("withRun writes rows only", () => {
+		const room = kitchen();
+		const view = { ...runView(room, 3), wallWidthMm: 1 };
+		const next = withRun(room, 3, { ...view, floor: [base("x", 0)] });
+		expect(next.plan).toBe(room.plan);
+		expect(next.runs[3].floor).toHaveLength(1);
 	});
 });
 
 describe("cornerShutSides", () => {
-	// A left corner puts the square at the start of the main wall and at the far
-	// end of the side wall, so these two sit either side of it. The side run is
-	// as long as the room is deep: 3600.
+	// The left wall is 3600 long and its corner is its far end.
 	const pair = (mainMm: number, sideEndMm: number) =>
-		lRoom("left", [base("a", mainMm)], [base("b", sideEndMm - 600)]);
-
+		lRoom([base("a", mainMm)], [base("b", sideEndMm - 600)]);
 	const both = new Map([
 		["a", "left"],
 		["b", "right"],
@@ -612,31 +400,17 @@ describe("cornerShutSides", () => {
 	});
 
 	it("still shuts them when a cabinet is nudged a few mm off the square", () => {
-		// The bug this replaces: the rule asked whether a cabinet sat against the
-		// square within a millimetre, so a 4mm nudge turned it off while the
-		// leaves still swung through each other.
 		expect(engine.cornerShutSides(pair(611, 2993))).toEqual(both);
 		expect(engine.cornerShutSides(pair(750, 2993))).toEqual(both);
 	});
 
 	it("lets them open once both are out of each other's reach", () => {
-		// These fixtures are a 600 leaf on a 607-deep carcass, so a leaf sweeps
-		// to 1207 from its own wall and back to 205 behind its stile: it clears
-		// the other run's sweep from about 1412 off the corner. Well past that,
-		// nothing is shut.
 		expect(engine.cornerShutSides(pair(1600, 2000))).toEqual(new Map());
-		// Still shut just inside it — the boxes are bounding boxes, so the edge
-		// of the window errs towards shut.
 		expect(engine.cornerShutSides(pair(1400, 2200))).toEqual(both);
 	});
 
 	it("still shuts them when a cabinet is lifted off the floor", () => {
-		// A base carcass is 870 tall, so a 40mm lift still leaves 830mm of shared
-		// height. The bug this replaces skipped every lifted cabinet — `inRun`
-		// bundles lifted in with turned — so hanging one a hair off the floor
-		// switched the rule off while its doors still swung.
 		const lifted = lRoom(
-			"left",
 			[{ ...base("a", 607), hangAtMm: 40 }],
 			[base("b", 2393)],
 		);
@@ -644,52 +418,31 @@ describe("cornerShutSides", () => {
 	});
 
 	it("lets them open when a lift clears the other run's doors", () => {
-		// Lifted past the other cabinet's top: the two leaves never share a
-		// height, so they cannot meet whatever they do in plan.
 		const hoisted = lRoom(
-			"left",
 			[{ ...base("a", 607), hangAtMm: 1500 }],
 			[base("b", 2393)],
 		);
 		expect(engine.cornerShutSides(hoisted)).toEqual(new Map());
 	});
 
-	it("ignores a turned cabinet, whose front no longer faces out", () => {
+	it("ignores a turned cabinet", () => {
 		const turned = lRoom(
-			"left",
 			[{ ...base("a", 607), rotationDeg: 30 }],
 			[base("b", 2393)],
 		);
 		expect(engine.cornerShutSides(turned)).toEqual(new Map());
 	});
 
-	it("leaves a lone cabinet's leaf swinging into the empty corner", () => {
-		expect(engine.cornerShutSides(lRoom("left", [base("a", 607)]))).toEqual(
-			new Map(),
-		);
-	});
-
-	it("shuts nothing on a straight wall", () => {
-		expect(engine.cornerShutSides(asRoom(emptyLayout(4200)))).toEqual(
-			new Map(),
-		);
+	it("shuts nothing while only one wall holds cabinets", () => {
+		expect(engine.cornerShutSides(lRoom([base("a", 607)]))).toEqual(new Map());
 	});
 
 	it("opens both once the corner square is deeper than the leaves reach", () => {
-		// Same L, cabinets hard against the square, two square sizes. A filled
-		// corner sets the square to the unit's width.
 		const filled = (squareMm: number): RoomLayout => ({
-			...lRoom(
-				"left",
-				[base("a", squareMm)],
-				[base("b", 3600 - squareMm - 600)],
-			),
-			corner: { side: "left", floor: base("corner", 0, squareMm), wall: null },
+			...lRoom([base("a", squareMm)], [base("b", 3600 - squareMm - 600)]),
+			corners: [{ vertex: 3, floor: base("corner", 0, squareMm), wall: null }],
 		});
-
-		// 900 against a 607 carcass: the leaves still reach across each other.
 		expect(engine.cornerShutSides(filled(900))).toEqual(both);
-		// 2600 puts the far corner of the square out of either leaf's reach.
 		expect(engine.cornerShutSides(filled(2600))).toEqual(new Map());
 	});
 });
