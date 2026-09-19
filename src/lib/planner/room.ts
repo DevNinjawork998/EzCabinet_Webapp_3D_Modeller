@@ -8,6 +8,7 @@ import {
 	frameOf,
 	nearestWall,
 	setWallLength as planWithWallLength,
+	pointInPlan,
 	type RoomShape,
 	rectCorners,
 	rectsOverlap,
@@ -118,12 +119,14 @@ export const offWall = (
 
 /** The wall a cabinet dropped at `centre` joins — the nearest, if its back
  * edge is within `SNAP_TO_WALL_MM` of it — and the drop point along it; or
- * `null` when it stands free. Ignores any turn, as `dropAt` does. */
+ * `null` when it stands free, or when `centre` is outside the room: behind a
+ * wall is not near it. Ignores any turn, as `dropAt` does. */
 export function wallToJoin(
 	plan: FloorPlan,
 	centre: Vec2,
 	depthMm: number,
 ): { run: number; xMm: number } | null {
+	if (!pointInPlan(plan, centre)) return null;
 	const target = nearestWall(plan, centre);
 	return offWall(plan, target.run, centre, depthMm) ? null : target;
 }
@@ -711,13 +714,15 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 	/**
 	 * Where a dragged cabinet lands on release. Its back edge within
 	 * `SNAP_TO_WALL_MM` of the nearest wall joins that wall's run, centred on
-	 * the drop point along it; anywhere else it stands free there.
+	 * the drop point along it; anywhere else in the room it stands free there.
 	 */
 	function dropAt(room: RoomLayout, id: string, centre: Vec2): RoomLayout {
 		const sourceRun = runIndexOf(room, id);
 		const found = findModule(room, id);
 		const family = found && familyIn(catalogue, found.familyId);
-		if (!found || !family) return room;
+		// Outside the room — the L's notch, say — is refused, not handed to the
+		// wall it happens to be behind.
+		if (!found || !family || !pointInPlan(room.plan, centre)) return room;
 		const target = wallToJoin(room.plan, centre, family.depthMm);
 		if (!target) return placeFree(room, id, centre);
 		const xMm = target.xMm - found.widthMm / 2;

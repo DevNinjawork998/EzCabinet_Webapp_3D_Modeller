@@ -829,6 +829,19 @@ describe("free-standing cabinets", () => {
 		).toBe(-1);
 	});
 
+	it("snaps back a drop whose centre is outside the room, not onto the wall behind it", () => {
+		let room: RoomLayout = {
+			...emptyRoom(5500),
+			plan: lPlan,
+			runs: Array.from({ length: 6 }, () => ({ floor: [], wall: [] })),
+		};
+		room = engine.addModule(room, "base-cabinet", 0, "a", 600);
+		// In the notch, a hand's breadth behind its walls.
+		const notch = { xMm: 2100, zMm: 800 };
+		expect(engine.dropAt(room, "a", notch)).toBe(room);
+		expect(wallToJoin(lPlan, notch, 607)).toBeNull();
+	});
+
 	it("refuses overlapping another free cabinet", () => {
 		let room = engine.addModule(withBase(), "base-cabinet", 600, "b", 600);
 		room = engine.placeFree(room, "a", { xMm: 0, zMm: 0 });
