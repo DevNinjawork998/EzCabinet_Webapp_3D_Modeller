@@ -240,6 +240,7 @@ export function StudioScreen({
 		positionsOf,
 		removeModules,
 		replaceFamily,
+		rotateFree,
 		rowEndMm,
 		runExtentMm,
 		offsetsOf,
@@ -454,6 +455,12 @@ export function StudioScreen({
 
 	const menuFamily = menu
 		? placed.find((position) => position.placed.id === menu.id)?.family
+		: undefined;
+	// A free cabinet: the run edits (resize, replace, duplicate, swap, gaps,
+	// lift) are no-ops on it, so none is offered, and its turn is its own.
+	const menuFree = menu ? layout.free.some((m) => m.id === menu.id) : false;
+	const selectedFree = selected
+		? layout.free.find((m) => m.id === selected.placed.id)
 		: undefined;
 
 	const canFlush = placed.some((position) => position.family.kind === "tall");
@@ -856,7 +863,7 @@ export function StudioScreen({
 							y={menu.y}
 							onDismissAction={() => setMenu(null)}
 							items={[
-								...((menuFamily?.sizes.length ?? 0) > 1
+								...(!menuFree && (menuFamily?.sizes.length ?? 0) > 1
 									? [
 											{
 												key: "resize",
@@ -868,26 +875,34 @@ export function StudioScreen({
 								// A corner unit stays in its corner — see SelectionPanel.
 								...(menuFamily && isCorner(menuFamily)
 									? []
-									: [
-											{
-												key: "replace",
-												label: t.planner.selection.verbReplace,
-												press: () => setVerb("replace"),
-											},
-											{
-												key: "move",
-												label: t.planner.selection.verbMove,
-												press: () => setVerb("move"),
-											},
-											{
-												key: "duplicate",
-												label: t.planner.selection.duplicate,
-												press: () =>
-													setLayoutAction((prev) =>
-														duplicateModule(prev, menu.id),
-													),
-											},
-										]),
+									: menuFree
+										? [
+												{
+													key: "move",
+													label: t.planner.selection.verbMove,
+													press: () => setVerb("move"),
+												},
+											]
+										: [
+												{
+													key: "replace",
+													label: t.planner.selection.verbReplace,
+													press: () => setVerb("replace"),
+												},
+												{
+													key: "move",
+													label: t.planner.selection.verbMove,
+													press: () => setVerb("move"),
+												},
+												{
+													key: "duplicate",
+													label: t.planner.selection.duplicate,
+													press: () =>
+														setLayoutAction((prev) =>
+															duplicateModule(prev, menu.id),
+														),
+												},
+											]),
 								{
 									key: "remove",
 									label: t.planner.selection.remove,
@@ -1038,7 +1053,20 @@ export function StudioScreen({
 							<SelectionPanel
 								catalogue={catalogue}
 								layout={layout}
-								selected={selected}
+								// A free cabinet's turn lives on its row, not in the
+								// run-of-one view `allPositions` draws it from.
+								selected={
+									selectedFree
+										? {
+												...selected,
+												placed: {
+													...selected.placed,
+													rotationDeg: selectedFree.rotationDeg,
+												},
+											}
+										: selected
+								}
+								free={selectedFree !== undefined}
 								verb={verb}
 								onVerbAction={setVerb}
 								widthOptions={widthOptionsFor(layout, selected.placed.id)}
@@ -1085,7 +1113,9 @@ export function StudioScreen({
 								}
 								onRotationAction={(deg) =>
 									setLayoutAction((prev) =>
-										setRotation(prev, selected.placed.id, deg),
+										selectedFree
+											? rotateFree(prev, selected.placed.id, deg)
+											: setRotation(prev, selected.placed.id, deg),
 									)
 								}
 								onToggleDoorAction={() => {

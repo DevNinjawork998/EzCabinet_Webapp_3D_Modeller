@@ -54,6 +54,7 @@ import {
 	toLocalMm,
 	toWorldMm,
 	transferTarget,
+	type Vec2,
 	type WallFrame,
 	wallsOf,
 } from "@/lib/planner/floorplan";
@@ -77,8 +78,11 @@ import {
 import {
 	cornerAt,
 	cornerSpans,
+	offWall,
 	type RoomLayout,
+	runIndexOf,
 	runView,
+	wallToJoin,
 	withRun,
 } from "@/lib/planner/room";
 import { Cabinet } from "./Cabinet";
@@ -781,6 +785,35 @@ function CabinetHitTest({
 	return null;
 }
 
+/** A drag that may leave its wall and follow the floor — see `Run`. */
+type FloorFollow = {
+	/** Centre minus the point taken hold of, plan mm. */
+	gripXMm: number;
+	gripZMm: number;
+	/** Height of the level plane the pointer is read on — the grab point's. */
+	levelYMm: number;
+	depthMm: number;
+	/** Where it would stand if dropped now; `null` while it is on its wall. */
+	centre: Vec2 | null;
+	/** The object moved while it follows the floor, where it started, and the
+	 * centre it was drawn at. */
+	obj: Object3D | null;
+	baseX: number;
+	baseZ: number;
+	fromXMm: number;
+	fromZMm: number;
+};
+
+/** Put a floated cabinet back where the layout draws it. */
+function land(f: FloorFollow) {
+	if (f.obj) {
+		f.obj.position.x = f.baseX;
+		f.obj.position.z = f.baseZ;
+	}
+	f.obj = null;
+	f.centre = null;
+}
+
 /**
  * The run itself, and the dragging of it.
  *
@@ -822,6 +855,9 @@ function Run({
 	onMeasureHover,
 	onDragPreview,
 	onTransfer,
+	onFreeDrop,
+	onFreeRotate,
+	freeStanding = false,
 	construction,
 }: {
 	layout: PlannerLayout;
@@ -883,6 +919,14 @@ function Run({
 	/** A `move` drag was released nearer another wall than its own: hand it
 	 * over instead of settling it on this one. */
 	onTransfer: (id: string, run: number, xMm: number) => void;
+	/** A floor-following drag was released: stand it at this centre (plan mm)
+	 * — free, or on the wall it landed near — or snap it back. */
+	onFreeDrop: (id: string, centre: Vec2) => void;
+	/** A free cabinet's ring was turned: its yaw, in degrees. */
+	onFreeRotate: (id: string, deg: number) => void;
+	/** One free-standing cabinet drawn as a run of one in its own frame: no
+	 * bare wall to press, and every slide follows the floor. */
+	freeStanding?: boolean;
 	/** Resolved outside the canvas and passed in: `Run` renders inside
 	 * `<Canvas>`, which is its own reconciler root. */
 	construction: Construction;
@@ -1018,6 +1062,9 @@ function Run({
 				/** The level plane's height when the wall plane is seen edge-on, else
 				 * `null` — see `seenEdgeOn`. */
 				levelY: number | null;
+				/** How this grab follows the floor, for a cabinet that may stand
+				 * free; `null` for a wall unit or a lift. */
+				floor: FloorFollow | null;
 		  }
 		| {
 				/** Turning: the pointer's bearing round the cabinet is the angle. */
@@ -1035,6 +1082,9 @@ function Run({
 				 * the ring.
 				 */
 				grabDeg: number;
+				/** A free cabinet turns in the world, not in its own frame — the
+				 * frame turns with it. */
+				free: boolean;
 		  }
 		| null
 	>(null);
@@ -1055,6 +1105,68 @@ function Run({
 	const layoutRef = useRef(layout);
 	layoutRef.current = layout;
 	const runWidthMm = layout.wallWidthMm;
+	/** The run's own group — what a free cabinet's floor drag moves, and
+	 * where a run cabinet's object is found for its own. */
+	const innerRef = useRef<Group>(null);
+
+	/** A cabinet's centre in plan, world mm. Its turn's spread is ignored, as
+	 * the drop rule ignores it. */
+	const centreOf = (position: Positioned): Vec2 => {
+		if (freeStanding) return { xMm: frame.xMm, zMm: frame.zMm };
+		const p = toWorldMm(
+			{
+				x: position.xMm + position.widthMm / 2 - runWidthMm / 2,
+				y: 0,
+				z:
+					-layoutRef.current.roomDepthMm / 2 +
+					WALL_GAP_MM +
+					position.family.depthMm / 2,
+			},
+			frame,
+		);
+		return { xMm: p.x, zMm: p.z };
+	};
+
+	/** Report the wall a drop would land on, only when that changes. */
+	const preview = (run: number | null) => {
+		if (lastPreviewRunRef.current === run) return;
+		lastPreviewRunRef.current = run;
+		onDragPreview(run);
+	};
+
+	/**
+	 * Draw the dragged cabinet standing at `centre`, by moving its object
+	 * directly — no layout change, so no re-render per pointer move. A free
+	 * cabinet moves its whole run of one (worktop and kick board with it); a
+	 * run cabinet moves alone, its run left as it was until the drop.
+	 */
+	const float = (id: string, f: FloorFollow, centre: Vec2) => {
+		if (!f.centre) {
+			const inner = innerRef.current;
+			const obj = freeStanding
+				? inner
+				: inner?.children.find((child) => child.userData.moduleId === id);
+			const position = allPositions(layoutRef.current).find(
+				(p) => p.placed.id === id,
+			);
+			if (!obj || !position) return;
+			const from = centreOf(position);
+			f.obj = obj;
+			f.baseX = obj.position.x;
+			f.baseZ = obj.position.z;
+			f.fromXMm = from.xMm;
+			f.fromZMm = from.zMm;
+		}
+		f.centre = centre;
+		if (!f.obj) return;
+		// The world move, turned into this run's frame.
+		const dx = centre.xMm - f.fromXMm;
+		const dz = centre.zMm - f.fromZMm;
+		const cos = Math.cos(frame.yawRad);
+		const sin = Math.sin(frame.yawRad);
+		f.obj.position.x = f.baseX + m(dx * cos - dz * sin);
+		f.obj.position.z = f.baseZ + m(dx * sin + dz * cos);
+	};
 
 	/** Take hold of a cabinet. The grab offset is what stops it snapping its
 	 *  left edge to the pointer — see `dragRef`. */
@@ -1075,6 +1187,9 @@ function Run({
 			xMm: hit.x + runWidthMm / 2,
 			yMm: hit.y,
 		};
+		// The cabinet's centre in plan, less the point taken hold of: what keeps
+		// a floor-following drag from jumping the cabinet's centre to the cursor.
+		const centre = centreOf(position);
 		dragRef.current = {
 			mode: "move",
 			id: position.placed.id,
@@ -1083,6 +1198,21 @@ function Run({
 			vertical,
 			planeZ,
 			levelY,
+			floor:
+				vertical || position.family.kind === "wall"
+					? null
+					: {
+							gripXMm: centre.xMm - e.point.x * 1000,
+							gripZMm: centre.zMm - e.point.z * 1000,
+							levelYMm: e.point.y * 1000,
+							depthMm: position.family.depthMm,
+							centre: null,
+							obj: null,
+							fromXMm: 0,
+							fromZMm: 0,
+							baseX: 0,
+							baseZ: 0,
+						},
 		};
 		crossWallRef.current = null;
 		lastPreviewRunRef.current = null;
@@ -1101,11 +1231,22 @@ function Run({
 		// its local frame is not the world's. The bearing has to be read against
 		// the cabinet's world centre or the cabinet turns the wrong way from
 		// half the camera angles.
-		const centreXMm = position.xMm + position.widthMm / 2 - runWidthMm / 2;
-		const centreZMm =
-			-layout.roomDepthMm / 2 + WALL_GAP_MM + position.family.depthMm / 2;
+		// A free cabinet's own turn is its frame's, so its bearing is read in
+		// the world, about its centre there.
+		const centreXMm = freeStanding
+			? frame.xMm
+			: position.xMm + position.widthMm / 2 - runWidthMm / 2;
+		const centreZMm = freeStanding
+			? frame.zMm
+			: -layout.roomDepthMm / 2 + WALL_GAP_MM + position.family.depthMm / 2;
+		const turnDeg = freeStanding
+			? (frame.yawRad * 180) / Math.PI
+			: (position.placed.rotationDeg ?? 0);
 
-		const pointer = planPointFromRay(localRay(e.ray, frame), planeY);
+		const pointer = planPointFromRay(
+			freeStanding ? e.ray : localRay(e.ray, frame),
+			planeY,
+		);
 		dragRef.current = {
 			mode: "rotate",
 			id: position.placed.id,
@@ -1113,8 +1254,8 @@ function Run({
 			centreZMm,
 			planeY,
 			grabDeg:
-				bearingDeg(pointer.xMm - centreXMm, pointer.zMm - centreZMm) -
-				(position.placed.rotationDeg ?? 0),
+				bearingDeg(pointer.xMm - centreXMm, pointer.zMm - centreZMm) - turnDeg,
+			free: freeStanding,
 		};
 		setDragging(true);
 		if (controls) controls.enabled = false;
@@ -1131,6 +1272,17 @@ function Run({
 		// nearest eighth, and running the placement snap here would slide a
 		// cabinet the gesture never touched.
 		if (drag.mode === "rotate") return;
+		// Following the floor: put the drawn cabinet back where the layout has
+		// it, and let the drop decide — free there, onto a wall, or refused, in
+		// which case putting it back *is* the snap back.
+		const following = drag.floor?.centre;
+		if (drag.floor && following) {
+			land(drag.floor);
+			onFreeDrop(drag.id, following);
+			return;
+		}
+		// A free cabinet has no run to settle into.
+		if (freeStanding) return;
 		// Dropped nearer another wall: hand it over instead of settling it here.
 		const crossWall = crossWallRef.current;
 		crossWallRef.current = null;
@@ -1153,7 +1305,15 @@ function Run({
 			drag.vertical ? current.hangAtMm : undefined,
 		);
 		if (next !== layoutRef.current) onLayoutChange(next);
-	}, [controls, onLayoutChange, dropModule, onDragPreview, onTransfer]);
+	}, [
+		controls,
+		onLayoutChange,
+		dropModule,
+		onDragPreview,
+		onTransfer,
+		onFreeDrop,
+		freeStanding,
+	]);
 
 	// A drag can end anywhere — off the plane, outside the canvas, or with this
 	// unmounting mid-gesture. All of them have to give orbiting back.
@@ -1198,6 +1358,44 @@ function Run({
 		DRAG_RAYCASTER.setFromCamera(DRAG_NDC, camera);
 		const ray = localRay(DRAG_RAYCASTER.ray, frame);
 
+		// A cabinet that may stand free follows the floor once it is dragged off
+		// its wall — a free one always. Read on the level plane through the
+		// point taken hold of, so the cabinet keeps pace with the cursor.
+		if (drag.mode === "move" && drag.floor) {
+			const f = drag.floor;
+			const { origin, direction } = DRAG_RAYCASTER.ray;
+			// Grazing the level plane, a pixel is a metre: no floor to follow.
+			const level =
+				Math.abs(direction.y) < GRAZING_DIRECTION
+					? null
+					: floorPointFromRay(
+							{
+								x: origin.x * 1000,
+								y: origin.y * 1000 - f.levelYMm,
+								z: origin.z * 1000,
+							},
+							{
+								x: direction.x * 1000,
+								y: direction.y * 1000,
+								z: direction.z * 1000,
+							},
+						);
+			if (level) {
+				const centre = {
+					xMm: level.xMm + f.gripXMm,
+					zMm: level.zMm + f.gripZMm,
+				};
+				if (freeStanding || offWall(plan, runIndex, centre, f.depthMm)) {
+					float(drag.id, f, centre);
+					crossWallRef.current = null;
+					preview(wallToJoin(plan, centre, f.depthMm)?.run ?? null);
+					return;
+				}
+				// Back within reach of its own wall: slide along it as before.
+				if (f.centre) land(f);
+			} else if (freeStanding) return;
+		}
+
 		// A slide or a lift, never a turn, can hand the cabinet to another wall.
 		// Read against the world ray, before `localRay` turns it into this run's
 		// own frame — the same `floorPointFromRay` `DropPicker` calls for a
@@ -1211,11 +1409,17 @@ function Run({
 			);
 			const candidate = floor ? transferTarget(plan, runIndex, floor) : null;
 			crossWallRef.current = candidate;
-			const previewRun = candidate?.run ?? null;
-			if (lastPreviewRunRef.current !== previewRun) {
-				lastPreviewRunRef.current = previewRun;
-				onDragPreview(previewRun);
-			}
+			preview(candidate?.run ?? null);
+		}
+
+		if (drag.mode === "rotate" && drag.free) {
+			const point = planPointFromRay(DRAG_RAYCASTER.ray, drag.planeY);
+			onFreeRotate(
+				drag.id,
+				bearingDeg(point.xMm - drag.centreXMm, point.zMm - drag.centreZMm) -
+					drag.grabDeg,
+			);
+			return;
 		}
 
 		if (drag.mode === "rotate") {
@@ -1316,18 +1520,24 @@ function Run({
 	// by its back face from here, with a scribe gap so the carcasses do not
 	// z-fight with the wall they stand against.
 	return (
-		<group position={[0, 0, -m(layout.roomDepthMm) / 2 + m(WALL_GAP_MM)]}>
+		<group
+			ref={innerRef}
+			position={[0, 0, -m(layout.roomDepthMm) / 2 + m(WALL_GAP_MM)]}
+		>
 			{/* A press on bare wall clears the selection. The moves of a drag are
-			    read off the window instead — see `onDragMove`. */}
-			<mesh
-				position={[0, m(layout.ceilingHeightMm) / 2, 0]}
-				onPointerDown={() => onSelect(null, false)}
-			>
-				<planeGeometry
-					args={[m(runWidthMm) * 4, m(layout.ceilingHeightMm) * 3]}
-				/>
-				<meshBasicMaterial transparent opacity={0} depthWrite={false} />
-			</mesh>
+			    read off the window instead — see `onDragMove`. A free cabinet
+			    stands against no wall, so it has none. */}
+			{!freeStanding && (
+				<mesh
+					position={[0, m(layout.ceilingHeightMm) / 2, 0]}
+					onPointerDown={() => onSelect(null, false)}
+				>
+					<planeGeometry
+						args={[m(runWidthMm) * 4, m(layout.ceilingHeightMm) * 3]}
+					/>
+					<meshBasicMaterial transparent opacity={0} depthWrite={false} />
+				</mesh>
+			)}
 
 			<ContactShadows layout={layout} runWidthMm={runWidthMm} engine={engine} />
 			<Worktop
@@ -1466,7 +1676,7 @@ function Run({
 							runWidthMm={runWidthMm}
 							roomDepthMm={layout.roomDepthMm}
 							floorHeightMm={floorHeightMmOf(position, layout)}
-							vertical={canHangAt(layout, position.placed.id)}
+							vertical={!freeStanding && canHangAt(layout, position.placed.id)}
 							onGrab={(e, planeZ, vertical) => {
 								e.stopPropagation();
 								if (measureMode) return;
@@ -1988,6 +2198,9 @@ function WorktopMaterial({ width, depth }: { width: number; depth: number }) {
 
 /** Module-level so the default never changes identity between renders. */
 const EMPTY_IDS: ReadonlySet<string> = new Set();
+/** A free cabinet's run of one has no corners. Stable, for `Run`'s memos. */
+const NO_CORNERS: Positioned[] = [];
+const NO_SPANS: Record<"floor" | "wall", Span[]> = { floor: [], wall: [] };
 
 export default function PlannerScene({
 	layout,
@@ -2099,6 +2312,15 @@ export default function PlannerScene({
 			})),
 		[layout, walls],
 	);
+	// Each free cabinet, drawn as a run of one in its own frame.
+	const freeRuns = useMemo(
+		() =>
+			layout.free.flatMap((module) => {
+				const drawn = rooms.freeRun(layout, module.id);
+				return drawn ? [{ id: module.id, ...drawn }] : [];
+			}),
+		[rooms, layout],
+	);
 	const count = layout.runs.length;
 	const cornersByRun = useMemo(
 		() => layout.runs.map((_, i) => rooms.cornerPositionsOf(layout, i)),
@@ -2155,6 +2377,28 @@ export default function PlannerScene({
 			onWallPickAction?.(run);
 		},
 		[rooms, onLayoutChangeAction, onWallPickAction],
+	);
+	// A floor-following drag let go: free there, onto the wall it landed near,
+	// or refused — the room unchanged, which `Run` has already drawn as a snap
+	// back. A cabinet that joined another wall takes the target with it.
+	const onFreeDrop = useCallback(
+		(id: string, centre: Vec2) => {
+			const room = roomRef.current;
+			const next = rooms.dropAt(room, id, centre);
+			if (next === room) return;
+			onLayoutChangeAction(next);
+			const run = runIndexOf(next, id);
+			if (run >= 0 && run !== runIndexOf(room, id)) onWallPickAction?.(run);
+		},
+		[rooms, onLayoutChangeAction, onWallPickAction],
+	);
+	const onFreeRotate = useCallback(
+		(id: string, deg: number) => {
+			const room = roomRef.current;
+			const next = rooms.rotateFree(room, id, deg, true);
+			if (next !== room) onLayoutChangeAction(next);
+		},
+		[rooms, onLayoutChangeAction],
 	);
 	// Only the first point anchors the lock; with two down the next click starts
 	// a fresh measurement, which has nothing to constrain against.
@@ -2253,6 +2497,8 @@ export default function PlannerScene({
 						onMeasureHover={setHoverPoint}
 						onDragPreview={setPreviewWall}
 						onTransfer={onTransfer}
+						onFreeDrop={onFreeDrop}
+						onFreeRotate={onFreeRotate}
 						construction={construction}
 					/>
 					{i === lonelyRun && positioned && offsets && (
@@ -2266,6 +2512,48 @@ export default function PlannerScene({
 							engine={engine}
 						/>
 					)}
+				</group>
+			))}
+			{freeRuns.map(({ id, view: freeLayout, frame }) => (
+				<group
+					key={id}
+					position={[m(frame.xMm), 0, m(frame.zMm)]}
+					rotation={[0, frame.yawRad, 0]}
+				>
+					<Run
+						freeStanding
+						layout={freeLayout}
+						frame={frame}
+						plan={layout.plan}
+						runIndex={-1}
+						corners={NO_CORNERS}
+						filledSpans={NO_SPANS}
+						exposure={exposure}
+						shutSides={shutSides}
+						cornerWorktop={null}
+						catalogue={catalogue}
+						engine={engine}
+						finishHex={finishHex}
+						finishPhoto={finishPhoto}
+						selectedIds={selectedIds}
+						openIds={openIds}
+						doorsHidden={doorsHidden}
+						doorTargetId={doorTargetId}
+						measureMode={measureMode}
+						measureAxis={measureAxis}
+						measureAnchor={measureAnchor}
+						// Never called: a free cabinet's edits go through the drop and
+						// the ring, not the one-wall engine.
+						onLayoutChange={() => {}}
+						onSelect={onSelectAction}
+						onMeasurePick={onMeasurePickAction ?? (() => {})}
+						onMeasureHover={setHoverPoint}
+						onDragPreview={setPreviewWall}
+						onTransfer={onTransfer}
+						onFreeDrop={onFreeDrop}
+						onFreeRotate={onFreeRotate}
+						construction={construction}
+					/>
 				</group>
 			))}
 			{view === "plan" && onWallLengthAction && (

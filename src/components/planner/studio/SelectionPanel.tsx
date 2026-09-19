@@ -21,6 +21,7 @@ export function SelectionPanel({
 	catalogue,
 	layout,
 	selected,
+	free,
 	verb,
 	onVerbAction,
 	widthOptions,
@@ -46,6 +47,10 @@ export function SelectionPanel({
 	catalogue: PlannerCatalogue;
 	layout: RoomLayout;
 	selected: Positioned;
+	/** Standing free on the floor: only turning, doors and removal apply —
+	 * the run edits (resize, replace, duplicate, swap, gaps, lift) would do
+	 * nothing to it, so they are not offered. */
+	free: boolean;
 	verb: SelectionVerb;
 	onVerbAction: (verb: SelectionVerb) => void;
 	widthOptions: { widthMm: number; fits: boolean }[];
@@ -93,7 +98,7 @@ export function SelectionPanel({
 	const verbs = [
 		// One design is one width: a cabinet with a single size has nothing to
 		// resize to, and a greyed-out verb would read as broken.
-		...(selected.family.sizes.length > 1
+		...(!free && selected.family.sizes.length > 1
 			? [
 					{
 						key: "resize" as const,
@@ -106,12 +111,17 @@ export function SelectionPanel({
 		...(corner
 			? []
 			: [
-					{
-						key: "replace" as const,
-						label: t.planner.selection.verbReplace,
-						meta: selected.family.label,
-						press: () => onVerbAction(verb === "replace" ? null : "replace"),
-					},
+					...(free
+						? []
+						: [
+								{
+									key: "replace" as const,
+									label: t.planner.selection.verbReplace,
+									meta: selected.family.label,
+									press: () =>
+										onVerbAction(verb === "replace" ? null : "replace"),
+								},
+							]),
 					{
 						key: "move" as const,
 						label: t.planner.selection.verbMove,
@@ -128,7 +138,7 @@ export function SelectionPanel({
 			press: onToggleDoorAction,
 			disabled: selected.placed.doorStyleId === null,
 		},
-		...(corner
+		...(corner || free
 			? []
 			: [
 					{
@@ -252,28 +262,30 @@ export function SelectionPanel({
 					<p className="font-semibold text-[12px] text-neutral-700">
 						{t.planner.selection.positionHeading}
 					</p>
-					<div className="flex gap-1">
-						<button
-							type="button"
-							onClick={() => onSwapAction(-1)}
-							disabled={!canSwap.left}
-							aria-label={t.planner.selection.swapLeft}
-							title={t.planner.selection.swapLeft}
-							className="flex h-9 flex-1 items-center justify-center rounded-lg border border-neutral-300 text-[15px] text-[#1f5138] hover:bg-[#e7efe9] disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-300 disabled:hover:bg-transparent"
-						>
-							←
-						</button>
-						<button
-							type="button"
-							onClick={() => onSwapAction(1)}
-							disabled={!canSwap.right}
-							aria-label={t.planner.selection.swapRight}
-							title={t.planner.selection.swapRight}
-							className="flex h-9 flex-1 items-center justify-center rounded-lg border border-neutral-300 text-[15px] text-[#1f5138] hover:bg-[#e7efe9] disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-300 disabled:hover:bg-transparent"
-						>
-							→
-						</button>
-					</div>
+					{!free && (
+						<div className="flex gap-1">
+							<button
+								type="button"
+								onClick={() => onSwapAction(-1)}
+								disabled={!canSwap.left}
+								aria-label={t.planner.selection.swapLeft}
+								title={t.planner.selection.swapLeft}
+								className="flex h-9 flex-1 items-center justify-center rounded-lg border border-neutral-300 text-[15px] text-[#1f5138] hover:bg-[#e7efe9] disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-300 disabled:hover:bg-transparent"
+							>
+								←
+							</button>
+							<button
+								type="button"
+								onClick={() => onSwapAction(1)}
+								disabled={!canSwap.right}
+								aria-label={t.planner.selection.swapRight}
+								title={t.planner.selection.swapRight}
+								className="flex h-9 flex-1 items-center justify-center rounded-lg border border-neutral-300 text-[15px] text-[#1f5138] hover:bg-[#e7efe9] disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-300 disabled:hover:bg-transparent"
+							>
+								→
+							</button>
+						</div>
+					)}
 
 					{/* The same two gaps the dimension lines draw, measured to the same
 					    neighbour or wall. A "from left wall" figure measured past the
@@ -304,24 +316,30 @@ export function SelectionPanel({
 								</span>
 							</div>
 						))}
-					<div className="flex items-center justify-between gap-2">
-						<label htmlFor="hangatmm" className="text-[12px] text-neutral-500">
-							{isWall
-								? t.planner.selection.hangAtThis
-								: t.planner.selection.standsAt}
-						</label>
-						<span className="flex items-center gap-1">
-							<input
-								id="hangatmm"
-								type="number"
-								step={10}
-								value={hangAtMm}
-								onChange={(e) => onHangAtAction(Number(e.target.value))}
-								className="w-[70px] rounded-[7px] border border-neutral-300 px-2 py-1.5 text-right text-[12px]"
-							/>
-							<span className="text-[11px] text-[#8a857c]">mm</span>
-						</span>
-					</div>
+					{/* A free cabinet stands on the floor: no lift. */}
+					{!free && (
+						<div className="flex items-center justify-between gap-2">
+							<label
+								htmlFor="hangatmm"
+								className="text-[12px] text-neutral-500"
+							>
+								{isWall
+									? t.planner.selection.hangAtThis
+									: t.planner.selection.standsAt}
+							</label>
+							<span className="flex items-center gap-1">
+								<input
+									id="hangatmm"
+									type="number"
+									step={10}
+									value={hangAtMm}
+									onChange={(e) => onHangAtAction(Number(e.target.value))}
+									className="w-[70px] rounded-[7px] border border-neutral-300 px-2 py-1.5 text-right text-[12px]"
+								/>
+								<span className="text-[11px] text-[#8a857c]">mm</span>
+							</span>
+						</div>
+					)}
 
 					{/* The angle in figures as well as on the ring. A turn is a drag
 					    round a gizmo, which is exactly the gesture a thumb on a phone
@@ -346,9 +364,11 @@ export function SelectionPanel({
 						</span>
 					</div>
 
-					<p className="text-[11px] text-[#8a857c] leading-[15px]">
-						{t.planner.selection.swapHint}
-					</p>
+					{!free && (
+						<p className="text-[11px] text-[#8a857c] leading-[15px]">
+							{t.planner.selection.swapHint}
+						</p>
+					)}
 				</section>
 			)}
 
