@@ -52,6 +52,7 @@ import {
 	nearestWall,
 	toLocalMm,
 	toWorldMm,
+	transferTarget,
 	type WallFrame,
 	wallsOf,
 } from "@/lib/planner/floorplan";
@@ -795,6 +796,8 @@ function CabinetHitTest({
 function Run({
 	layout,
 	frame,
+	plan,
+	runIndex,
 	corners,
 	filledSpans,
 	exposure,
@@ -815,11 +818,17 @@ function Run({
 	onSelect,
 	onMeasurePick,
 	onMeasureHover,
+	onDragPreview,
+	onTransfer,
 	construction,
 }: {
 	layout: PlannerLayout;
 	/** Where this run's group stands — see `localRay`. */
 	frame: WallFrame;
+	/** The whole room's outline — what a cross-room drag is read against. */
+	plan: FloorPlan;
+	/** This run's own wall, so a drop on it is never read as a transfer. */
+	runIndex: number;
 	/** Corner units at this run's start. Selectable, never dragged. */
 	corners: Positioned[];
 	/** The corner squares along this run that hold a unit, per row. A filled
@@ -866,6 +875,12 @@ function Run({
 	/** What the measuring tool would pick right now, so the overlay can show it
 	 * before the click commits. `null` once the pointer leaves. */
 	onMeasureHover: (snap: SnapPoint | null) => void;
+	/** The wall a cabinet mid-drag would land on if released now, or `null` —
+	 * for the preview tint. Fires only when the candidate changes. */
+	onDragPreview: (run: number | null) => void;
+	/** A `move` drag was released nearer another wall than its own: hand it
+	 * over instead of settling it on this one. */
+	onTransfer: (id: string, run: number, xMm: number) => void;
 	/** Resolved outside the canvas and passed in: `Run` renders inside
 	 * `<Canvas>`, which is its own reconciler root. */
 	construction: Construction;
@@ -1022,6 +1037,13 @@ function Run({
 		| null
 	>(null);
 	const [dragging, setDragging] = useState(false);
+	/** The wall a `move` drag would transfer to if released now — read by
+	 * `endDrag`, and mirrored to `onDragPreview` only when it changes, so a
+	 * pointer move that lands on the same candidate wall costs no re-render. */
+	const crossWallRef = useRef<{ run: number; xMm: number } | null>(null);
+	/** The last run reported to `onDragPreview`, so a pointer move that lands
+	 * on the same wall never calls it again. */
+	const lastPreviewRunRef = useRef<number | null>(null);
 	// Which cabinet the measuring tool is over right now, so it can glow the
 	// same way a door-drag target does — the user needs to see which surface
 	// a click is about to measure before committing to it.
@@ -1060,6 +1082,8 @@ function Run({
 			planeZ,
 			levelY,
 		};
+		crossWallRef.current = null;
+		lastPreviewRunRef.current = null;
 		setDragging(true);
 		if (controls) controls.enabled = false;
 	};
@@ -1100,10 +1124,18 @@ function Run({
 		dragRef.current = null;
 		setDragging(false);
 		if (controls) controls.enabled = true;
+		onDragPreview(null);
 		// A turn has nothing to settle: `setRotation` already landed it on the
 		// nearest eighth, and running the placement snap here would slide a
 		// cabinet the gesture never touched.
 		if (drag.mode === "rotate") return;
+		// Dropped nearer another wall: hand it over instead of settling it here.
+		const crossWall = crossWallRef.current;
+		crossWallRef.current = null;
+		if (crossWall) {
+			onTransfer(drag.id, crossWall.run, crossWall.xMm);
+			return;
+		}
 		// Settle it: flush against a neighbour, a wall end, or the cabinet below.
 		const current = [
 			...layoutRef.current.floor,
@@ -1119,7 +1151,7 @@ function Run({
 			drag.vertical ? current.hangAtMm : undefined,
 		);
 		if (next !== layoutRef.current) onLayoutChange(next);
-	}, [controls, onLayoutChange, dropModule]);
+	}, [controls, onLayoutChange, dropModule, onDragPreview, onTransfer]);
 
 	// A drag can end anywhere — off the plane, outside the canvas, or with this
 	// unmounting mid-gesture. All of them have to give orbiting back.
@@ -1163,6 +1195,28 @@ function Run({
 		if (Math.abs(DRAG_NDC.x) > 1 || Math.abs(DRAG_NDC.y) > 1) return;
 		DRAG_RAYCASTER.setFromCamera(DRAG_NDC, camera);
 		const ray = localRay(DRAG_RAYCASTER.ray, frame);
+
+		// A slide or a lift, never a turn, can hand the cabinet to another wall.
+		// Read against the world ray, before `localRay` turns it into this run's
+		// own frame — the same floor-point maths `DropPicker` uses for a palette
+		// drop.
+		if (drag.mode === "move" && !drag.vertical) {
+			const origin = DRAG_RAYCASTER.ray.origin;
+			const direction = DRAG_RAYCASTER.ray.direction;
+			const candidate =
+				Math.abs(direction.y) < 1e-6
+					? null
+					: transferTarget(plan, runIndex, {
+							xMm: (origin.x + (direction.x * -origin.y) / direction.y) * 1000,
+							zMm: (origin.z + (direction.z * -origin.y) / direction.y) * 1000,
+						});
+			crossWallRef.current = candidate;
+			const previewRun = candidate?.run ?? null;
+			if (lastPreviewRunRef.current !== previewRun) {
+				lastPreviewRunRef.current = previewRun;
+				onDragPreview(previewRun);
+			}
+		}
 
 		if (drag.mode === "rotate") {
 			const plan = planPointFromRay(ray, drag.planeY);
@@ -2091,6 +2145,17 @@ export default function PlannerScene({
 		catalogue.finishes[0].hex;
 	const finishPhoto = finishTextures[finish] ?? null;
 	const [hoverPoint, setHoverPoint] = useState<SnapPoint | null>(null);
+	// The wall a cabinet mid-drag would transfer to, for the preview tint.
+	// `Run` already dedupes before calling this, so every call here is a real
+	// change and a plain `useState` re-render is the right cost.
+	const [previewWall, setPreviewWall] = useState<number | null>(null);
+	const onTransfer = useCallback(
+		(id: string, run: number, xMm: number) => {
+			onLayoutChangeAction(rooms.moveToRun(roomRef.current, id, run, xMm));
+			onWallPickAction?.(run);
+		},
+		[rooms, onLayoutChangeAction, onWallPickAction],
+	);
 	// Only the first point anchors the lock; with two down the next click starts
 	// a fresh measurement, which has nothing to constrain against.
 	const measureAnchor =
@@ -2145,6 +2210,7 @@ export default function PlannerScene({
 				plan={layout.plan}
 				height={m(layout.ceilingHeightMm)}
 				targetWall={targetRun}
+				dragPreviewWall={previewWall}
 				onWallPick={measureMode ? undefined : onWallPickAction}
 			/>
 
@@ -2159,6 +2225,8 @@ export default function PlannerScene({
 					<Run
 						layout={runLayout}
 						frame={frame}
+						plan={layout.plan}
+						runIndex={i}
 						corners={cornersByRun[i]}
 						filledSpans={filledByRun[i]}
 						exposure={exposure}
@@ -2183,6 +2251,8 @@ export default function PlannerScene({
 						onSelect={onSelectAction}
 						onMeasurePick={onMeasurePickAction ?? (() => {})}
 						onMeasureHover={setHoverPoint}
+						onDragPreview={setPreviewWall}
+						onTransfer={onTransfer}
 						construction={construction}
 					/>
 					{i === lonelyRun && positioned && offsets && (

@@ -13,6 +13,7 @@ import {
 	runIndexOf,
 	runView,
 	setDoor,
+	setHinge,
 	withRun,
 } from "../room";
 
@@ -376,6 +377,72 @@ describe("cornerWorktops", () => {
 		expect(engine.cornerWorktops(room)).toEqual([
 			{ vertex: 3, sizeMm: 900, topMm: 880 },
 		]);
+	});
+});
+
+describe("moveToRun", () => {
+	it("hands a cabinet to another wall, keeping id, door and hinge", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		room = setDoor(room, "a", "shaker");
+		room = setHinge(room, "a", "right");
+		const next = engine.moveToRun(room, "a", 3, 1500);
+		expect(runIndexOf(next, "a")).toBe(3);
+		expect(next.runs[0].floor).toEqual([]);
+		const moved = next.runs[3].floor.find((m) => m.id === "a");
+		expect(moved).toMatchObject({
+			id: "a",
+			familyId: "base-cabinet",
+			widthMm: 600,
+			doorStyleId: "shaker",
+			hinge: "right",
+			xMm: 1200,
+		});
+	});
+
+	it("drops rotationDeg on a turned cabinet", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		room = engine.setRotation(room, "a", 90);
+		const next = engine.moveToRun(room, "a", 3, 1500);
+		const moved = next.runs[3].floor.find((m) => m.id === "a");
+		expect(moved?.rotationDeg).toBeUndefined();
+	});
+
+	it("refuses a wall with no room, unchanged", () => {
+		// Run 2 (front, 4200mm) never shares a corner with run 0, so filling it
+		// exactly leaves nothing else in play.
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		room = engine.addModule(room, "base-cabinet", 0, "w1", 900, 2);
+		room = engine.addModule(room, "base-cabinet", 900, "w2", 900, 2);
+		room = engine.addModule(room, "base-cabinet", 1800, "w3", 900, 2);
+		room = engine.addModule(room, "base-cabinet", 2700, "w4", 900, 2);
+		room = engine.addModule(room, "base-cabinet", 3600, "w5", 600, 2);
+		expect(engine.moveToRun(room, "a", 2, 1500)).toBe(room);
+	});
+
+	it("refuses a corner unit, unchanged", () => {
+		const room = engine.addModule(kitchen(), "corner-base", 0, "c");
+		expect(engine.moveToRun(room, "c", 1, 500)).toBe(room);
+	});
+
+	it("frees the corner square when the only cabinet on the other wall leaves, and does not pull the first back", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		room = engine.addModule(room, "base-cabinet", 3000, "s", 600, 3);
+		expect(isActiveCorner(room, 3)).toBe(true);
+		expect(xOf(room, "a")).toBe(607);
+		const next = engine.moveToRun(room, "s", 2, 300);
+		expect(isActiveCorner(next, 3)).toBe(false);
+		expect(xOf(next, "a")).toBe(607);
+		expect(runIndexOf(next, "s")).toBe(2);
+	});
+
+	it("activates a corner and cascades when the target wall meets a used one", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		room = engine.addModule(room, "base-cabinet", 0, "x", 600, 2);
+		expect(xOf(room, "a")).toBe(0);
+		const next = engine.moveToRun(room, "x", 3, 300);
+		expect(runIndexOf(next, "x")).toBe(3);
+		expect(isActiveCorner(next, 3)).toBe(true);
+		expect(xOf(next, "a")).toBe(607);
 	});
 });
 

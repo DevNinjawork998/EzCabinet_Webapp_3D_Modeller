@@ -824,6 +824,47 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		);
 	}
 
+	/**
+	 * Hand a cabinet to another wall — the target a drag is dropped nearest.
+	 * Refused, unchanged, for an unknown id, a corner unit (never in a run, so
+	 * `runIndexOf` already answers -1), the cabinet's own wall, or a target with
+	 * nowhere for it. `xMm` is the pointer's drop point; the cabinet centres on
+	 * it, same as `nearestWall` hands back a drop point rather than an edge.
+	 */
+	function moveToRun(
+		room: RoomLayout,
+		id: string,
+		run: number,
+		xMm: number,
+	): RoomLayout {
+		const sourceRun = runIndexOf(room, id);
+		if (sourceRun < 0 || sourceRun === run) return room;
+		const found =
+			room.runs[sourceRun].floor.find((m) => m.id === id) ??
+			room.runs[sourceRun].wall.find((m) => m.id === id);
+		if (!found) return room;
+		const removed = removeModules(room, [id]);
+		const added = addModule(
+			removed,
+			found.familyId,
+			xMm - found.widthMm / 2,
+			id,
+			found.widthMm,
+			run,
+		);
+		if (added === removed) return room;
+		let next = mapModule(added, id, (module) => ({
+			...module,
+			doorStyleId: found.doorStyleId,
+			hinge: found.hinge,
+		}));
+		if (found.hangAtMm !== undefined) {
+			const hangAtMm = found.hangAtMm;
+			next = mapModule(next, id, (module) => ({ ...module, hangAtMm }));
+		}
+		return next;
+	}
+
 	function removeModules(room: RoomLayout, ids: Iterable<string>): RoomLayout {
 		const gone = new Set(ids);
 		if (gone.size === 0) return room;
@@ -922,6 +963,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		swapWithNeighbour: inRunOf(wall.swapWithNeighbour),
 		removeModules,
 		removeModule: (room: RoomLayout, id: string) => removeModules(room, [id]),
+		moveToRun,
 		closeGaps,
 		setHangingHeight: setting<"hangingHeightMm", number>(
 			"hangingHeightMm",

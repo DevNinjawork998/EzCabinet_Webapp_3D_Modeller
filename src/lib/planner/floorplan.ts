@@ -301,3 +301,14 @@ export function nearestWall(
 	});
 	return best;
 }
+
+/** Where a cabinet dragged off `ownRun` should transfer to: the wall a floor
+ * point lands nearest, or `null` when that is the wall it is already on. */
+export function transferTarget(
+	plan: FloorPlan,
+	ownRun: number,
+	point: Vec2,
+): { run: number; xMm: number } | null {
+	const target = nearestWall(plan, point);
+	return target.run === ownRun ? null : target;
+}

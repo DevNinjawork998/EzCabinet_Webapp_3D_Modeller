@@ -16,6 +16,9 @@ const m = (mm: number) => mm / 1000;
 const WALL_COLOR = "#e8e6e1";
 /** The wall the add menu builds on: tinted just enough to find. */
 const TARGET_WALL_COLOR = "#dde7e0";
+/** The wall a cabinet mid-drag would land on: a lighter version of the same
+ * green, so it reads as "about to" rather than "is". */
+const DRAG_PREVIEW_WALL_COLOR = "#eaf1ec";
 
 /**
  * The SPC plank tile `pnpm generate:grain` draws to `public/floor.png`: two
@@ -75,11 +78,14 @@ export function Room({
 	plan,
 	height,
 	targetWall,
+	dragPreviewWall = null,
 	onWallPick,
 }: {
 	plan: FloorPlan;
 	height: number;
 	targetWall: number;
+	/** The wall a cabinet mid-drag would transfer to, or `null`. */
+	dragPreviewWall?: number | null;
 	/** Absent while measuring: a tap then picks a point, not a wall. */
 	onWallPick?: (wall: number) => void;
 }) {
@@ -138,7 +144,13 @@ export function Room({
 					>
 						<planeGeometry args={[m(Math.hypot(dx, dz)), height]} />
 						<meshStandardMaterial
-							color={i === targetWall ? TARGET_WALL_COLOR : WALL_COLOR}
+							color={
+								i === targetWall
+									? TARGET_WALL_COLOR
+									: i === dragPreviewWall
+										? DRAG_PREVIEW_WALL_COLOR
+										: WALL_COLOR
+							}
 							roughness={0.95}
 						/>
 					</mesh>

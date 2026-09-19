@@ -10,6 +10,7 @@ import {
 	shapeOf,
 	toLocalMm,
 	toWorldMm,
+	transferTarget,
 	vertexKind,
 	wallLabelMm,
 	wallsOf,
@@ -192,5 +193,15 @@ describe("nearestWall", () => {
 			run: 0,
 			xMm: 2200,
 		});
+	});
+});
+
+describe("transferTarget", () => {
+	it("hands a drop to the wall it lands nearest, unless that is its own", () => {
+		expect(transferTarget(rect, 0, { xMm: -2000, zMm: 1000 })).toEqual({
+			run: 3,
+			xMm: 800,
+		});
+		expect(transferTarget(rect, 3, { xMm: -2000, zMm: 1000 })).toBeNull();
 	});
 });
