@@ -26,7 +26,11 @@ import {
 	Vector3,
 } from "three";
 import { captureError } from "@/lib/analytics";
-import { panTargetMm, type RoomBoundsMm } from "@/lib/planner/camera";
+import {
+	panSpaceFor,
+	panTargetMm,
+	type RoomBoundsMm,
+} from "@/lib/planner/camera";
 import {
 	CEILING_TRIM_MM,
 	type Construction,
@@ -442,8 +446,9 @@ function PanGizmo({
 }: {
 	bounds: RoomBoundsMm;
 	view: PlannerView;
-	/** The targeted wall's run frame: the axes the pan is masked and clamped
-	 * in, and the wall the single-sided puck faces in elevation. */
+	/** The frame the pan is masked and clamped in — the targeted wall's, or
+	 * the plan's own in plan view (see `panSpaceFor`) — and in elevation the
+	 * wall the single-sided puck faces. */
 	frame: WallFrame;
 	/** Same trigger `FitCamera` refits on. Watched here only to abandon a
 	 * journey the refit has just overruled. */
@@ -2054,6 +2059,23 @@ export default function PlannerScene({
 		() => rooms.cornerShutSides(layout),
 		[rooms, layout],
 	);
+	const panSpace = panSpaceFor(
+		view,
+		{
+			frame: target.frame,
+			bounds: {
+				runWidthMm: Math.max(runWidthMm, engine.rowEndMm(target.view, "floor")),
+				roomDepthMm: target.view.roomDepthMm,
+				ceilingHeightMm: layout.ceilingHeightMm,
+				// The floor units only. A wall unit hangs over floor a person
+				// can stand on, and so can the puck.
+				runDepthMm: engine
+					.positionsOf(target.view, "floor")
+					.reduce((deepest, p) => Math.max(deepest, p.family.depthMm), 0),
+			},
+		},
+		layout.plan,
+	);
 	const finishHex =
 		catalogue.finishes.find((f) => f.id === finish)?.hex ??
 		catalogue.finishes[0].hex;
@@ -2199,24 +2221,7 @@ export default function PlannerScene({
 				enableRotate={view === "3d"}
 				maxPolarAngle={Math.PI / 2 - 0.05}
 			/>
-			<PanGizmo
-				bounds={{
-					runWidthMm: Math.max(
-						runWidthMm,
-						engine.rowEndMm(target.view, "floor"),
-					),
-					roomDepthMm: target.view.roomDepthMm,
-					ceilingHeightMm: layout.ceilingHeightMm,
-					// The floor units only. A wall unit hangs over floor a person
-					// can stand on, and so can the puck.
-					runDepthMm: engine
-						.positionsOf(target.view, "floor")
-						.reduce((deepest, p) => Math.max(deepest, p.family.depthMm), 0),
-				}}
-				view={view}
-				frame={target.frame}
-				refitKey={refitKey}
-			/>
+			<PanGizmo {...panSpace} view={view} refitKey={refitKey} />
 			<FitCamera
 				runWidthMm={Math.max(runWidthMm, engine.rowEndMm(target.view, "floor"))}
 				roomDepthMm={target.view.roomDepthMm}

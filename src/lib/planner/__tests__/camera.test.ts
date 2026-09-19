@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { clampPanTarget, panTargetMm, type RoomBoundsMm } from "../camera";
+import {
+	clampPanTarget,
+	panSpaceFor,
+	panTargetMm,
+	type RoomBoundsMm,
+} from "../camera";
 import type { WallFrame } from "../floorplan";
 import type { Vec3Mm } from "../parts";
 
@@ -137,6 +142,55 @@ describe("panTargetMm", () => {
 				LEFT_ROOM,
 			),
 			{ x: -500, y: 1000, z: -700 },
+		);
+	});
+});
+
+describe("panSpaceFor", () => {
+	// The IKEA L: 5500 × 5075. Wall 2 is the notch's top wall, whose own box
+	// (1500 along it, 2075 out from it) misses the plan's centre entirely.
+	const plan = { widthMm: 5500, depthMm: 5075 };
+	const notchWall = {
+		frame: { yawRad: Math.PI, xMm: 2000, zMm: 1500 },
+		bounds: { ...ROOM, runWidthMm: 1500, roomDepthMm: 2075, runDepthMm: 600 },
+	};
+
+	it("keeps the targeted wall's frame and box in 3D and elevation", () => {
+		expect(panSpaceFor("3d", notchWall, plan)).toBe(notchWall);
+		expect(panSpaceFor("elevation", notchWall, plan)).toBe(notchWall);
+	});
+
+	it("pans the plan view over the whole plan, whatever wall is targeted", () => {
+		const space = panSpaceFor("plan", notchWall, plan);
+		expect(space.frame).toEqual(IDENTITY);
+		expect(space.bounds).toEqual({
+			runWidthMm: 5500,
+			roomDepthMm: 5075,
+			ceilingHeightMm: ROOM.ceilingHeightMm,
+			runDepthMm: 0,
+		});
+		const { frame, bounds } = space;
+		// The plan view is framed on the centre; the first nudge stays there.
+		close(
+			panTargetMm(
+				{ x: 0, y: 0, z: 0 },
+				{ x: 0, y: 0, z: 0 },
+				ALL,
+				frame,
+				bounds,
+			),
+			{ x: 0, y: 0, z: 0 },
+		);
+		// And stops at the plan's bounding box.
+		close(
+			panTargetMm(
+				{ x: 9000, y: 0, z: 9000 },
+				{ x: 0, y: 0, z: 0 },
+				ALL,
+				frame,
+				bounds,
+			),
+			{ x: 2750, y: 0, z: 2537.5 },
 		);
 	});
 });

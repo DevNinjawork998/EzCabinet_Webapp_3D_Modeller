@@ -80,3 +80,31 @@ export function panTargetMm(
 		frame,
 	);
 }
+
+export type PanSpace = { frame: WallFrame; bounds: RoomBoundsMm };
+
+const PLAN_FRAME: WallFrame = { yawRad: 0, xMm: 0, zMm: 0 };
+
+/**
+ * The frame and box the puck is clamped in. 3D and elevation look at the
+ * targeted wall, so they pan in its box. The plan view is framed on the whole
+ * floor plan — and on an L a notch wall's box misses the plan's centre
+ * entirely, so the first nudge would throw the view into that leg. There the
+ * box is the plan's bounding box, with no run footprint to keep clear of.
+ */
+export function panSpaceFor(
+	view: "3d" | "elevation" | "plan",
+	wall: PanSpace,
+	plan: { widthMm: number; depthMm: number },
+): PanSpace {
+	if (view !== "plan") return wall;
+	return {
+		frame: PLAN_FRAME,
+		bounds: {
+			runWidthMm: plan.widthMm,
+			roomDepthMm: plan.depthMm,
+			ceilingHeightMm: wall.bounds.ceilingHeightMm,
+			runDepthMm: 0,
+		},
+	};
+}
