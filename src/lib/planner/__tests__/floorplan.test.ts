@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+	distanceToWallMm,
 	type FloorPlan,
 	floorPointFromRay,
+	footprintInPlan,
 	frameOf,
 	nearestWall,
 	outlineOf,
 	planIsValid,
+	pointInPlan,
+	rectCorners,
+	rectsOverlap,
 	reshape,
 	setWallLength,
 	shapeOf,
@@ -225,5 +230,101 @@ describe("transferTarget", () => {
 			xMm: 800,
 		});
 		expect(transferTarget(rect, 3, { xMm: -2000, zMm: 1000 })).toBeNull();
+	});
+});
+
+describe("pointInPlan", () => {
+	it("is inside a rectangle, outside past its walls, inside on a wall", () => {
+		expect(pointInPlan(rect, { xMm: 0, zMm: 0 })).toBe(true);
+		expect(pointInPlan(rect, { xMm: 2200, zMm: 0 })).toBe(false);
+		expect(pointInPlan(rect, { xMm: 2100, zMm: 0 })).toBe(true);
+		expect(pointInPlan(rect, { xMm: -2100, zMm: -1800 })).toBe(true);
+	});
+
+	it("puts the L's notch outside", () => {
+		// Notch: x 1250..2750, z -462.5..2537.5.
+		expect(pointInPlan(l, { xMm: 2000, zMm: 1500 })).toBe(false);
+		expect(pointInPlan(l, { xMm: 2000, zMm: -1000 })).toBe(true);
+		expect(pointInPlan(l, { xMm: 0, zMm: 1500 })).toBe(true);
+		expect(pointInPlan(lMirror, { xMm: -2000, zMm: 1500 })).toBe(false);
+	});
+});
+
+describe("rectCorners", () => {
+	it("turns the footprint about its centre, same sense as a wall's yaw", () => {
+		const corners = rectCorners({ xMm: 0, zMm: 0 }, 600, 400, Math.PI / 2);
+		const round = corners.map((c) => ({
+			xMm: Math.round(c.xMm),
+			zMm: Math.round(c.zMm),
+		}));
+		// Turned a quarter, the 600 width runs along z and the 400 depth along x.
+		expect(Math.max(...round.map((c) => c.xMm))).toBe(200);
+		expect(Math.max(...round.map((c) => c.zMm))).toBe(300);
+		// Local +z (the front) turned by +π/2 points along +x, as `toWorldMm`.
+		const front = toWorldMm(
+			{ x: 0, y: 0, z: 200 },
+			{
+				yawRad: Math.PI / 2,
+				xMm: 0,
+				zMm: 0,
+			},
+		);
+		expect(Math.round(front.x)).toBe(200);
+	});
+});
+
+describe("rectsOverlap", () => {
+	const at = (xMm: number, zMm: number, yawRad = 0) =>
+		rectCorners({ xMm, zMm }, 600, 600, yawRad);
+
+	it("tells disjoint from overlapping", () => {
+		expect(rectsOverlap(at(0, 0), at(1000, 0))).toBe(false);
+		expect(rectsOverlap(at(0, 0), at(300, 300))).toBe(true);
+	});
+
+	it("does not count touching edges as overlap", () => {
+		expect(rectsOverlap(at(0, 0), at(600, 0))).toBe(false);
+		expect(rectsOverlap(at(0, 0), at(599, 0))).toBe(true);
+	});
+
+	it("separates a 45° square by its own axes, not just the other's", () => {
+		// Bounding boxes overlap; the diamond's own edge separates them.
+		const diamond = at(0, 0, Math.PI / 4);
+		expect(rectsOverlap(diamond, at(700, 700))).toBe(false);
+		expect(rectsOverlap(diamond, at(600, 0))).toBe(true);
+	});
+});
+
+describe("distanceToWallMm", () => {
+	it("measures inward from a wall's line", () => {
+		// Back wall at z = -1800, left wall (3) at x = -2100.
+		expect(distanceToWallMm(rect, 0, { xMm: 0, zMm: -1000 })).toBe(800);
+		expect(distanceToWallMm(rect, 3, { xMm: -1800, zMm: 0 })).toBe(300);
+		expect(distanceToWallMm(rect, 3, { xMm: -2200, zMm: 0 })).toBe(-100);
+	});
+});
+
+describe("footprintInPlan", () => {
+	it("keeps a footprint against a wall, refuses one through it", () => {
+		// Back wall at z = -1800: a 600-deep box centred 300 off it touches.
+		expect(
+			footprintInPlan(rect, rectCorners({ xMm: 0, zMm: -1500 }, 600, 600, 0)),
+		).toBe(true);
+		expect(
+			footprintInPlan(rect, rectCorners({ xMm: 0, zMm: -1600 }, 600, 600, 0)),
+		).toBe(false);
+	});
+
+	it("refuses a thin box across the L's notch with every corner inside", () => {
+		// From the back leg at (2600, -600) to the left leg at (1100, 2400).
+		const yaw = Math.atan2(-3000, -1500);
+		const across = rectCorners(
+			{ xMm: 1850, zMm: 900 },
+			Math.hypot(1500, 3000),
+			20,
+			yaw,
+		);
+		expect(across.every((c) => pointInPlan(l, c))).toBe(true);
+		expect(footprintInPlan(l, across)).toBe(false);
 	});
 });

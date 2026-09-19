@@ -327,3 +327,118 @@ export function transferTarget(
 	const target = nearestWall(plan, point);
 	return target.run === ownRun ? null : target;
 }
+
+/** How far apart two edges may overlap and still count as touching — the same
+ * half millimetre `layout.ts` forgives along a wall. */
+const SLACK_MM = 0.5;
+
+/** Whether a floor point is in the room. On a wall counts as in: a cabinet
+ * stands against one. */
+export function pointInPlan(plan: FloorPlan, p: Vec2): boolean {
+	const pts = outlineOf(plan);
+	let inside = false;
+	for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+		const a = pts[i];
+		const b = pts[j];
+		// On this edge, within the slack.
+		const ex = b.xMm - a.xMm;
+		const ez = b.zMm - a.zMm;
+		const t = Math.max(
+			0,
+			Math.min(
+				1,
+				((p.xMm - a.xMm) * ex + (p.zMm - a.zMm) * ez) / (ex * ex + ez * ez),
+			),
+		);
+		if (Math.hypot(a.xMm + t * ex - p.xMm, a.zMm + t * ez - p.zMm) <= SLACK_MM)
+			return true;
+		if (
+			a.zMm > p.zMm !== b.zMm > p.zMm &&
+			p.xMm < a.xMm + ((p.zMm - a.zMm) * ex) / ez
+		)
+			inside = !inside;
+	}
+	return inside;
+}
+
+/** A footprint's four corners in plan, turned by `yawRad` about its centre —
+ * the same turn `toWorldMm` gives a run, so local +z (the front) faces the way
+ * a wall at that yaw faces. */
+export function rectCorners(
+	centre: Vec2,
+	widthMm: number,
+	depthMm: number,
+	yawRad: number,
+): Vec2[] {
+	const frame = { yawRad, xMm: centre.xMm, zMm: centre.zMm };
+	const w = widthMm / 2;
+	const d = depthMm / 2;
+	return [
+		[-w, -d],
+		[w, -d],
+		[w, d],
+		[-w, d],
+	].map(([x, z]) => {
+		const p = toWorldMm({ x, y: 0, z }, frame);
+		return { xMm: p.x, zMm: p.z };
+	});
+}
+
+/** Whether two convex outlines overlap, by separating axes. Edges that only
+ * touch do not. */
+export function rectsOverlap(a: Vec2[], b: Vec2[]): boolean {
+	for (const poly of [a, b]) {
+		for (let i = 0; i < poly.length; i++) {
+			const p = poly[i];
+			const q = poly[(i + 1) % poly.length];
+			const axis = { xMm: q.zMm - p.zMm, zMm: p.xMm - q.xMm };
+			const len = Math.hypot(axis.xMm, axis.zMm);
+			if (len === 0) continue;
+			const project = (poly: Vec2[]) =>
+				poly.map((v) => (v.xMm * axis.xMm + v.zMm * axis.zMm) / len);
+			const pa = project(a);
+			const pb = project(b);
+			if (
+				Math.min(Math.max(...pa), Math.max(...pb)) -
+					Math.max(Math.min(...pa), Math.min(...pb)) <=
+				SLACK_MM
+			)
+				return false;
+		}
+	}
+	return true;
+}
+
+/** How far `p` stands off wall `wall`'s line, into the room. Negative is
+ * behind it. */
+export function distanceToWallMm(
+	plan: FloorPlan,
+	wall: number,
+	p: Vec2,
+): number {
+	const w = wallsOf(plan)[wall];
+	return (
+		(p.xMm - w.startMm.xMm) * w.inward.xMm +
+		(p.zMm - w.startMm.zMm) * w.inward.zMm
+	);
+}
+
+/** Whether a convex footprint lies wholly in the room. Every corner inside is
+ * not enough for an L: a long box can reach from one leg to the other across
+ * the notch, so the notch is also a rectangle it must not overlap. */
+export function footprintInPlan(plan: FloorPlan, corners: Vec2[]): boolean {
+	if (!corners.every((c) => pointInPlan(plan, c))) return false;
+	if (plan.template === "rect") return true;
+	const w = plan.widthMm / 2;
+	const d = plan.depthMm / 2;
+	const inner = plan.mirror ? -w + plan.notchWidthMm : w - plan.notchWidthMm;
+	const outer = plan.mirror ? -w : w;
+	const top = d - plan.notchDepthMm;
+	const notch = [
+		{ xMm: inner, zMm: top },
+		{ xMm: outer, zMm: top },
+		{ xMm: outer, zMm: d },
+		{ xMm: inner, zMm: d },
+	];
+	return !rectsOverlap(corners, notch);
+}
