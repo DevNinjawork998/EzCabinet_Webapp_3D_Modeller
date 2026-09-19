@@ -2,13 +2,19 @@ import {
 	doorPriceRmIn,
 	doorStyleIn,
 	type FinishId,
+	familyIn,
 	type ModuleKind,
 	type ResolvedRates,
 	ratesOf,
 	sizePriceRmIn,
 } from "./catalogue";
 import type { PlannerCatalogue } from "./catalogueSchema";
-import { inRun, type Positioned } from "./layout";
+import {
+	inRun,
+	type PlannerLayout,
+	type Positioned,
+	plannerEngine,
+} from "./layout";
 import { type RoomLayout, roomEngine } from "./room";
 
 /**
@@ -89,6 +95,21 @@ type KitchenPrice = {
 
 const ftOf = (mm: number) => mm / MM_PER_FT;
 
+/** Each free **base** cabinet as the run of one it is priced as. A free tall
+ * unit has no worktop and, by the spec, no kick board of its own. */
+const freeBaseViews = (
+	layout: RoomLayout,
+	catalogue: PlannerCatalogue,
+): PlannerLayout[] => {
+	const engine = roomEngine(catalogue);
+	return layout.free.flatMap((m) => {
+		const view = engine.freeView(layout, m.id);
+		return view && familyIn(catalogue, m.familyId)?.kind === "base"
+			? [view]
+			: [];
+	});
+};
+
 /** What one placed cabinet costs: its size, plus its door if it has one. */
 function cabinetPriceRm(
 	placed: Positioned,
@@ -128,11 +149,16 @@ export function worktopFt(
 		// same slab — see `inRun`.
 		.filter(inRun)
 		.reduce((total, position) => total + position.widthMm, 0);
+	// A free base unit carries its own top, cut to its width.
+	const freeMm = freeBaseViews(layout, catalogue)
+		.flatMap((view) => plannerEngine(catalogue).positionsOf(view, "floor"))
+		.filter(inRun)
+		.reduce((total, position) => total + position.widthMm, 0);
 	// Each square where two runs meet is one piece of worktop, counted once.
 	const cornersMm = engine
 		.cornerWorktops(layout)
 		.reduce((total, square) => total + square.sizeMm, 0);
-	return ftOf(mm + cornersMm);
+	return ftOf(mm + freeMm + cornersMm);
 }
 
 /**
@@ -163,9 +189,13 @@ export function skirtingFt(
 	catalogue: PlannerCatalogue,
 ): number {
 	const engine = roomEngine(catalogue);
-	const mm = layout.runs
-		.flatMap((_, run) => engine.skirtingSpans(layout, run))
-		.reduce((total, span) => total + (span.endMm - span.startMm), 0);
+	const oneWall = plannerEngine(catalogue);
+	const mm = [
+		...layout.runs.flatMap((_, run) => engine.skirtingSpans(layout, run)),
+		...freeBaseViews(layout, catalogue).flatMap((view) =>
+			oneWall.skirtingSpans(view),
+		),
+	].reduce((total, span) => total + (span.endMm - span.startMm), 0);
 	return ftOf(mm);
 }
 

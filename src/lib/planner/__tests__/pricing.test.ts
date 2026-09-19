@@ -494,3 +494,35 @@ describe("an L-shaped room", () => {
 		expect(price.worktopFt).toBeCloseTo((600 + 600 + 900) / MM_PER_FT);
 	});
 });
+
+describe("a free-standing cabinet", () => {
+	const rooms = roomEngine(PLANNER_CATALOGUE);
+	const standing = (familyId: string, widthMm: number) => {
+		const room = rooms.addModule(emptyRoom(4200), familyId, 0, "f", widthMm);
+		return rooms.placeFree(room, "f", { xMm: 0, zMm: 0 });
+	};
+
+	it("is priced as a run of one: its own worktop, kick board and both ends", () => {
+		const room = standing("base-cabinet", 600);
+		expect(room.free).toHaveLength(1);
+		expect(roomWorktopFt(room, PLANNER_CATALOGUE) * MM_PER_FT).toBeCloseTo(600);
+		expect(roomSkirtingFt(room, PLANNER_CATALOGUE) * MM_PER_FT).toBeCloseTo(
+			600,
+		);
+		const panels = rooms.endPanels(room);
+		expect(panels).toHaveLength(2);
+		expect(panels.every((p) => p.kind === "base")).toBe(true);
+		expect(roomEndPanelPriceRm(room, PLANNER_CATALOGUE).amountRm).toBe(
+			2 * RATES.endPanelBaseRm,
+		);
+	});
+
+	it("gives a tall unit two tall panels and no worktop", () => {
+		const room = standing("tall-cabinet", 600);
+		expect(room.free).toHaveLength(1);
+		expect(roomWorktopFt(room, PLANNER_CATALOGUE)).toBe(0);
+		expect(roomSkirtingFt(room, PLANNER_CATALOGUE)).toBe(0);
+		const panels = rooms.endPanels(room);
+		expect(panels.map((p) => p.kind)).toEqual(["tall", "tall"]);
+	});
+});
