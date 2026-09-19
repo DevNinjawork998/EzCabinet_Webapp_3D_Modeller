@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	clampIntoPlan,
 	distanceToWallMm,
 	type FloorPlan,
 	floorPointFromRay,
@@ -326,5 +327,46 @@ describe("footprintInPlan", () => {
 		);
 		expect(across.every((c) => pointInPlan(l, c))).toBe(true);
 		expect(footprintInPlan(l, across)).toBe(false);
+	});
+});
+
+describe("clampIntoPlan", () => {
+	it("stops a cabinet pushed through the back wall with its back on the wall", () => {
+		expect(clampIntoPlan(rect, { xMm: 0, zMm: -1900 }, 600, 580, 0)).toEqual({
+			xMm: 0,
+			zMm: -1800 + 290,
+		});
+	});
+
+	it("stops one pushed past two walls in their corner", () => {
+		const c = clampIntoPlan(rect, { xMm: -2300, zMm: -2000 }, 600, 580, 0);
+		expect(c.xMm).toBeCloseTo(-2100 + 300);
+		expect(c.zMm).toBeCloseTo(-1800 + 290);
+	});
+
+	it("hands back an inside centre as the same object", () => {
+		const centre = { xMm: 0, zMm: 0 };
+		expect(clampIntoPlan(rect, centre, 600, 580, 0)).toBe(centre);
+	});
+
+	it("lets a turned cabinet's corner touch the wall, not cross it", () => {
+		const c = clampIntoPlan(
+			rect,
+			{ xMm: 0, zMm: -1700 },
+			600,
+			580,
+			Math.PI / 4,
+		);
+		const corners = rectCorners(c, 600, 580, Math.PI / 4);
+		expect(Math.min(...corners.map((p) => p.zMm))).toBeCloseTo(-1800);
+		expect(footprintInPlan(rect, corners)).toBe(true);
+	});
+
+	it("pushes one out of the L's notch onto the nearer notch wall", () => {
+		// Notch: x 1250…2750, z −462.5…2537.5. Nearer its back wall (z −462.5).
+		const c = clampIntoPlan(l, { xMm: 2300, zMm: -380 }, 600, 580, 0);
+		expect(c.xMm).toBeCloseTo(2300);
+		expect(c.zMm).toBeCloseTo(-462.5 - 290);
+		expect(footprintInPlan(l, rectCorners(c, 600, 580, 0))).toBe(true);
 	});
 });

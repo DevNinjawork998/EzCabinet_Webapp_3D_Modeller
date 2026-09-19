@@ -442,3 +442,45 @@ export function footprintInPlan(plan: FloorPlan, corners: Vec2[]): boolean {
 	];
 	return !rectsOverlap(corners, notch);
 }
+
+/**
+ * The nearest centre to `centre` at which a footprint turned by `yawRad` lies
+ * wholly in the room — what keeps a dragged cabinet sliding along a wall
+ * rather than passing through it. `centre` itself, the same object, when it
+ * already does.
+ *
+ * Each corner outside the room is charged to the wall segment it is nearest,
+ * and the centre is pushed along each charged wall's inward normal by the
+ * deepest corner behind it. Nearest segment rather than every wall line: an
+ * L's notch walls, extended, cut through the other leg, and a corner out in
+ * the notch belongs to the notch wall it is closest to.
+ */
+export function clampIntoPlan(
+	plan: FloorPlan,
+	centre: Vec2,
+	widthMm: number,
+	depthMm: number,
+	yawRad: number,
+): Vec2 {
+	const walls = wallsOf(plan);
+	let at = centre;
+	// ponytail: two passes resolve every 90° corner; a general polygon would
+	// need iteration to convergence.
+	for (let pass = 0; pass < 2; pass++) {
+		const corners = rectCorners(at, widthMm, depthMm, yawRad);
+		if (footprintInPlan(plan, corners)) return at;
+		const depth = walls.map(() => 0);
+		for (const corner of corners) {
+			if (pointInPlan(plan, corner)) continue;
+			const { run } = nearestWall(plan, corner);
+			depth[run] = Math.max(depth[run], -distanceToWallMm(plan, run, corner));
+		}
+		let { xMm, zMm } = at;
+		walls.forEach((wall, run) => {
+			xMm += wall.inward.xMm * depth[run];
+			zMm += wall.inward.zMm * depth[run];
+		});
+		at = { xMm, zMm };
+	}
+	return at;
+}

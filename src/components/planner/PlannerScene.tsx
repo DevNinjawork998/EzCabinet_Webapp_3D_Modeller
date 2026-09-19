@@ -47,6 +47,7 @@ import {
 	sideGapsMm,
 } from "@/lib/planner/exposure";
 import {
+	clampIntoPlan,
 	type FloorPlan,
 	floorPointFromRay,
 	frameOf,
@@ -792,7 +793,11 @@ type FloorFollow = {
 	gripZMm: number;
 	/** Height of the level plane the pointer is read on — the grab point's. */
 	levelYMm: number;
+	widthMm: number;
 	depthMm: number;
+	/** Its turn in plan — the wall's and its own — for keeping its footprint
+	 * inside the room. */
+	yawRad: number;
 	/** Where it would stand if dropped now; `null` while it is on its wall. */
 	centre: Vec2 | null;
 	/** The object moved while it follows the floor, where it started, and the
@@ -1205,7 +1210,13 @@ function Run({
 							gripXMm: centre.xMm - e.point.x * 1000,
 							gripZMm: centre.zMm - e.point.z * 1000,
 							levelYMm: e.point.y * 1000,
+							widthMm: position.widthMm,
 							depthMm: position.family.depthMm,
+							// A free cabinet's turn is its frame's; a run cabinet's is its
+							// wall's plus its own.
+							yawRad:
+								frame.yawRad +
+								((position.placed.rotationDeg ?? 0) * Math.PI) / 180,
 							centre: null,
 							obj: null,
 							fromXMm: 0,
@@ -1381,10 +1392,15 @@ function Run({
 							},
 						);
 			if (level) {
-				const centre = {
-					xMm: level.xMm + f.gripXMm,
-					zMm: level.zMm + f.gripZMm,
-				};
+				// Kept inside the room: pushed against a wall it slides along it
+				// rather than through it, and the drop reads the same centre.
+				const centre = clampIntoPlan(
+					plan,
+					{ xMm: level.xMm + f.gripXMm, zMm: level.zMm + f.gripZMm },
+					f.widthMm,
+					f.depthMm,
+					f.yawRad,
+				);
 				if (freeStanding || offWall(plan, runIndex, centre, f.depthMm)) {
 					float(drag.id, f, centre);
 					crossWallRef.current = null;
