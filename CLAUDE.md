@@ -66,8 +66,10 @@ a template with editable wall lengths, not a wall list. `rect` has four walls,
 one more shape later. Every corner is 90° and closure is guaranteed by
 construction: there is no wall list to leave open. `wallsOf(plan)` derives the
 walls (start, end, length, yaw, inward normal) and `setWallLength(plan, wall,
-mm)` edits one, clamped so a wall never goes shorter than what its cabinets and
-corner squares need.
+mm)` edits one, clamped only to the plan's own limits (`clampPlan`). The
+cabinet-aware clamp is the engine's `setWallLength` (`room.ts`): a wall never
+goes shorter than what its cabinets, corner squares and any free cabinet need —
+it bisects to the nearest length `isClear` accepts.
 
 A room is still **runs** — `runs[i]` belongs to wall *i*. Each run is still the
 one-dimensional thing `layout.ts` places: `runView` hands a run to that engine
@@ -119,11 +121,18 @@ the wall-length labels; orbit and zoom stay live regardless.
 
 ### Drag to another wall
 
-A floor-row cabinet dragged near a different wall than the one it's on rejoins
-there: `transferTarget` finds the candidate wall and `moveToRun` (`room.ts`)
-moves it, keeping its id, door style and hinge and dropping whatever turn it
-had on its old wall. A custom hang height survives the move only if it's still
-valid on the new wall; otherwise it resets.
+**Floor units (base, tall) have one drop rule.** Dragged more than 150 mm off
+their wall they follow the floor, and the release goes through `dropAt`
+(`room.ts`): back edge within `SNAP_TO_WALL_MM` of a wall joins that wall, else
+the cabinet stands free (see below). The wall tint while dragging reads the
+same `wallToJoin`, so the preview and the drop always agree. Within 150 mm of
+their own wall they slide along it and stay on it.
+
+**Only wall units hop wall to wall** (`transferTarget`, `floorplan.ts`, from
+the pointer's floor point), since they cannot stand free. Either way the move
+is `moveToRun`, keeping id, door style and hinge and dropping whatever turn it
+had on its old wall. A wall unit's custom hang height survives the move only if
+it's still valid on the new wall; otherwise it resets.
 
 ### Free-standing cabinets
 
@@ -134,9 +143,12 @@ need a wall or a corner to exist.
 
 On drop, if the cabinet's back edge lands within **150 mm**
 (`SNAP_TO_WALL_MM`, `room.ts`) of a wall, it joins that wall's run through the
-same `moveToRun` path; otherwise it stays free at the drop point. The only
-thing that refuses a drop is the L notch's outside area — everywhere else
-inside the room outline, clear of other cabinets' footprints, is valid. A free
+same `moveToRun` path; otherwise it stays free at the drop point. While
+dragging, `clampIntoPlan` (`floorplan.ts`) keeps the cabinet's footprint inside
+the room — pushed against a wall it slides along it, and a drop aimed into the
+L's notch lands just outside it. `dropAt` still refuses a centre in the notch
+for any caller that skips the clamp; everywhere else inside the room outline,
+clear of other cabinets' footprints, is valid. A free
 cabinet is drawn as a one-cabinet `Run` built from `freeView` — the same view
 `pricing.ts` reads — so the worktop, kick board, doors and end panels are the
 existing `Run` code, not a special case. It prices as a run of one: its own

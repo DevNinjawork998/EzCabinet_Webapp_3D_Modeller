@@ -241,3 +241,16 @@ A cabinet can stand anywhere on the floor, not only against a wall.
 - **Pricing:** a free cabinet is priced exactly as a run of one: its own worktop (base only, by width), its own kick board wherever a run would bill one (a base unit, or a tall unit standing on legs), and both sides charged as end panels. **The exposed back is not charged** — an open question for EzCabinet. A free row never carries `hangAtMm`: a free cabinet stands on the floor.
 - **Checkout:** `validateOrder` checks free cabinets like run cabinets (known family, on-ladder width, room offers it, kind base/tall, not a corner design) plus inside-the-room and no-overlap.
 - **Scene:** a free cabinet is drawn as a one-cabinet run with its own frame (yaw = its rotation, position = its centre), so the worktop, kick board, end panels and doors reuse `Run` unchanged. Dragging reads the floor plane; a wall cabinet dragged more than the snap distance off its wall follows the pointer on the floor.
+
+## Deviations adopted during implementation
+
+- **`wallToWall` removed.** Every room now has walls all round, so the flag
+  has nothing left to mean; v1/v2 designs drop it on migration.
+- **`corners` is stored as an array**, `{ vertex, floor, wall }[]`, one entry
+  per inside vertex that holds a unit — not a map keyed by vertex.
+- **A free cabinet's kick board is billed as a run of one** — as §5 already
+  says.
+- **Floor units use one drop rule.** A base or tall unit changes wall only by
+  following the floor and dropping within `SNAP_TO_WALL_MM` of a wall
+  (`dropAt` / `wallToJoin`); `transferTarget` is kept for wall units alone, so
+  the drag preview and the drop cannot disagree.
