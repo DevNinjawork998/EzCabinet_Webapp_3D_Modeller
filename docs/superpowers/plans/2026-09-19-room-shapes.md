@@ -3269,3 +3269,48 @@ git commit -m "docs: room shapes, the floor plan and design v3
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
+
+---
+
+### Task 8: Drag a cabinet to another wall (added 2026-09-19, user request)
+
+Today a placed cabinet stores only `xMm` along its own wall, `hangAtMm` and `rotationDeg`. The drag solves the pointer against the cabinet's own wall plane, so it can never leave its wall. The user chose: **dragging a cabinet across the room hands it to the wall it is dropped nearest.** It still stands against a wall. There is no data-format change and no island or pull-off.
+
+**Files:**
+- Modify: `src/lib/planner/floorplan.ts` (+ `transferTarget`), `src/lib/planner/__tests__/floorplan.test.ts`
+- Modify: `src/lib/planner/room.ts` (+ engine `moveToRun`), `src/lib/planner/__tests__/room.test.ts`
+- Modify: `src/components/planner/PlannerScene.tsx` (drag release → transfer; target-wall preview tint), `src/components/planner/StudioScreen.tsx` (retarget after a transfer)
+
+**Interfaces:**
+- `transferTarget(plan: FloorPlan, ownRun: number, point: Vec2): { run: number; xMm: number } | null`: `nearestWall(plan, point)`, or `null` when that is `ownRun`.
+- Engine `moveToRun(room: RoomLayout, id: string, run: number, xMm: number): RoomLayout`:
+  - Returns `room` unchanged if the id is unknown, is a corner unit, is already on `run`, or the cabinet does not fit on the new wall.
+  - Otherwise it removes the cabinet from its run and places it on `run`. The xMm is centred on the pointer: `xMm − widthMm/2`, clamped by the one-wall engine.
+  - It keeps `id`, `familyId`, `widthMm`, `doorStyleId`, `hinge` and `hangAtMm`, and drops `rotationDeg`.
+  - It runs the same corner cascade and `allClear` gate as `addModule`.
+
+- [ ] **Step 1: Failing tests.**
+  - floorplan: `transferTarget(rect, 0, { xMm: -2000, zMm: 1000 })` → `{ run: 3, xMm: 800 }`; the same point with ownRun 3 → `null`.
+  - room:
+    1. A base cabinet on the back wall moved to run 3 at x=1500 lands on run 3, is gone from run 0, and keeps id, door and hinge.
+    2. A turned cabinet loses `rotationDeg`.
+    3. Moving onto a full wall returns the room unchanged (`toBe`).
+    4. Moving a corner unit returns the room unchanged.
+    5. Moving the second wall's only cabinet away frees the corner square (the first wall's cabinet stays where it is).
+    6. Moving onto a wall that meets a used wall activates that corner and cascades.
+- [ ] **Step 2:** Run them and watch them fail (`transferTarget`/`moveToRun` not found).
+- [ ] **Step 3:** Implement. `moveToRun` = `removeModules` → `addModule(room, familyId, xMm − width/2, id, widthMm, run)` → restore door, hinge and hangAt via `mapModule`, then return the original room if the add was refused.
+- [ ] **Step 4: Scene.**
+  - At `Run`'s drag release (the window `pointerup` that ends a `move` drag), read the pointer's floor point with the same ray→floor maths `DropPicker` uses, in world mm.
+  - Call `transferTarget(layout.plan, i, point)`.
+  - If it returns a wall, call `onLayoutChangeAction(rooms.moveToRun(roomRef.current, id, target.run, target.xMm))` and `onWallPickAction?.(target.run)`, instead of committing the along-wall drag.
+  - While dragging, pass the would-be target run to `<Room>` as a preview tint (a lighter green than the target tint). Keep the preview in a ref plus light state so the room doesn't re-render per pointer move; update it only when the candidate run changes.
+  - Measure mode and rotate/lift gestures are unaffected. Only a `move` drag transfers.
+- [ ] **Step 5: Gates and browser.**
+  - `pnpm vitest run --dir src`, `pnpm typecheck` and `pnpm lint` all pass.
+  - Browser, recorded as a GIF:
+    - Drag a back-wall cabinet toward the left wall: the left wall previews, and on release the cabinet stands on the left wall.
+    - Dropping onto a full wall snaps it back.
+    - The corner square switches on or off as walls fill and empty.
+    - Undo still works, if the studio has undo.
+- [ ] **Step 6:** Commit, ending the message with the two attribution lines.
