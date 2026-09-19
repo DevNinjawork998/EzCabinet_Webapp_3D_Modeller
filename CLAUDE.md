@@ -95,9 +95,12 @@ there has an open end.
 
 Every room now has walls all round, so a cabinet flush against a side wall
 (within one board) wears no end panel — see Open questions. Stored orders are
-design v3; v1 and v2 are migrated to v3 on read (a straight room becomes
-`rect` with the run on wall 0; an L's corner and side run map onto the vertex
-and wall the winding rule puts them at).
+design v3; v1 and v2 are migrated to v3 on read as a `rect` plan — v2 never had
+an L-shaped *room*, only an L-shaped kitchen run along two walls of a
+rectangle. The straight run lands on wall 0; a v2 L's side run lands on wall 3
+(left) or wall 1 (right), and its corner unit at the vertex those walls share
+(3 or 0), so the kitchen the customer built is unchanged, only the room around
+it is now explicit.
 
 ### Wall numbering
 
@@ -107,7 +110,10 @@ the admin both use. The Room panel shows a small floor-plan map (`WallMap`,
 length field carries the same number. The scene mirrors it: `showWallNumbers`
 turns on floor badges at the foot of every wall while the Room panel is open —
 off by default, since they're clutter once the shape is settled — and plan
-view labels each wall "Wall n" on its `DimensionField`. The pan gizmo
+view labels each wall "Wall n" beside an editable length chip
+(`WallLengths.tsx`, built on the same `EditableFigure` `PositionDimensions.tsx`
+uses — `DimensionField` is the Room panel's own field, a different component).
+The pan gizmo
 (`showPanPuck`) hides while the Room panel is open so it doesn't sit on top of
 the wall-length labels; orbit and zoom stay live regardless.
 
