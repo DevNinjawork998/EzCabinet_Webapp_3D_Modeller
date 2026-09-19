@@ -350,3 +350,60 @@ describe("orderDesignSchema", () => {
 		expect("wallToWall" in right).toBe(false);
 	});
 });
+
+describe("a free-standing order", () => {
+	const rooms = roomEngine(catalogue);
+	const width = inKitchen.sizes[0].widthMm;
+	const island = () => {
+		const room = rooms.addModule(emptyRoom(4200), inKitchen.id, 0, "f", width);
+		return rooms.placeFree(room, "f", { xMm: 0, zMm: 0 });
+	};
+	const checkRoom = (room: ReturnType<typeof island>) =>
+		validateOrder(room, "kitchen", finishId, catalogue);
+	const wallFamily = catalogue.families.find(
+		(f) => f.kind === "wall" && kitchen.familyIds.includes(f.id),
+	);
+
+	it("reads a v3 design saved before free cabinets as none", () => {
+		const { free: _none, ...saved } = emptyRoom(4200);
+		const parsed = roomLayoutSchema.parse(saved);
+		expect(parsed.free).toEqual([]);
+	});
+
+	it("keeps a free cabinet's centre through the schema", () => {
+		const parsed = roomLayoutSchema.parse(island());
+		expect(parsed.free).toHaveLength(1);
+		expect(parsed.free[0]).toMatchObject({ id: "f", xMm: 0, zMm: 0 });
+	});
+
+	it("accepts a free cabinet the planner placed", () => {
+		expect(island().free).toHaveLength(1);
+		expect(checkRoom(island())).toEqual({ ok: true });
+	});
+
+	it("refuses a free wall unit", () => {
+		if (!wallFamily) throw new Error("seed kitchen lost its wall unit");
+		const room = structuredClone(island());
+		room.free[0] = {
+			...room.free[0],
+			familyId: wallFamily.id,
+			widthMm: wallFamily.sizes[0].widthMm,
+		};
+		expect(checkRoom(room)).toMatchObject({
+			problem: "does_not_fit",
+			moduleId: "f",
+		});
+	});
+
+	it("refuses a free cabinet outside the room", () => {
+		const room = structuredClone(island());
+		room.free[0].xMm = 5000;
+		expect(checkRoom(room)).toMatchObject({ problem: "does_not_fit" });
+	});
+
+	it("refuses overlapping free cabinets", () => {
+		const room = structuredClone(island());
+		room.free.push({ ...room.free[0], id: "g", xMm: 100 });
+		expect(checkRoom(room)).toMatchObject({ problem: "does_not_fit" });
+	});
+});

@@ -81,6 +81,13 @@ export function validateOrder(
 				return placed ? [{ placed, row, corner: true }] : [];
 			}),
 		),
+		// A free cabinet stands on the floor: a wall unit there has no row to
+		// match, and `does_not_fit` is its answer.
+		...layout.free.map((placed) => ({
+			placed,
+			row: "floor" as const,
+			corner: false,
+		})),
 	];
 	if (rows.length === 0) return { ok: false, problem: "empty" };
 
@@ -132,7 +139,8 @@ export function validateOrder(
 	}
 
 	// A cabinet inside a corner square, or a square grown into a run, is not a
-	// design anyone can fit.
+	// design anyone can fit — nor a free cabinet outside the room or overlapping
+	// another (`isClear` asks `freeIsClear` too).
 	if (!engine.isClear(layout)) return { ok: false, problem: "does_not_fit" };
 
 	return { ok: true };

@@ -103,6 +103,17 @@ export const roomLayoutSchema = z
 				}),
 			)
 			.max(6),
+		// Free-standing cabinets, centred in plan millimetres. Optional so a v3
+		// design saved before they existed still reads, as none.
+		free: z
+			.array(
+				placedModuleSchema.extend({
+					xMm: z.number().min(-20_000).max(20_000),
+					zMm: z.number().min(-20_000).max(20_000),
+				}),
+			)
+			.max(30)
+			.default([]),
 	})
 	.refine((room) => room.runs.length === wallsOf(room.plan).length, {
 		message: "one run per wall",
@@ -171,6 +182,7 @@ function fromV2(v2: z.infer<typeof roomLayoutV2Schema>): RoomLayout {
 		plan: { template: "rect", widthMm: wallWidthMm, depthMm: roomDepthMm },
 		runs: next,
 		corners,
+		free: [],
 	};
 }
 
