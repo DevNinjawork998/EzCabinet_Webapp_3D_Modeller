@@ -814,6 +814,10 @@ type FloorFollow = {
 	/** The object moved while it follows the floor, where it started, and the
 	 * centre it was drawn at. */
 	obj: Object3D | null;
+	/** A run cabinet's own worktop, kick board and shadow, moved in step with
+	 * `obj` — the run's are redrawn without it. `null` for a free cabinet,
+	 * whose `obj` is its whole run. */
+	extras: Object3D | null;
 	baseX: number;
 	baseZ: number;
 	fromXMm: number;
@@ -826,7 +830,9 @@ function land(f: FloorFollow) {
 		f.obj.position.x = f.baseX;
 		f.obj.position.z = f.baseZ;
 	}
+	f.extras?.position.set(0, 0, 0);
 	f.obj = null;
+	f.extras = null;
 	f.centre = null;
 }
 
@@ -1125,6 +1131,25 @@ function Run({
 	/** The run's own group — what a free cabinet's floor drag moves, and
 	 * where a run cabinet's object is found for its own. */
 	const innerRef = useRef<Group>(null);
+	/** The run cabinet following the floor, if any. Its worktop, kick board and
+	 * shadow leave the run's and travel with it in `extrasRef`, so nothing is
+	 * left hanging where it stood until the drop. */
+	const [floatingId, setFloatingId] = useState<string | null>(null);
+	const extrasRef = useRef<Group>(null);
+	const { stayLayout, floatLayout } = useMemo(() => {
+		if (!floatingId) return { stayLayout: layout, floatLayout: null };
+		return {
+			stayLayout: {
+				...layout,
+				floor: layout.floor.filter((placed) => placed.id !== floatingId),
+			},
+			floatLayout: {
+				...layout,
+				floor: layout.floor.filter((placed) => placed.id === floatingId),
+				wall: [],
+			},
+		};
+	}, [layout, floatingId]);
 
 	/** A cabinet's centre in plan, world mm. Its turn's spread is ignored, as
 	 * the drop rule ignores it. */
@@ -1169,6 +1194,8 @@ function Run({
 			if (!obj || !position) return;
 			const from = centreOf(position);
 			f.obj = obj;
+			f.extras = freeStanding ? null : extrasRef.current;
+			if (!freeStanding) setFloatingId(id);
 			f.baseX = obj.position.x;
 			f.baseZ = obj.position.z;
 			f.fromXMm = from.xMm;
@@ -1183,6 +1210,7 @@ function Run({
 		const sin = Math.sin(frame.yawRad);
 		f.obj.position.x = f.baseX + m(dx * cos - dz * sin);
 		f.obj.position.z = f.baseZ + m(dx * sin + dz * cos);
+		f.extras?.position.set(m(dx * cos - dz * sin), 0, m(dx * sin + dz * cos));
 	};
 
 	/** Take hold of a cabinet. The grab offset is what stops it snapping its
@@ -1231,6 +1259,7 @@ function Run({
 								((position.placed.rotationDeg ?? 0) * Math.PI) / 180,
 							centre: null,
 							obj: null,
+							extras: null,
 							fromXMm: 0,
 							fromZMm: 0,
 							baseX: 0,
@@ -1301,6 +1330,7 @@ function Run({
 		const following = drag.floor?.centre;
 		if (drag.floor && following) {
 			land(drag.floor);
+			setFloatingId(null);
 			onFreeDrop(drag.id, following);
 			return;
 		}
@@ -1420,7 +1450,10 @@ function Run({
 					return;
 				}
 				// Back within reach of its own wall: slide along it as before.
-				if (f.centre) land(f);
+				if (f.centre) {
+					land(f);
+					setFloatingId(null);
+				}
 			} else if (freeStanding) return;
 			// On its own wall it stays there: a floor unit reaches another wall
 			// only by following the floor, so the drop (`dropAt`) and this tint
@@ -1572,9 +1605,13 @@ function Run({
 				</mesh>
 			)}
 
-			<ContactShadows layout={layout} runWidthMm={runWidthMm} engine={engine} />
+			<ContactShadows
+				layout={stayLayout}
+				runWidthMm={runWidthMm}
+				engine={engine}
+			/>
 			<Worktop
-				layout={layout}
+				layout={stayLayout}
 				runWidthMm={runWidthMm}
 				construction={construction}
 				engine={engine}
@@ -1613,7 +1650,30 @@ function Run({
 				finishPhoto={finishPhoto}
 				engine={engine}
 			/>
-			<Skirting layout={layout} runWidthMm={runWidthMm} engine={engine} />
+			<Skirting layout={stayLayout} runWidthMm={runWidthMm} engine={engine} />
+			{/* Always mounted, so `float` has it to move from the first frame. */}
+			<group ref={extrasRef}>
+				{floatLayout && (
+					<>
+						<ContactShadows
+							layout={floatLayout}
+							runWidthMm={runWidthMm}
+							engine={engine}
+						/>
+						<Worktop
+							layout={floatLayout}
+							runWidthMm={runWidthMm}
+							construction={construction}
+							engine={engine}
+						/>
+						<Skirting
+							layout={floatLayout}
+							runWidthMm={runWidthMm}
+							engine={engine}
+						/>
+					</>
+				)}
+			</group>
 
 			{/* Corner units are drawn for the left-hand corner, and every corner
 			    is the left-hand corner of the run after it, so they stand at this
