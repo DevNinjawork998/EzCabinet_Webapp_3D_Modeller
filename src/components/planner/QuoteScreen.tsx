@@ -287,6 +287,7 @@ export function QuoteScreen({
 							doorTargetId={null}
 							targetRun={0}
 							frameWholeRoom
+							showPanPuck={false}
 							onLayoutChangeAction={() => {}}
 							onSelectAction={() => {}}
 							pickerRef={pickerRef}

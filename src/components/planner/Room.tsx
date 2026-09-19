@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import {
+	type Object3D,
 	RepeatWrapping,
 	Shape,
 	SRGBColorSpace,
@@ -13,6 +14,13 @@ import { WALL_GAP_MM } from "@/lib/planner/catalogue";
 import { type FloorPlan, outlineOf } from "@/lib/planner/floorplan";
 
 const m = (mm: number) => mm / 1000;
+
+/** Whether a hit object is part of a cabinet: `Cabinet` tags its group. */
+const isCabinet = (object: Object3D): boolean => {
+	for (let node: Object3D | null = object; node; node = node.parent)
+		if (typeof node.userData?.moduleId === "string") return true;
+	return false;
+};
 const WALL_COLOR = "#e8e6e1";
 /** The wall the add menu builds on: tinted just enough to find. */
 const TARGET_WALL_COLOR = "#dde7e0";
@@ -138,9 +146,16 @@ export function Room({
 								// A drag that ended here was an orbit, not a tap.
 								if (e.delta > 4) return;
 								// A tap on a cabinet in front of this wall reaches it too, since
-								// R3F hands a click to everything under the ray: only the
-								// nearest hit is a pick of the wall.
-								if (e.intersections[0]?.eventObject !== e.eventObject) return;
+								// R3F hands a click to everything under the ray. Not "nearest
+								// hit only": each run's invisible deselect plane stands just in
+								// front of its wall, so the test is a cabinet (`moduleId`, as
+								// `CabinetHitTest` reads it) nearer than the wall.
+								if (
+									e.intersections.some(
+										(hit) => hit.distance < e.distance && isCabinet(hit.object),
+									)
+								)
+									return;
 								e.stopPropagation();
 								onWallPick(i);
 							})
