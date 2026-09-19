@@ -11,6 +11,7 @@ import {
 	wallsOf,
 } from "./floorplan";
 import {
+	canHangAt,
 	type EndPanel,
 	emptyLayout,
 	type HingeSide,
@@ -21,6 +22,7 @@ import {
 	type Positioned,
 	plannerEngine,
 	type Row,
+	rowFor,
 	type Span,
 	spreadMm,
 } from "./layout";
@@ -853,16 +855,36 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			run,
 		);
 		if (added === removed) return room;
-		let next = mapModule(added, id, (module) => ({
+		const next = mapModule(added, id, (module) => ({
 			...module,
 			doorStyleId: found.doorStyleId,
 			hinge: found.hinge,
 		}));
-		if (found.hangAtMm !== undefined) {
-			const hangAtMm = found.hangAtMm;
-			next = mapModule(next, id, (module) => ({ ...module, hangAtMm }));
-		}
-		return next;
+		// `next` carries no `hangAtMm` yet — `addModule` never sets one, so the
+		// cabinet already reads as "hangs with the row" on the destination.
+		// Only add the kept height back once it is checked against what is
+		// actually there: a custom height valid beside the old neighbours can
+		// be invalid beside the new ones (under a tall unit, over a lifted
+		// base unit), and `hangRangeMm` is asked here rather than trusted from
+		// the source wall.
+		if (found.hangAtMm === undefined) return next;
+		const hangAtMm = found.hangAtMm;
+		const family = familyIn(catalogue, found.familyId);
+		const row: Row = family ? rowFor(family.kind) : "floor";
+		const view = runView(next, run);
+		const position = wall
+			.positionsOf(view, row)
+			.find((p) => p.placed.id === id);
+		const range = position && wall.hangRangeMm(position, view, row);
+		const validHere =
+			position !== undefined &&
+			canHangAt(view, id) &&
+			range !== undefined &&
+			hangAtMm >= range.minMm &&
+			hangAtMm <= range.maxMm;
+		if (!validHere) return allClear(next) ? next : room;
+		const withHang = mapModule(next, id, (module) => ({ ...module, hangAtMm }));
+		return allClear(withHang) ? withHang : allClear(next) ? next : room;
 	}
 
 	function removeModules(room: RoomLayout, ids: Iterable<string>): RoomLayout {

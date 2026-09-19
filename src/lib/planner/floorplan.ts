@@ -302,6 +302,21 @@ export function nearestWall(
 	return best;
 }
 
+/** Where a ray crosses the floor (y = 0), or `null` when it never does: level
+ * (no y component to close on) or aimed away from the floor (the crossing
+ * would be behind the origin). The one floor-intersection formula — `Run`'s
+ * transfer check and `DropPicker`'s palette drop both call this rather than
+ * each re-deriving it. */
+export function floorPointFromRay(
+	origin: Vec3Mm,
+	direction: Vec3Mm,
+): Vec2 | null {
+	if (Math.abs(direction.y) < 1e-6) return null;
+	const t = -origin.y / direction.y;
+	if (t <= 0) return null;
+	return { xMm: origin.x + direction.x * t, zMm: origin.z + direction.z * t };
+}
+
 /** Where a cabinet dragged off `ownRun` should transfer to: the wall a floor
  * point lands nearest, or `null` when that is the wall it is already on. */
 export function transferTarget(

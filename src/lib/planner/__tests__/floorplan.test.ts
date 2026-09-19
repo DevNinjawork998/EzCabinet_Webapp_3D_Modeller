@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	type FloorPlan,
+	floorPointFromRay,
 	frameOf,
 	nearestWall,
 	outlineOf,
@@ -193,6 +194,27 @@ describe("nearestWall", () => {
 			run: 0,
 			xMm: 2200,
 		});
+	});
+});
+
+describe("floorPointFromRay", () => {
+	it("reads where a downward ray crosses the floor", () => {
+		expect(
+			floorPointFromRay({ x: 500, y: 2000, z: 1000 }, { x: 0, y: -1, z: 0 }),
+		).toEqual({ xMm: 500, zMm: 1000 });
+	});
+
+	it("is null looking level along the floor", () => {
+		expect(
+			floorPointFromRay({ x: 0, y: 1000, z: 0 }, { x: 1, y: 0, z: 0 }),
+		).toBeNull();
+	});
+
+	it("is null when the floor is behind the ray (t <= 0)", () => {
+		// Above the floor, aimed further up: the crossing is behind the origin.
+		expect(
+			floorPointFromRay({ x: 0, y: 1000, z: 0 }, { x: 0, y: 1, z: 0 }),
+		).toBeNull();
 	});
 });
 

@@ -444,6 +444,39 @@ describe("moveToRun", () => {
 		expect(isActiveCorner(next, 3)).toBe(true);
 		expect(xOf(next, "a")).toBe(607);
 	});
+
+	// A wall-kind and a tall-kind cabinet can never share an x-span — `addModule`
+	// keeps a wall unit out of a tall unit's footprint on every wall, both
+	// directions, regardless of any custom height either carries (see
+	// `occupiedSpans` in layout.ts) — so a transferred wall cabinet can never
+	// literally land over a tall unit. The reachable version of "the kept
+	// height doesn't fit here" is a lifted cabinet in the *other* row at the
+	// same x: a base cabinet raised well off the floor reaches up into the
+	// wall row's usual hanging band, which is exactly the shape of conflict
+	// `hangRangeMm` already guards drags against.
+	it("keeps a custom hang height that is still valid on the destination", () => {
+		let room = engine.addModule(kitchen(), "wall-cabinet", 0, "w", 400);
+		room = engine.setHangAt(room, "w", 1600);
+		// A tall cabinet elsewhere on the destination wall: present, but never
+		// in the wall cabinet's way — confirming the two coexist normally.
+		room = engine.addModule(room, "tall-cabinet", 3000, "t", 600, 3);
+		const next = engine.moveToRun(room, "w", 3, 200);
+		const moved = next.runs[3].wall.find((m) => m.id === "w");
+		expect(moved).toMatchObject({ id: "w", hangAtMm: 1600 });
+	});
+
+	it("drops a custom hang height a lifted cabinet on the destination now blocks", () => {
+		let room = engine.addModule(kitchen(), "wall-cabinet", 0, "w", 400);
+		room = engine.setHangAt(room, "w", 1200);
+		// A base cabinet lifted to 400mm on the destination wall occupies
+		// 400–1280mm — past the wall row's usual 1200mm floor.
+		let room2 = engine.addModule(room, "base-cabinet", 0, "b", 600, 3);
+		room2 = engine.setHangAt(room2, "b", 400);
+		const next = engine.moveToRun(room2, "w", 3, 200);
+		const moved = next.runs[3].wall.find((m) => m.id === "w");
+		expect(moved).toBeDefined();
+		expect(moved?.hangAtMm).toBeUndefined();
+	});
 });
 
 describe("where a run starts", () => {

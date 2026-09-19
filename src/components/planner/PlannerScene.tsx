@@ -48,6 +48,7 @@ import {
 } from "@/lib/planner/exposure";
 import {
 	type FloorPlan,
+	floorPointFromRay,
 	frameOf,
 	nearestWall,
 	toLocalMm,
@@ -711,17 +712,18 @@ function DropPicker({
 				0.5,
 			).unproject(camera);
 			const direction = point.sub(camera.position).normalize();
-			// Looking level along the floor there is no floor point to read.
-			if (Math.abs(direction.y) < 1e-6) return null;
 			// Read against the floor: only the wall and the position along it
 			// matter, and which row the cabinet joins is decided by what was
 			// dragged.
-			const t = -camera.position.y / direction.y;
-			// The floor point, in plan millimetres — the scene's world axes.
-			return nearestWall(plan, {
-				xMm: (camera.position.x + direction.x * t) * 1000,
-				zMm: (camera.position.z + direction.z * t) * 1000,
-			});
+			const floor = floorPointFromRay(
+				{
+					x: camera.position.x * 1000,
+					y: camera.position.y * 1000,
+					z: camera.position.z * 1000,
+				},
+				{ x: direction.x * 1000, y: direction.y * 1000, z: direction.z * 1000 },
+			);
+			return floor && nearestWall(plan, floor);
 		};
 		return () => {
 			pickerRef.current = null;
@@ -1198,18 +1200,16 @@ function Run({
 
 		// A slide or a lift, never a turn, can hand the cabinet to another wall.
 		// Read against the world ray, before `localRay` turns it into this run's
-		// own frame — the same floor-point maths `DropPicker` uses for a palette
-		// drop.
+		// own frame — the same `floorPointFromRay` `DropPicker` calls for a
+		// palette drop.
 		if (drag.mode === "move" && !drag.vertical) {
 			const origin = DRAG_RAYCASTER.ray.origin;
 			const direction = DRAG_RAYCASTER.ray.direction;
-			const candidate =
-				Math.abs(direction.y) < 1e-6
-					? null
-					: transferTarget(plan, runIndex, {
-							xMm: (origin.x + (direction.x * -origin.y) / direction.y) * 1000,
-							zMm: (origin.z + (direction.z * -origin.y) / direction.y) * 1000,
-						});
+			const floor = floorPointFromRay(
+				{ x: origin.x * 1000, y: origin.y * 1000, z: origin.z * 1000 },
+				{ x: direction.x * 1000, y: direction.y * 1000, z: direction.z * 1000 },
+			);
+			const candidate = floor ? transferTarget(plan, runIndex, floor) : null;
 			crossWallRef.current = candidate;
 			const previewRun = candidate?.run ?? null;
 			if (lastPreviewRunRef.current !== previewRun) {
