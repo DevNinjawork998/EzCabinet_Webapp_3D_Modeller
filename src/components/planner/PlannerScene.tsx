@@ -92,7 +92,7 @@ import {
 import { MeasureOverlay } from "./MeasureOverlay";
 import { PositionDimensions } from "./PositionDimensions";
 import { Room } from "./Room";
-import { WallLengths } from "./WallLengths";
+import { WallLengths, WallNumbers } from "./WallLengths";
 
 const m = (mm: number) => mm / 1000;
 
@@ -1950,6 +1950,8 @@ export default function PlannerScene({
 	view = "3d",
 	refitKey = 0,
 	targetRun,
+	showWallNumbers = false,
+	showPanPuck = true,
 	onLayoutChangeAction,
 	onSelectAction,
 	onMeasurePickAction,
@@ -1997,6 +1999,14 @@ export default function PlannerScene({
 	/** The wall the add menu builds on: tinted, and what 3D and elevation
 	 * frame. */
 	targetRun: number;
+	/** Numbered floor badges at the foot of every wall — on while the Room
+	 * panel is open, so a customer can match "wall 3" in the field list to a
+	 * wall in the room. Off by default: the badges are clutter once the room's
+	 * shape is settled. */
+	showWallNumbers?: boolean;
+	/** The pan gizmo, hidden while the Room panel is open so it doesn't sit on
+	 * top of the wall-length labels. Orbit and zoom stay on regardless. */
+	showPanPuck?: boolean;
 	onLayoutChangeAction: (next: RoomLayout) => void;
 	onSelectAction: (id: string | null, additive: boolean) => void;
 	onMeasurePickAction?: (snap: SnapPoint) => void;
@@ -2195,6 +2205,13 @@ export default function PlannerScene({
 					onLengthAction={onWallLengthAction}
 				/>
 			)}
+			{showWallNumbers && view !== "plan" && (
+				<WallNumbers
+					plan={layout.plan}
+					targetWall={targetRun}
+					onPickAction={onWallPickAction}
+				/>
+			)}
 			<MeasureOverlay
 				points={measurePoints}
 				previewPoint={measureMode ? hoverPoint : null}
@@ -2221,7 +2238,9 @@ export default function PlannerScene({
 				enableRotate={view === "3d"}
 				maxPolarAngle={Math.PI / 2 - 0.05}
 			/>
-			<PanGizmo {...panSpace} view={view} refitKey={refitKey} />
+			{showPanPuck && (
+				<PanGizmo {...panSpace} view={view} refitKey={refitKey} />
+			)}
 			<FitCamera
 				runWidthMm={Math.max(runWidthMm, engine.rowEndMm(target.view, "floor"))}
 				roomDepthMm={target.view.roomDepthMm}

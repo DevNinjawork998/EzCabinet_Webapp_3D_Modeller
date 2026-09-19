@@ -14,6 +14,7 @@ import type { Dictionary } from "@/lib/copy/en";
 import type { Locale } from "@/lib/copy/locales";
 import type { FinishId, RoomTypeId } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
+import { wallsOf } from "@/lib/planner/floorplan";
 import { computePlannerPrice } from "@/lib/planner/pricing";
 import { emptyRoom, type RoomLayout } from "@/lib/planner/room";
 
@@ -193,7 +194,7 @@ function PlannerScreens({
 				track("quote_viewed", {
 					room: roomId,
 					cabinets: allPositions(layout).length,
-					wallMm: layout.wallWidthMm,
+					wallMm: wallsOf(layout.plan)[0].lengthMm,
 					totalRm: Math.round(
 						computePlannerPrice(layout, finish, catalogue).totalRm,
 					),

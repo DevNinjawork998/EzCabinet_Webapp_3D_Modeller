@@ -8,6 +8,7 @@ import { fill } from "@/lib/copy/fill";
 import { htmlLang } from "@/lib/copy/locales";
 import type { FinishId, RoomTypeId } from "@/lib/planner/catalogue";
 import { doorStyleIn, ratesOf, roomTypeIn } from "@/lib/planner/catalogue";
+import { wallsOf } from "@/lib/planner/floorplan";
 import { computePlannerPrice } from "@/lib/planner/pricing";
 import type { RoomLayout } from "@/lib/planner/room";
 import { useCatalogue, useRoomEngine } from "./CatalogueContext";
@@ -90,7 +91,7 @@ export function QuoteScreen({
 				: t.quote.mixedFronts;
 
 	const pickerRef = useRef<
-		((x: number, y: number, run: number) => number) | null
+		((x: number, y: number) => { run: number; xMm: number } | null) | null
 	>(null);
 	const hitTestRef = useRef<((x: number, y: number) => string | null) | null>(
 		null,
@@ -285,6 +286,7 @@ export function QuoteScreen({
 							finishTextures={finishTextures}
 							selectedIds={new Set()}
 							doorTargetId={null}
+							targetRun={0}
 							onLayoutChangeAction={() => {}}
 							onSelectAction={() => {}}
 							pickerRef={pickerRef}
@@ -295,7 +297,7 @@ export function QuoteScreen({
 						<p className="font-semibold text-[13px]">
 							{fill(t.quote.summary, {
 								room: room.label,
-								wall: (layout.wallWidthMm / 1000).toFixed(2),
+								wall: (wallsOf(layout.plan)[0].lengthMm / 1000).toFixed(2),
 								count: placed.length,
 								unit: placed.length === 1 ? t.planner.unit : t.planner.units,
 							})}

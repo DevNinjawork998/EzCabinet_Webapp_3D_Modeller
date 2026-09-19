@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { track } from "@/lib/analytics";
 import { CATEGORIES } from "@/lib/catalogue/cabinetDesignLabels";
 import type { Dictionary } from "@/lib/copy/en";
@@ -19,6 +19,7 @@ import {
 	roomTypeIn,
 	WALL_HANG_LIMITS,
 } from "@/lib/planner/catalogue";
+import { type RoomShape, shapeOf } from "@/lib/planner/floorplan";
 import { type HingeSide, type Positioned, rowFor } from "@/lib/planner/layout";
 import {
 	AXIS_COLOR,
@@ -33,6 +34,7 @@ import {
 import { fitOutOf } from "@/lib/planner/parts";
 import { computePlannerPrice } from "@/lib/planner/pricing";
 import {
+	cornerVertexFor,
 	emptyRoom,
 	nearCornerMm,
 	type RoomLayout,
@@ -40,7 +42,6 @@ import {
 	runView,
 	setDoors,
 	setHinge,
-	shapeOf,
 } from "@/lib/planner/room";
 import { useCatalogue, useRoomEngine } from "./CatalogueContext";
 import { useCopy, useLocale } from "./CopyContext";
@@ -50,7 +51,6 @@ import { AdminLink, PlannerHeader } from "./PlannerHeader";
 import type { PlannerView } from "./PlannerScene";
 import { priceLineDetail, priceLineLabel } from "./priceLineCopy";
 import { CabinetMenu } from "./studio/CabinetMenu";
-import { chip } from "./studio/chrome";
 import { DesignRecap } from "./studio/DesignRecap";
 import { PriceFooter } from "./studio/PriceFooter";
 import { RoomPanel } from "./studio/RoomPanel";
@@ -82,13 +82,9 @@ const PlannerScene = dynamic(() => import("./PlannerScene"), {
 });
 
 /** Labels for the view toggle, in the order a fitter reads them. */
-const views = (
-	t: Dictionary,
-	hasSide: boolean,
-): { id: PlannerView; label: string }[] => [
+const views = (t: Dictionary): { id: PlannerView; label: string }[] => [
 	{ id: "3d", label: t.planner.view.threeD },
 	{ id: "elevation", label: t.planner.view.elevation },
-	...(hasSide ? [{ id: "side" as const, label: t.planner.view.side }] : []),
 	{ id: "plan", label: t.planner.view.plan },
 ];
 
@@ -104,12 +100,6 @@ const wallModes = (t: Dictionary): { toCeiling: boolean; label: string }[] => [
 const baseModes = (t: Dictionary): { skirted: boolean; label: string }[] => [
 	{ skirted: true, label: t.planner.room.skirted },
 	{ skirted: false, label: t.planner.room.legsShown },
-];
-
-/** Built into the alcove, or standing clear of the side walls. */
-const runModes = (t: Dictionary): { toWall: boolean; label: string }[] => [
-	{ toWall: false, label: t.planner.room.openEnds },
-	{ toWall: true, label: t.planner.room.toWalls },
 ];
 
 /** Doors shut, or swung open so the customer can see the inside they are
@@ -245,8 +235,6 @@ export function StudioScreen({
 		flushWallToTallTops,
 		freeSpans,
 		hangingHeightMmOf,
-		minRoomDepthMm,
-		minWallWidthMm,
 		overhangMm,
 		positionsOf,
 		removeModules,
@@ -259,35 +247,31 @@ export function StudioScreen({
 		setCeilingHeight,
 		setHangAt,
 		setHangingHeight,
-		setRoomDepth,
 		setRotation,
 		setShape,
+		setWallLength,
 		setWallToCeiling,
-		setWallToWall,
-		setWallWidth,
 		setWidth,
 		swapWithNeighbour,
 		widthOptionsFor,
+		wallLengthRangeMm,
 	} = useRoomEngine();
 	const room = roomTypeIn(catalogue, roomId);
 	const selectedSet = new Set(selectedIds);
 
 	// Filled in by the scene: screen-point → run position / cabinet under it.
 	const pickerRef = useRef<
-		((x: number, y: number, run: number) => number) | null
+		((x: number, y: number) => { run: number; xMm: number } | null) | null
 	>(null);
 	const hitTestRef = useRef<((x: number, y: number) => string | null) | null>(
 		null,
 	);
 	const [dragFamilyId, setDragFamilyId] = useState<string | null>(null);
 	const [view, setView] = useState<PlannerView>("3d");
-	// A straightened room has no side wall to look at. Derived rather than
-	// reset in an effect, so no frame ever draws a side view with no side.
-	const shownView: PlannerView =
-		view === "side" && !layout.corner ? "elevation" : view;
-	// Which wall the add menu places on. Only an L has a choice.
+	// Which wall the add menu builds on. Tapping a wall in the room sets it.
 	const [targetRun, setTargetRun] = useState(0);
-	const run = layout.corner ? targetRun : 0;
+	// A shape change can leave fewer walls than the index held.
+	const run = Math.min(targetRun, layout.runs.length - 1);
 	// A pan now survives a layout change, so something has to be able to put
 	// the framing back. Bumping this is the only thing that refits the camera.
 	const [refitKey, setRefitKey] = useState(0);
@@ -407,26 +391,20 @@ export function StudioScreen({
 		selection.length === 1 ? selection[0] : undefined;
 
 	const overhang = overhangMm(layout);
-	// Usually the run rather than the catalogue floor — worth naming which,
-	// because a slider that stops for no visible reason reads as broken.
-	const minWallMm = minWallWidthMm(layout);
-	// Whole millimetres: a dragged cabinet lands on a fractional x, and the
-	// customer measures with a tape, not a micrometer.
-	// In an L the corner square is not free wall. `runExtentMm` measures from
-	// the corner end, whichever end of the main wall that is, so the free wall
-	// is what lies past the longer of the run and the square.
-	const cornerMm = Math.max(
+	// The targeted wall: its corner squares are not free wall.
+	const targetView = runView(layout, run);
+	const cornerMm = (targetView.reserved?.floor ?? []).reduce(
+		(total, span) => total + span.endMm - span.startMm,
 		0,
-		...Object.values(runView(layout, 0).reserved ?? {})
-			.flat()
-			.map((span) => span.endMm - span.startMm),
 	);
 	const freeMm = Math.round(
-		layout.wallWidthMm - Math.max(cornerMm, runExtentMm(layout)),
+		targetView.wallWidthMm - Math.max(cornerMm, runExtentMm(layout, run)),
 	);
-	// Each wall's run, from its corner: an L has two.
+	// Every wall with a run on it, from its corner.
 	const runMetres = layout.runs
-		.map((_, i) => `${(runExtentMm(layout, i) / 1000).toFixed(2)} m`)
+		.map((_, i) => runExtentMm(layout, i))
+		.filter((mm) => mm > 0)
+		.map((mm) => `${(mm / 1000).toFixed(2)} m`)
 		.join(" + ");
 	const construction = constructionOf(catalogue);
 	const price = computePlannerPrice(layout, finish, catalogue);
@@ -454,10 +432,12 @@ export function StudioScreen({
 	);
 
 	const dropCarcass = (familyId: string, clientX: number, clientY: number) => {
-		const runXMm = pickerRef.current?.(clientX, clientY, run) ?? 0;
+		// Dropped near a wall is dropped on that wall.
+		const hit = pickerRef.current?.(clientX, clientY) ?? { run, xMm: 0 };
 		track("cabinet_added", { family: familyId, via: "drag" });
+		setTargetRun(hit.run);
 		setLayoutAction((prev) =>
-			addModule(prev, familyId, runXMm, undefined, undefined, run),
+			addModule(prev, familyId, hit.xMm, undefined, undefined, hit.run),
 		);
 	};
 
@@ -481,35 +461,42 @@ export function StudioScreen({
 
 	const canFlush = placed.some((position) => position.family.kind === "tall");
 
+	const wallRanges = useMemo(
+		() => layout.runs.map((_, i) => wallLengthRangeMm(layout, i)),
+		[layout, wallLengthRangeMm],
+	);
 	const roomBody = (
 		<RoomPanel
 			catalogue={catalogue}
 			roomId={roomId}
 			layout={layout}
-			minWallMm={minWallMm}
 			freeMm={freeMm}
 			overhangMm={overhang}
-			shape={shapeOf(layout)}
+			shape={shapeOf(layout.plan)}
 			reachable={{
-				straight: setShape(layout, "straight") !== layout,
-				left: setShape(layout, "left") !== layout,
-				right: setShape(layout, "right") !== layout,
+				rect:
+					setShape(layout, "rect") !== layout ||
+					shapeOf(layout.plan) === "rect",
+				l: setShape(layout, "l") !== layout || shapeOf(layout.plan) === "l",
+				"l-mirror":
+					setShape(layout, "l-mirror") !== layout ||
+					shapeOf(layout.plan) === "l-mirror",
 			}}
-			minDepthMm={minRoomDepthMm(layout)}
-			onShapeAction={(shape) => {
-				// Only a change that lands: a re-press or a refused L is not one.
+			wallRanges={wallRanges}
+			targetWall={run}
+			onShapeAction={(shape: RoomShape) => {
 				if (setShape(layout, shape) === layout) return;
 				track("room_shape_changed", { shape });
 				setLayoutAction((prev) => setShape(prev, shape));
 			}}
 			onChangeRoomAction={onChangeRoomAction}
-			onWallWidthAction={(mm) =>
-				setLayoutAction((prev) => setWallWidth(prev, mm))
+			onWallLengthAction={(wall, mm) =>
+				setLayoutAction((prev) => setWallLength(prev, wall, mm))
 			}
+			onTargetWallAction={setTargetRun}
 			onCeilingAction={(mm) =>
 				setLayoutAction((prev) => setCeilingHeight(prev, mm))
 			}
-			onDepthAction={(mm) => setLayoutAction((prev) => setRoomDepth(prev, mm))}
 			onOpenDefaultsAction={() => setTool("defaults")}
 		/>
 	);
@@ -523,32 +510,16 @@ export function StudioScreen({
 	});
 	const addBody = (
 		<div className="flex flex-col gap-3">
-			{layout.corner && (
-				<div className="flex flex-col gap-1.5">
-					<p className="font-semibold text-[11px] text-neutral-600 uppercase tracking-[0.06em]">
-						{t.planner.addCabinets.targetWall}
-					</p>
-					<div className="flex gap-1">
-						{[
-							t.planner.addCabinets.mainWall,
-							t.planner.addCabinets.sideWall,
-						].map((label, index) => (
-							<button
-								key={label}
-								type="button"
-								aria-pressed={run === index}
-								onClick={() => setTargetRun(index)}
-								className={chip(run === index)}
-							>
-								{label}
-							</button>
-						))}
-					</div>
-				</div>
-			)}
+			<p className="text-[11px] text-neutral-500 leading-4">
+				{fill(t.planner.addCabinets.targetWallHint, { n: run + 1 })}
+			</p>
 			{CATEGORIES.map((category) => {
-				// A corner unit has nowhere to go until there is a corner.
-				if (category.startsWith("CORNER_") && !layout.corner) return null;
+				// A corner unit has nowhere to go until there is a corner on this wall.
+				if (
+					category.startsWith("CORNER_") &&
+					cornerVertexFor(layout, run) === null
+				)
+					return null;
 				const shelf = offered.filter(
 					(family) =>
 						(family.category ?? KIND_CATEGORY[family.kind]) === category,
@@ -631,7 +602,7 @@ export function StudioScreen({
 
 	const viewBody = (
 		<div className="flex flex-col gap-1.5">
-			{views(t, layout.corner !== null).map((option) => (
+			{views(t).map((option) => (
 				<PanelOption
 					key={option.id}
 					label={option.label}
@@ -640,11 +611,9 @@ export function StudioScreen({
 							? t.planner.panel.threeDHint
 							: option.id === "elevation"
 								? t.planner.panel.elevationHint
-								: option.id === "side"
-									? t.planner.panel.sideHint
-									: t.planner.panel.planHint
+								: t.planner.panel.planHint
 					}
-					pressed={shownView === option.id}
+					pressed={view === option.id}
 					onPressAction={() => {
 						track("view_changed", { view: option.id });
 						setView(option.id);
@@ -703,23 +672,6 @@ export function StudioScreen({
 				}))}
 				onPickAction={(skirted) =>
 					setLayoutAction((prev) => setBaseSkirting(prev, skirted))
-				}
-			/>
-
-			<PanelToggle
-				label={t.planner.room.runAria}
-				hint={
-					layout.wallToWall
-						? t.planner.room.noPanelNeededNote
-						: t.planner.room.panelNeededNote
-				}
-				value={layout.wallToWall}
-				options={runModes(t).map((mode) => ({
-					value: mode.toWall,
-					label: mode.label,
-				}))}
-				onPickAction={(toWall) =>
-					setLayoutAction((prev) => setWallToWall(prev, toWall))
 				}
 			/>
 
@@ -885,11 +837,18 @@ export function StudioScreen({
 						measurePoints={measurePoints}
 						measureAxis={measureAxis}
 						positionMode={verb === "move"}
-						view={shownView}
+						view={view}
 						refitKey={refitKey}
+						targetRun={run}
+						showWallNumbers={tool === "room"}
+						showPanPuck={tool !== "room"}
 						onLayoutChangeAction={setLayoutAction}
 						onSelectAction={select}
 						onMeasurePickAction={onMeasurePick}
+						onWallPickAction={setTargetRun}
+						onWallLengthAction={(wall, mm) =>
+							setLayoutAction((prev) => setWallLength(prev, wall, mm))
+						}
 						pickerRef={pickerRef}
 						hitTestRef={hitTestRef}
 					/>
@@ -945,20 +904,16 @@ export function StudioScreen({
 					<div className="absolute top-3 left-3.5 z-[6] flex flex-wrap items-center gap-2">
 						<span className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[12px] text-neutral-700 shadow-[0_1px_2px_rgba(0,0,0,.04)]">
 							{fill(t.planner.canvas.runOfWall, {
-								// The main wall's run, from its corner: the chip names the
-								// main wall's length, and the sidebar lists both runs.
-								run: (runExtentMm(layout) / 1000).toFixed(2),
-								wall: (layout.wallWidthMm / 1000).toFixed(2),
+								// The targeted wall's run, from its corner: the chip names
+								// the targeted wall's length, and the sidebar lists every run.
+								run: (runExtentMm(layout, run) / 1000).toFixed(2),
+								wall: (targetView.wallWidthMm / 1000).toFixed(2),
 							})}{" "}
 							· {placed.length}{" "}
 							{placed.length === 1 ? t.planner.unit : t.planner.units}
 						</span>
 						<span className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[12px] text-[#8a857c] shadow-[0_1px_2px_rgba(0,0,0,.04)]">
-							{
-								views(t, layout.corner !== null).find(
-									(option) => option.id === shownView,
-								)?.label
-							}
+							{views(t).find((option) => option.id === view)?.label}
 						</span>
 					</div>
 
@@ -1057,7 +1012,7 @@ export function StudioScreen({
 									{ label: t.planner.design.room, value: room.label },
 									{
 										label: t.planner.design.wall,
-										value: `${(layout.wallWidthMm / 1000).toFixed(2)} m · ${(
+										value: `${(targetView.wallWidthMm / 1000).toFixed(2)} m · ${(
 											layout.ceilingHeightMm / 1000
 										).toFixed(2)} m`,
 									},

@@ -138,7 +138,6 @@ export const ms: Dictionary = {
 			defaultsTitle: "Tetapan lalai untuk seluruh baris",
 		},
 		panel: {
-			sideHint: "Pandangan rata ke dinding sisi.",
 			close: "Tutup panel",
 			addTitle: "Tambah kabinet",
 			addHint:
@@ -177,21 +176,17 @@ export const ms: Dictionary = {
 			moreSettings: "Papan kaki, hujung, ketinggian gantung…",
 			heading: "Bilik",
 			subtitle: "Menetapkan ruang yang perlu dimuatkan oleh setiap kabinet.",
-			wallLength: "Panjang dinding",
 			ceiling: "Siling",
-			roomDepth: "Kedalaman bilik",
 			shape: "Susun atur",
-			shapeStraight: "Satu dinding",
-			shapeLeft: "L, sudut di kiri",
-			shapeRight: "L, sudut di kanan",
+			shapeRect: "Segi empat",
+			shapeL: "Bentuk L",
+			shapeLMirror: "Bentuk L, bertentangan",
 			shapeLocked:
-				"Kosongkan dinding sisi dan sudut untuk kembali ke satu dinding.",
-			shapeRefused:
-				"Kosongkan ruang di hujung dinding itu untuk menjadikannya bentuk L.",
-			sideWallLength: "Panjang dinding sisi",
+				"Kosongkan semua dinding kecuali dinding belakang untuk menukar bentuk bilik.",
+			wallName: "Dinding {n}",
+			wallsHint:
+				"Ketik dinding dalam bilik, atau ukuran dalam pandangan pelan, untuk mengubahnya.",
 			wallUnitsHangAt: "Unit dinding tergantung pada",
-			narrowWallNote:
-				"Susunan {min}mm anda menetapkan dinding paling sempit yang boleh memuatkannya. Buang atau ubah saiz kabinet untuk lebih sempit lagi.",
 			wallUnitsAria: "Unit dinding",
 			hanging: "Tergantung",
 			toCeiling: "Sampai ke siling",
@@ -207,13 +202,6 @@ export const ms: Dictionary = {
 				"Papan kaki dipasang sepanjang lantai, menyembunyikan kaki pelaras.",
 			levellersNote:
 				"Kaki pelaras yang boleh diselaraskan kelihatan di bawah susunan.",
-			runAria: "Susunan",
-			openEnds: "Hujung terbuka",
-			toWalls: "Sampai ke dinding",
-			noPanelNeededNote:
-				"Hujung yang bercantum dengan dinding sisi tidak memerlukan panel siap.",
-			panelNeededNote:
-				"Setiap hujung terbuka dikemaskan dengan panel di atas sisi badan kabinet.",
 			doorsAria: "Pintu",
 			doorsClosed: "Pintu tertutup",
 			doorsOpen: "Pintu terbuka",
@@ -228,7 +216,6 @@ export const ms: Dictionary = {
 				"Susunan ini melebihi dinding sebanyak {overhang}mm — rapatkan jurang di bawah, atau buang satu kabinet.",
 		},
 		view: {
-			side: "Dinding sisi",
 			ariaLabel: "Paparan",
 			threeD: "Paparan 3D",
 			elevation: "Pandangan sisi",
@@ -236,8 +223,8 @@ export const ms: Dictionary = {
 		},
 		addCabinets: {
 			targetWall: "Tambah ke",
-			mainWall: "Dinding utama",
-			sideWall: "Dinding sisi",
+			targetWallHint:
+				"Menambah ke dinding {n}. Ketik dinding lain dalam bilik untuk membina di sana.",
 			heading: "Tambah kabinet",
 			subtitle: "Seret ke dinding. Saiz dan pintu boleh dipilih kemudian.",
 			sizeRange: "{min}–{max}mm · dari {price}",

@@ -141,7 +141,6 @@ export const en = {
 			defaultsTitle: "Defaults for the whole run",
 		},
 		panel: {
-			sideHint: "Flat onto the side wall.",
 			close: "Close panel",
 			addTitle: "Add a cabinet",
 			addHint:
@@ -178,19 +177,17 @@ export const en = {
 			moreSettings: "Skirting, ends, hang height…",
 			heading: "The room",
 			subtitle: "Sets the space every cabinet has to fit in.",
-			wallLength: "Wall length",
 			ceiling: "Ceiling",
-			roomDepth: "Room depth",
 			shape: "Layout",
-			shapeStraight: "One wall",
-			shapeLeft: "L, corner on the left",
-			shapeRight: "L, corner on the right",
-			shapeLocked: "Clear the side wall and corner to go back to one wall.",
-			shapeRefused: "Make room at that end of the wall to turn this into an L.",
-			sideWallLength: "Side wall length",
+			shapeRect: "Rectangle",
+			shapeL: "L-shaped",
+			shapeLMirror: "L-shaped, mirrored",
+			shapeLocked:
+				"Clear every wall but the back wall to change the room's shape.",
+			wallName: "Wall {n}",
+			wallsHint:
+				"Tap a wall in the room, or a length in the plan view, to change it.",
 			wallUnitsHangAt: "Wall units hang at",
-			narrowWallNote:
-				"Your {min}mm run sets the shortest wall it fits on. Remove or resize a cabinet to go narrower.",
 			wallUnitsAria: "Wall units",
 			hanging: "Hanging",
 			toCeiling: "To ceiling",
@@ -203,13 +200,6 @@ export const en = {
 			legsShown: "Legs shown",
 			kickBoardNote: "A kick board runs along the floor, hiding the levellers.",
 			levellersNote: "The adjustable levellers stay on show under the run.",
-			runAria: "Run",
-			openEnds: "Open ends",
-			toWalls: "To walls",
-			noPanelNeededNote:
-				"An end that butts into a side wall needs no finished panel.",
-			panelNeededNote:
-				"Each open end is finished with a panel over the carcass side.",
 			doorsAria: "Doors",
 			doorsClosed: "Doors closed",
 			doorsOpen: "Doors open",
@@ -224,7 +214,6 @@ export const en = {
 				"The run overhangs this wall by {overhang}mm — close the gaps below, or remove a cabinet.",
 		},
 		view: {
-			side: "Side wall",
 			ariaLabel: "View",
 			threeD: "3D",
 			elevation: "Elevation",
@@ -232,8 +221,8 @@ export const en = {
 		},
 		addCabinets: {
 			targetWall: "Add to",
-			mainWall: "Main wall",
-			sideWall: "Side wall",
+			targetWallHint:
+				"Adding to wall {n}. Tap another wall in the room to build there.",
 			heading: "Add cabinets",
 			subtitle: "Drag onto the wall. Size and front come after.",
 			sizeRange: "{min}–{max}mm · from {price}",

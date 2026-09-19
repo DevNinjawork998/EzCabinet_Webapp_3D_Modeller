@@ -11,6 +11,7 @@ import {
 	toLocalMm,
 	toWorldMm,
 	vertexKind,
+	wallLabelMm,
 	wallsOf,
 } from "../floorplan";
 
@@ -38,6 +39,11 @@ describe("wallsOf", () => {
 		expect(back.inward.zMm).toBeCloseTo(1);
 		expect(right.inward.xMm).toBeCloseTo(-1);
 		expect(left.inward.xMm).toBeCloseTo(1);
+	});
+
+	it("labels a wall at its midpoint, pushed into the room", () => {
+		const [back] = wallsOf(rect);
+		expect(wallLabelMm(back, 300)).toEqual({ xMm: 0, zMm: -1500 });
 	});
 
 	it("chains every wall's end to the next wall's start", () => {

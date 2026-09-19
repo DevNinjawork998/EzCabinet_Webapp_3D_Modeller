@@ -1,73 +1,213 @@
 "use client";
 
 import { fill } from "@/lib/copy/fill";
-import {
-	CEILING_LIMITS,
-	ROOM_DEPTH_LIMITS,
-	type RoomTypeId,
-} from "@/lib/planner/catalogue";
+import { CEILING_LIMITS, type RoomTypeId } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
-import { WALL_LIMITS } from "@/lib/planner/layout";
-import type { RoomLayout, RoomShape } from "@/lib/planner/room";
+import {
+	type FloorPlan,
+	outlineOf,
+	type RoomShape,
+	reshape,
+	wallLabelMm,
+	wallsOf,
+} from "@/lib/planner/floorplan";
+import type { RoomLayout } from "@/lib/planner/room";
 import { useCopy } from "../CopyContext";
 import { DimensionField } from "../DimensionField";
 import { chip } from "./chrome";
 
+/** A wall's number, in a matching badge wherever it shows up: the map, the
+ * field list and the 3D floor. One target colour (`#1f5138`, the brand
+ * green) so a customer can match a field to a wall without reading labels. */
+function WallBadge({
+	n,
+	target,
+	label,
+}: {
+	n: number;
+	target: boolean;
+	label: string;
+}) {
+	return (
+		<span
+			aria-hidden="true"
+			title={label}
+			className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-medium text-[10px]"
+			style={{
+				backgroundColor: target ? "#1f5138" : "#e5e5e5",
+				color: target ? "#ffffff" : "#525252",
+			}}
+		>
+			{n}
+		</span>
+	);
+}
+
+/** The room's own floor plan, small: every wall numbered so a customer can
+ * find "wall 3" in the room rather than guess from a list. Inline SVG, per
+ * CLAUDE.md — no WebGL context for a thumbnail. */
+function WallMap({
+	plan,
+	targetWall,
+	onPickAction,
+}: {
+	plan: FloorPlan;
+	targetWall: number;
+	onPickAction: (wall: number) => void;
+}) {
+	const t = useCopy();
+	const walls = wallsOf(plan);
+	const outline = outlineOf(plan);
+	const xs = outline.map((p) => p.xMm);
+	const zs = outline.map((p) => p.zMm);
+	const minX = Math.min(...xs);
+	const maxX = Math.max(...xs);
+	const minZ = Math.min(...zs);
+	const maxZ = Math.max(...zs);
+	const width = maxX - minX;
+	const height = maxZ - minZ;
+	const margin = Math.max(width, height) * 0.18;
+	const insetMm = Math.min(width, height) * 0.12;
+
+	return (
+		// biome-ignore lint/a11y/noSvgWithoutTitle: each badge inside carries its own aria-label
+		<svg
+			viewBox={`${minX - margin} ${minZ - margin} ${width + margin * 2} ${height + margin * 2}`}
+			preserveAspectRatio="xMidYMid meet"
+			className="h-[140px] w-full"
+		>
+			<polygon
+				points={outline.map((p) => `${p.xMm},${p.zMm}`).join(" ")}
+				fill="#f4f3f1"
+			/>
+			{walls.map((wall, i) => (
+				<line
+					// biome-ignore lint/suspicious/noArrayIndexKey: a wall's index is its identity
+					key={i}
+					x1={wall.startMm.xMm}
+					y1={wall.startMm.zMm}
+					x2={wall.endMm.xMm}
+					y2={wall.endMm.zMm}
+					stroke={i === targetWall ? "#1f5138" : "#a3a3a3"}
+					strokeWidth={i === targetWall ? width * 0.014 : width * 0.007}
+					strokeLinecap="round"
+				/>
+			))}
+			{walls.map((wall, i) => {
+				const { xMm, zMm } = wallLabelMm(wall, insetMm);
+				const label = fill(t.planner.room.wallName, { n: i + 1 });
+				return (
+					// biome-ignore lint/a11y/useSemanticElements: SVG has no <button>; role+tabIndex+onKeyDown makes this one
+					<g
+						// biome-ignore lint/suspicious/noArrayIndexKey: a wall's index is its identity
+						key={i}
+						role="button"
+						tabIndex={0}
+						aria-label={label}
+						onClick={() => onPickAction(i)}
+						onKeyDown={(e) => {
+							if (e.key !== "Enter" && e.key !== " ") return;
+							e.preventDefault();
+							onPickAction(i);
+						}}
+						style={{ cursor: "pointer" }}
+					>
+						<circle
+							cx={xMm}
+							cy={zMm}
+							r={insetMm * 0.55}
+							fill={i === targetWall ? "#1f5138" : "#ffffff"}
+							stroke={i === targetWall ? "#1f5138" : "#a3a3a3"}
+							strokeWidth={width * 0.004}
+						/>
+						<text
+							x={xMm}
+							y={zMm}
+							textAnchor="middle"
+							dominantBaseline="central"
+							fontSize={insetMm * 0.7}
+							fill={i === targetWall ? "#ffffff" : "#525252"}
+						>
+							{i + 1}
+						</text>
+					</g>
+				);
+			})}
+		</svg>
+	);
+}
+
+const SHAPES: RoomShape[] = ["rect", "l", "l-mirror"];
+
+/** A shape's outline, drawn from the template itself so the picture can never
+ * disagree with the room it makes. Inline SVG, per CLAUDE.md: no WebGL
+ * context per thumbnail. */
+function ShapeThumb({ shape }: { shape: RoomShape }) {
+	const plan = reshape(
+		{ template: "rect", widthMm: 3000, depthMm: 3000 },
+		shape,
+	);
+	const points = outlineOf(plan)
+		.map((p) => `${p.xMm},${p.zMm}`)
+		.join(" ");
+	return (
+		<svg viewBox="-1700 -1700 3400 3400" className="h-8 w-8" aria-hidden="true">
+			<polygon
+				points={points}
+				fill="none"
+				stroke="currentColor"
+				strokeWidth={160}
+			/>
+		</svg>
+	);
+}
+
 /**
- * The Room panel body: which room, how big, and whether the run fits in it.
- *
- * Everything else that used to live here — the base, run, wall-unit and door
- * modes — is behind the Defaults panel now. What is left is the one question
- * this panel exists to answer, which is what the cabinets have to fit inside.
- *
- * It was a permanent 236px column until the rail grew a Room tool. Three
- * sliders you set once at the start do not earn a fifth of the window for the
- * whole session, and the right-hand recap prints the same wall, run and
- * wall-free figures anyway — so what was lost by moving it here is the sliders
- * being in reach, never the numbers being in view. `StudioPanel` supplies the
- * heading, the hint and the scroll container this used to carry itself.
+ * The Room panel body: which room, what shape, how long each wall is, and
+ * whether the targeted wall's run fits on it.
  */
 export function RoomPanel({
 	catalogue,
 	roomId,
 	layout,
-	minWallMm,
 	freeMm,
 	overhangMm,
 	shape,
 	reachable,
-	minDepthMm,
+	wallRanges,
+	targetWall,
 	onShapeAction,
 	onChangeRoomAction,
-	onWallWidthAction,
+	onWallLengthAction,
+	onTargetWallAction,
 	onCeilingAction,
-	onDepthAction,
 	onOpenDefaultsAction,
 }: {
 	catalogue: PlannerCatalogue;
 	roomId: RoomTypeId;
 	layout: RoomLayout;
-	/** The shortest wall the placed run fits on — the slider's real floor. */
-	minWallMm: number;
-	/** Wall left over, negative when the run is longer than the wall. */
+	/** Wall left over on the targeted wall, negative when its run is longer. */
 	freeMm: number;
 	overhangMm: number;
-	/** One wall, or which side the corner of an L is on. */
 	shape: RoomShape;
-	/** Which shapes a press would actually reach. One wall is refused while the
-	 * side wall or corner holds anything; an L while the main run fills the end
-	 * its corner would take. */
+	/** Which shapes a press would actually reach. */
 	reachable: Record<RoomShape, boolean>;
-	/** The shortest room the side wall's cabinets fit in. */
-	minDepthMm: number;
+	/** Per wall, the lengths `setWallLength` will actually reach. */
+	wallRanges: { minMm: number; maxMm: number }[];
+	targetWall: number;
 	onShapeAction: (shape: RoomShape) => void;
 	onChangeRoomAction: (id: RoomTypeId) => void;
-	onWallWidthAction: (mm: number) => void;
+	onWallLengthAction: (wall: number, mm: number) => void;
+	onTargetWallAction: (wall: number) => void;
 	onCeilingAction: (mm: number) => void;
-	onDepthAction: (mm: number) => void;
 	onOpenDefaultsAction: () => void;
 }) {
 	const t = useCopy();
+	const shapeLabel: Record<RoomShape, string> = {
+		rect: t.planner.room.shapeRect,
+		l: t.planner.room.shapeL,
+		"l-mirror": t.planner.room.shapeLMirror,
+	};
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -91,52 +231,61 @@ export function RoomPanel({
 			<div className="flex flex-col gap-1.5">
 				<p className="text-[12px] text-neutral-600">{t.planner.room.shape}</p>
 				<div className="flex flex-wrap gap-1">
-					{(
-						[
-							["straight", t.planner.room.shapeStraight],
-							["left", t.planner.room.shapeLeft],
-							["right", t.planner.room.shapeRight],
-						] as const
-					).map(([option, label]) => (
+					{SHAPES.map((option) => (
 						<button
 							key={option}
 							type="button"
 							aria-pressed={shape === option}
+							aria-label={shapeLabel[option]}
+							title={shapeLabel[option]}
 							disabled={option !== shape && !reachable[option]}
 							onClick={() => onShapeAction(option)}
 							className={`${chip(shape === option)} disabled:cursor-not-allowed disabled:text-neutral-300`}
 						>
-							{label}
+							<ShapeThumb shape={option} />
 						</button>
 					))}
 				</div>
-				{shape !== "straight" && !reachable.straight && (
+				{SHAPES.some((option) => option !== shape && !reachable[option]) && (
 					<p className="text-[11px] text-neutral-500 leading-4">
 						{t.planner.room.shapeLocked}
 					</p>
 				)}
-				{(["left", "right"] as const).some(
-					(option) => option !== shape && !reachable[option],
-				) && (
-					<p className="text-[11px] text-neutral-500 leading-4">
-						{t.planner.room.shapeRefused}
-					</p>
-				)}
 			</div>
 
-			<DimensionField
-				label={t.planner.room.wallLength}
-				valueMm={layout.wallWidthMm}
-				minMm={minWallMm}
-				maxMm={WALL_LIMITS.maxMm}
-				stepMm={50}
-				onChangeAction={onWallWidthAction}
-			/>
-			{minWallMm > WALL_LIMITS.minMm && layout.wallWidthMm === minWallMm && (
-				<p className="-mt-1 text-[11px] text-neutral-500 leading-4">
-					{fill(t.planner.room.narrowWallNote, { min: minWallMm })}
+			<div className="flex flex-col gap-2">
+				<p className="text-[11px] text-neutral-500 leading-4">
+					{t.planner.room.wallsHint}
 				</p>
-			)}
+				<WallMap
+					plan={layout.plan}
+					targetWall={targetWall}
+					onPickAction={onTargetWallAction}
+				/>
+				{wallsOf(layout.plan).map((wall, i) => {
+					const label = fill(t.planner.room.wallName, { n: i + 1 });
+					return (
+						<div
+							// biome-ignore lint/suspicious/noArrayIndexKey: a wall's index is its identity
+							key={i}
+							onFocusCapture={() => onTargetWallAction(i)}
+							className={`flex items-center gap-2 ${i === targetWall ? "rounded-lg bg-[#eef3ef] p-1" : "p-1"}`}
+						>
+							<WallBadge n={i + 1} target={i === targetWall} label={label} />
+							<div className="flex-1">
+								<DimensionField
+									label={label}
+									valueMm={wall.lengthMm}
+									minMm={wallRanges[i]?.minMm ?? wall.lengthMm}
+									maxMm={wallRanges[i]?.maxMm ?? wall.lengthMm}
+									stepMm={50}
+									onChangeAction={(mm) => onWallLengthAction(i, mm)}
+								/>
+							</div>
+						</div>
+					);
+				})}
+			</div>
 
 			<DimensionField
 				label={t.planner.room.ceiling}
@@ -145,19 +294,6 @@ export function RoomPanel({
 				maxMm={CEILING_LIMITS.maxMm}
 				stepMm={50}
 				onChangeAction={onCeilingAction}
-			/>
-
-			<DimensionField
-				label={
-					shape === "straight"
-						? t.planner.room.roomDepth
-						: t.planner.room.sideWallLength
-				}
-				valueMm={layout.roomDepthMm}
-				minMm={minDepthMm}
-				maxMm={ROOM_DEPTH_LIMITS.maxMm}
-				stepMm={50}
-				onChangeAction={onDepthAction}
 			/>
 
 			<div className="mt-0.5 flex flex-col gap-1.5 border-[#f0efec] border-t pt-3">

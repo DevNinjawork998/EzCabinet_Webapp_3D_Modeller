@@ -109,6 +109,17 @@ export function wallsOf(plan: FloorPlan): WallGeom[] {
 	});
 }
 
+/** Where a wall's number (or its length figure) sits: the wall's midpoint,
+ * pushed `insetMm` into the room along its inward normal. Shared by the plan
+ * labels, the room-panel map and the 3D floor badges so all three agree on
+ * where a wall's marker belongs. */
+export function wallLabelMm(wall: WallGeom, insetMm: number): Vec2 {
+	return {
+		xMm: (wall.startMm.xMm + wall.endMm.xMm) / 2 + wall.inward.xMm * insetMm,
+		zMm: (wall.startMm.zMm + wall.endMm.zMm) / 2 + wall.inward.zMm * insetMm,
+	};
+}
+
 export function vertexKind(
 	plan: FloorPlan,
 	vertex: number,
