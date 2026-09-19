@@ -477,6 +477,7 @@ PostHog **Cloud EU**, installed from the Vercel Marketplace, so we can see where
 - **Journey events** are a typed union in `analytics.ts`, fired from existing handlers — one per customer decision, never per pointer move. `quote_submitted` fires after `POST /api/orders` answers 201 — a placed order, not a button press.
 - **Breakage:** `error.tsx`, `global-error.tsx`, WebGL context loss in `PlannerScene`, and mesh-load failures in `DesignedCabinet` (the procedural fallback hides them on screen).
 - **Room shapes changed two event payloads.** `room_shape_changed.shape` is now `rect | l | l-mirror` (was `straight | left | right`); `quote_viewed.wallMm` now means the back wall's length (`wallsOf(plan)[0].lengthMm`), not the room's one wall. Update any PostHog insight or funnel filtering on these values.
+- **Speed Insights** (`@vercel/speed-insights`, mounted beside `<Analytics>`, so public pages only): real-device LCP / INP / CLS per route. Cookieless, so no consent gate. A paid add-on on Pro — the component sends nothing until it is enabled in the project dashboard. `_vercel` is excluded from the `proxy.ts` matcher, or the beacon gets a locale redirect. It measures speed and has no failure alerting; that is PostHog and the 5xx rule below.
 - **Alerts → Slack:** PostHog error-tracking alerts (new/reopened issue, spike) and a funnel insight alert; server 5xx via the Vercel rule in `docs/ops/vercel-5xx-alert.json`.
 
 ## Auth

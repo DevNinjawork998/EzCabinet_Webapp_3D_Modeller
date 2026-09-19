@@ -72,3 +72,8 @@ skills-lock.json
 
 # subagent-driven-development scratch — ledger, briefs, review packages
 /.superpowers
+
+# A logistics partner's API guide is their confidential document, handed to us
+# under their own terms. Read it here, never commit it.
+/docs/API Docs/
+/City Link API.pdf

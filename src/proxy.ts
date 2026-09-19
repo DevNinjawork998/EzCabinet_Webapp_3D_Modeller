@@ -47,5 +47,5 @@ export const config = {
 	// is load-bearing: a bare `api` exclusion would drop /api/admin/* out of
 	// the matcher entirely and silently unauthenticate the admin API, since
 	// the admin gate above only runs when the proxy runs at all.
-	matcher: ["/((?!_next|api/(?!admin)|.*\\..*).*)"],
+	matcher: ["/((?!_next|_vercel|api/(?!admin)|.*\\..*).*)"],
 };
