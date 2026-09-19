@@ -951,6 +951,25 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		},
 		overhangMm: (room: RoomLayout) =>
 			Math.max(0, ...views(room).map((view) => wall.overhangMm(view))),
+		/**
+		 * How much of this wall a customer could still build on — negative when
+		 * the run is longer than the wall.
+		 *
+		 * Not `wallWidthMm - runExtentMm`: on a wall with a corner at each end (a
+		 * U's back wall) `runExtentMm` only measures from the corner it packs
+		 * against, so it never counts the far square. Free spans do, because
+		 * `occupiedSpans` reads `reserved[row]` — both ends of it — not just the
+		 * one the run is anchored to.
+		 */
+		freeWallMm: (room: RoomLayout, run: number): number => {
+			const view = runView(room, run);
+			const overhang = wall.overhangMm(view);
+			return overhang > 0
+				? -overhang
+				: wall
+						.freeSpans(view, "floor")
+						.reduce((total, span) => total + span.endMm - span.startMm, 0);
+		},
 		overhangingIds: (room: RoomLayout): ReadonlySet<string> =>
 			new Set(views(room).flatMap((view) => [...wall.overhangingIds(view)])),
 		isClear: (room: RoomLayout) =>

@@ -234,6 +234,7 @@ export function StudioScreen({
 		fits,
 		flushWallToTallTops,
 		freeSpans,
+		freeWallMm,
 		hangingHeightMmOf,
 		overhangMm,
 		positionsOf,
@@ -391,15 +392,11 @@ export function StudioScreen({
 		selection.length === 1 ? selection[0] : undefined;
 
 	const overhang = overhangMm(layout);
-	// The targeted wall: its corner squares are not free wall.
 	const targetView = runView(layout, run);
-	const cornerMm = (targetView.reserved?.floor ?? []).reduce(
-		(total, span) => total + span.endMm - span.startMm,
-		0,
-	);
-	const freeMm = Math.round(
-		targetView.wallWidthMm - Math.max(cornerMm, runExtentMm(layout, run)),
-	);
+	// Not `wallWidthMm - runExtentMm`: on a wall with a corner square at each
+	// end (a U's back wall), `runExtentMm` only measures from the corner it
+	// packs against, so it misses the far square. `freeWallMm` reads both.
+	const freeMm = Math.round(freeWallMm(layout, run));
 	// Every wall with a run on it, from its corner.
 	const runMetres = layout.runs
 		.map((_, i) => runExtentMm(layout, i))

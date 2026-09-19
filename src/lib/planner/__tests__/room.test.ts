@@ -187,6 +187,37 @@ describe("corners switch on when both walls hold cabinets", () => {
 	});
 });
 
+describe("freeWallMm", () => {
+	it("is the whole wall on an empty back wall", () => {
+		expect(engine.freeWallMm(kitchen(), 0)).toBe(4200);
+	});
+
+	it("subtracts one cabinet on the back wall", () => {
+		const room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		expect(engine.freeWallMm(room, 0)).toBe(3600);
+	});
+
+	it("subtracts both corner squares of a U, not just the near one", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 1800, "b", 600);
+		room = engine.addModule(room, "base-cabinet", 0, "l", 600, 3);
+		room = engine.addModule(room, "base-cabinet", 3000, "r", 600, 1);
+		// 4200 − 607 − 607 − 600 = 2386. `runExtentMm` alone would miss the far
+		// square and overstate this by 607.
+		expect(engine.freeWallMm(room, 0)).toBe(2386);
+	});
+
+	it("goes negative by the overhang when the run no longer fits", () => {
+		const room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 900);
+		// The shape a share link could deliver once parsed from JSON — no
+		// setter produces this, but `freeWallMm` still has to read it.
+		const tampered: RoomLayout = {
+			...room,
+			plan: { ...room.plan, widthMm: 600 },
+		};
+		expect(engine.freeWallMm(tampered, 0)).toBe(-300);
+	});
+});
+
 describe("setShape", () => {
 	it("turns a rectangle into an L, keeping the back wall", () => {
 		const room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
