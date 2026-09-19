@@ -192,11 +192,20 @@ const mirrorModule =
 			: {}),
 	});
 
-/** A run whose only corner is at its far end packs and measures from there. */
-const packsFromEnd = (room: RoomLayout, run: number) => {
+/** A run anchored at its far corner rather than its near one: either its only
+ * active corner span is at that end, or — before any corner has switched
+ * on — its start is the notch's outside corner and its end a real one, the
+ * same end `nearCornerMm` picks for a click-added cabinet. Packing, extent
+ * and a wall-length edit all follow this end, so a run reads the same way
+ * whether or not its corner has activated yet. */
+function anchoredAtEnd(room: RoomLayout, run: number): boolean {
 	const spans = cornerSpans(room, run, "floor");
-	return spans.length === 1 && !spans[0].atStart;
-};
+	if (spans.length > 0) return spans.length === 1 && !spans[0].atStart;
+	return (
+		vertexKind(room.plan, startVertexOf(room, run)) === "outside" &&
+		vertexKind(room.plan, run) === "inside"
+	);
+}
 
 export function runView(room: RoomLayout, run: number): PlannerLayout {
 	const { plan, runs, corners: _corners, ...settings } = room;
@@ -222,7 +231,7 @@ export function runView(room: RoomLayout, run: number): PlannerLayout {
  * one-wall engine — which packs toward x = 0 — packs toward the corner. */
 function fromCorner(room: RoomLayout, run: number): PlannerLayout {
 	const view = runView(room, run);
-	if (!packsFromEnd(room, run)) return view;
+	if (!anchoredAtEnd(room, run)) return view;
 	const L = view.wallWidthMm;
 	const flip = (span: Span): Span => ({
 		startMm: L - span.endMm,
@@ -239,6 +248,8 @@ function fromCorner(room: RoomLayout, run: number): PlannerLayout {
 	};
 }
 
+/** Write a view's rows back. Rows only: a view's length, depth, end walls and
+ * reserved spans are derived, and must never land in the document. */
 export function withRun(
 	room: RoomLayout,
 	run: number,
@@ -369,9 +380,20 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		room.runs.flatMap((_, run) => cornerPositionsOf(room, run));
 
 	/**
-	 * Slide one run's cabinets clear of one corner's square. The old
-	 * `cascadeCorner` body, for one end of one run: walk both rows ordered by
-	 * distance from that end, one cursor per row, a tall unit claiming both.
+	 * Make room for one corner's square along one run, by sliding cabinets,
+	 * not the whole row.
+	 *
+	 * Walks the run's floor and wall cabinets together, ordered by distance
+	 * from the corner end, keeping one cursor per row for how far that row is
+	 * claimed so far — starting at the square's own edge. A cabinet moves only
+	 * if its own footprint starts before the cursor of every row it occupies:
+	 * its own row, plus the *other* row too for a tall unit, the same two-way
+	 * rule `occupiedSpans` uses, since a tall unit stands floor to ceiling. It
+	 * is pushed exactly clear and never pulled toward the corner, and the
+	 * cursors of the rows it occupies advance to its new far edge — so a
+	 * cabinet already past the square, with a free gap behind it, stays put.
+	 * A run with nowhere to slide is not refused here; `isClear` is still the
+	 * gate for that, in `placeCorner`, `setShape` and `resizedTo`.
 	 */
 	function cascadeRun(
 		room: RoomLayout,
@@ -500,10 +522,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			plan,
 			runs: room.runs.map((run, i) => {
 				const shiftMm = after[i].lengthMm - before[i].lengthMm;
-				const followsEnd =
-					isActiveCorner(room, i) &&
-					!isActiveCorner(room, startVertexOf(room, i));
-				if (!followsEnd || shiftMm === 0) return run;
+				if (!anchoredAtEnd(room, i) || shiftMm === 0) return run;
 				const shift = (module: PlacedModule) => ({
 					...module,
 					xMm: module.xMm + shiftMm,
@@ -594,8 +613,12 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			.filter((panel) => exposure.get(panel.moduleId)?.[panel.side]);
 	}
 
-	/** The worktop square at each active corner: over a corner base unit, or
-	 * closing an empty square that a base unit on either wall meets. */
+	/**
+	 * The square of worktop at each active corner: over a corner base unit, or
+	 * closing an empty corner when a base unit in either run meets it.
+	 * Otherwise there is no counter to join. The same answer feeds the scene
+	 * and the price.
+	 */
 	function cornerWorktops(
 		room: RoomLayout,
 	): { vertex: number; sizeMm: number; topMm: number }[] {
@@ -642,10 +665,8 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		});
 	}
 
-	/** See the old file's comment on `cornerShutSides` — same reach rule, now
-	 * asked at every active corner rather than the one.
-	 *
-	 * The leaf that has to stay shut on each side of an L's inner corner.
+	/**
+	 * The leaf that has to stay shut on each side of an inside corner.
 	 *
 	 * Two cabinets on perpendicular walls each hinge a leaf toward the corner
 	 * they share, and both leaves swing through the same space: each stands in
@@ -788,6 +809,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 				placeCorner(room, familyId, cornerVertexFor(room, run), "probe") !==
 				room
 			);
+		if (run >= room.runs.length) return false;
 		// Probed through `addModule`, because a cabinet that fits the bare wall
 		// can still be refused by the corner it switches on.
 		return (
@@ -837,13 +859,17 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			return next === room[key] ? room : { ...room, [key]: next };
 		};
 
+	/** How much of a run's length its design needs, measured from the corner
+	 * end: a run shrinks and grows at its free end. */
 	const runExtentMm = (room: RoomLayout, run = 0): number =>
 		run < room.runs.length ? wall.runExtentMm(fromCorner(room, run)) : 0;
 
+	// Packed toward each run's corner: `fromCorner` is its own inverse, and
+	// only the rows of the view it returns are written back.
 	const closeGaps = (room: RoomLayout) =>
 		room.runs.reduce((next, _, run) => {
 			const packed = wall.closeGaps(fromCorner(next, run));
-			if (!packsFromEnd(next, run)) return withRun(next, run, packed);
+			if (!anchoredAtEnd(next, run)) return withRun(next, run, packed);
 			const L = packed.wallWidthMm;
 			return withRun(next, run, {
 				...packed,

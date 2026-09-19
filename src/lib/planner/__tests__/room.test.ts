@@ -6,6 +6,7 @@ import {
 	asRoom,
 	cornerVertexFor,
 	emptyRoom,
+	isActiveCorner,
 	nearCornerMm,
 	type RoomLayout,
 	roomEngine,
@@ -444,5 +445,145 @@ describe("cornerShutSides", () => {
 		});
 		expect(engine.cornerShutSides(filled(900))).toEqual(both);
 		expect(engine.cornerShutSides(filled(2600))).toEqual(new Map());
+	});
+});
+
+describe("fits guards an out-of-range run", () => {
+	it("refuses rather than crashing on a run past the plan's walls", () => {
+		// vertexKind wraps by modulo, so most out-of-range runs answer via that
+		// wrap; run = count + 3 lands on the L plan's one outside/inside pair
+		// (vertex 2 outside, vertex 3 inside) and used to reach `lengthOf`,
+		// which indexes `wallsOf(plan)` with the raw, un-wrapped run and threw.
+		const room: RoomLayout = {
+			...emptyRoom(5500),
+			plan: lPlan,
+			runs: Array.from({ length: 6 }, () => ({ floor: [], wall: [] })),
+		};
+		const run = room.runs.length + 3;
+		expect(() =>
+			engine.fits(room, "base-cabinet", undefined, run),
+		).not.toThrow();
+		expect(engine.fits(room, "base-cabinet", undefined, run)).toBe(false);
+	});
+});
+
+describe("a run anchors at its outside/inside far end before any corner is active", () => {
+	// The L plan's run 3 (the left wall) starts at the notch's outside corner
+	// and ends at vertex 3, a real one — the same end `nearCornerMm` picks —
+	// with no cabinets on either wall yet, so no corner has switched on.
+	const lRoomPlan = (): RoomLayout => ({
+		...emptyRoom(5500),
+		plan: lPlan,
+		runs: Array.from({ length: 6 }, () => ({ floor: [], wall: [] })),
+	});
+
+	it("measures runExtentMm from the far corner, not from x = 0", () => {
+		const at = nearCornerMm(lRoomPlan(), 3);
+		const placed = engine.addModule(
+			lRoomPlan(),
+			"base-cabinet",
+			at,
+			"a",
+			600,
+			3,
+		);
+		// The cabinet needs only its own 600mm, not the run up to it.
+		expect(engine.runExtentMm(placed, 3)).toBe(600);
+	});
+
+	it("closeGaps keeps the run packed against the far corner", () => {
+		const at = nearCornerMm(lRoomPlan(), 3);
+		const placed = engine.addModule(
+			lRoomPlan(),
+			"base-cabinet",
+			at,
+			"a",
+			600,
+			3,
+		);
+		const packed = engine.closeGaps(placed);
+		expect(xOf(packed, "a")).toBe(at - 600);
+	});
+
+	it("setWallLength keeps the run against that corner as the wall grows", () => {
+		const at = nearCornerMm(lRoomPlan(), 3);
+		let room = engine.addModule(lRoomPlan(), "base-cabinet", at, "a", 600, 3);
+		const before = xOf(room, "a") ?? 0;
+		room = engine.setWallLength(room, 3, 4000);
+		expect(xOf(room, "a")).toBe(before + 1000);
+	});
+});
+
+describe("restored from the v2 file, adapted to v3's vertex-keyed corners", () => {
+	it("moves a cabinet only as far as it needs, leaving a free gap alone", () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 700, "a", 600);
+		room = engine.addModule(room, "base-cabinet", 3600, "b", 600);
+		// 1300–3600 is free, so there is room for the 900mm corner square.
+		expect(engine.fits(room, "corner-base")).toBe(true);
+		const next = engine.addModule(room, "corner-base", 0, "c");
+		expect(next.corners[0]?.floor?.familyId).toBe("corner-base");
+		expect(xOf(next, "a")).toBe(900);
+		expect(xOf(next, "b")).toBe(3600);
+	});
+
+	it("clears both rows together for a tall unit, so the wall unit clears its end", () => {
+		let room = engine.addModule(kitchen(), "tall-cabinet", 0, "t", 600);
+		room = engine.addModule(room, "wall-cabinet", 600, "w", 400);
+		// Activating the corner from the other wall triggers the cascade.
+		const next = engine.addModule(room, "base-cabinet", 3000, "s", 600, 3);
+		expect(isActiveCorner(next, 3)).toBe(true);
+		expect(xOf(next, "t")).toBe(607);
+		expect(next.runs[0].wall.find((m) => m.id === "w")?.xMm).toBe(1207);
+	});
+
+	it("refuses a tall unit that would stand under a wide corner wall unit", () => {
+		const wide = {
+			...PLANNER_CATALOGUE,
+			families: PLANNER_CATALOGUE.families.map((f) =>
+				f.id === "corner-wall"
+					? { ...f, sizes: [{ widthMm: 900, priceRm: 900 }] }
+					: f,
+			),
+		};
+		const e = roomEngine(wide);
+		const room = e.addModule(kitchen(), "corner-wall", 0, "cw");
+		const next = e.addModule(room, "tall-cabinet", 607, "t", 600);
+		expect(e.isClear(next)).toBe(true);
+		expect(next).toBe(room);
+	});
+
+	it("cornerWorktops is none when the corner floor slot holds a non-base unit", () => {
+		// No non-base corner family exists in the seed yet — a corner tall
+		// unit is a future shape, per the CLAUDE.md corner-panel rules.
+		const cornerTall: (typeof PLANNER_CATALOGUE.families)[number] = {
+			id: "corner-tall",
+			label: "Corner tall cabinet",
+			category: "CORNER_BASE_CABINET",
+			kind: "tall",
+			depthMm: 900,
+			heightMm: 2380,
+			floorHeightMm: 0,
+			drawers: 0,
+			sizes: [{ widthMm: 900, priceRm: 1500 }],
+		};
+		const testCatalogue = {
+			...PLANNER_CATALOGUE,
+			families: [...PLANNER_CATALOGUE.families, cornerTall],
+		};
+		const testEngine = roomEngine(testCatalogue);
+		const room = testEngine.addModule(kitchen(), "corner-tall", 0, "c");
+		expect(room.corners[0]?.floor?.familyId).toBe("corner-tall");
+		expect(testEngine.cornerWorktops(room)).toEqual([]);
+	});
+
+	it("refuses the add that would switch on a second corner the back wall cannot give both squares to", () => {
+		// "b" sits flush against vertex 3's eventual square with no free run
+		// left for vertex 0's — the second corner's cascade would have to push
+		// it back into the first corner's square.
+		let room = engine.addModule(kitchen(), "base-cabinet", 607, "b", 3200);
+		room = engine.addModule(room, "base-cabinet", 0, "l", 600, 3);
+		expect(isActiveCorner(room, 3)).toBe(true);
+		const attempt = engine.addModule(room, "base-cabinet", 0, "r", 600, 1);
+		expect(attempt).toBe(room);
 	});
 });
