@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PLANNER_CATALOGUE } from "../catalogue";
+import { PLANNER_CATALOGUE, WALL_GAP_MM } from "../catalogue";
 import type { FloorPlan } from "../floorplan";
 import { emptyLayout, type PlacedModule, plannerEngine } from "../layout";
 import {
@@ -8,6 +8,7 @@ import {
 	emptyRoom,
 	isActiveCorner,
 	nearCornerMm,
+	offWall,
 	type RoomLayout,
 	roomEngine,
 	runIndexOf,
@@ -15,6 +16,7 @@ import {
 	SNAP_TO_WALL_MM,
 	setDoor,
 	setHinge,
+	wallToJoin,
 	withRun,
 } from "../room";
 
@@ -888,6 +890,58 @@ describe("free-standing cabinets", () => {
 		const room = engine.placeFree(withBase(), "a", { xMm: 0, zMm: 0 });
 		expect(freeOf(setDoor(room, "a", null), "a")?.doorStyleId).toBeNull();
 		expect(freeOf(setHinge(room, "a", "left"), "a")?.hinge).toBe("left");
+	});
+
+	it("draws a free cabinet as a run of one centred on its frame", () => {
+		let room = engine.placeFree(withBase(), "a", { xMm: 500, zMm: 300 });
+		room = engine.rotateFree(room, "a", 90);
+		const drawn = engine.freeRun(room, "a");
+		expect(drawn).not.toBeNull();
+		if (!drawn) return;
+		const { view, frame } = drawn;
+		expect(frame).toEqual({ yawRad: Math.PI / 2, xMm: 500, zMm: 300 });
+		// `Run` puts a cabinet's centre at x = xMm + w/2 − wall/2 and
+		// z = −roomDepth/2 + gap + depth/2: both zero, the frame's origin.
+		const [p] = oneWall.allPositions(view);
+		expect(p.xMm + p.widthMm / 2 - view.wallWidthMm / 2).toBe(0);
+		expect(-view.roomDepthMm / 2 + WALL_GAP_MM + p.family.depthMm / 2).toBe(0);
+		// The same view the price reads, only its depth set for drawing.
+		expect({ ...view, roomDepthMm: 0 }).toEqual({
+			...engine.freeView(room, "a"),
+			roomDepthMm: 0,
+		});
+		expect(engine.freeRun(room, "nope")).toBeNull();
+	});
+
+	it("says when a dragged centre has left its wall", () => {
+		const plan = kitchen().plan;
+		// Back wall at z = -1800; 607 deep, so the snap reaches 150 + 303.5.
+		expect(offWall(plan, 0, { xMm: 0, zMm: -1800 + 150 + HALF }, 607)).toBe(
+			false,
+		);
+		expect(offWall(plan, 0, { xMm: 0, zMm: -1800 + 151 + HALF }, 607)).toBe(
+			true,
+		);
+	});
+
+	it("names the wall a drop would join, or none", () => {
+		const plan = kitchen().plan;
+		expect(wallToJoin(plan, { xMm: -2100 + 100 + HALF, zMm: 0 }, 607)).toEqual({
+			run: 3,
+			xMm: 1800,
+		});
+		expect(wallToJoin(plan, { xMm: 0, zMm: 0 }, 607)).toBeNull();
+	});
+
+	it("lands a dragged turn on square when it is near it", () => {
+		const room = engine.placeFree(withBase(), "a", { xMm: 0, zMm: 0 });
+		expect(
+			freeOf(engine.rotateFree(room, "a", 93, true), "a")?.rotationDeg,
+		).toBe(90);
+		expect(freeOf(engine.rotateFree(room, "a", 93), "a")?.rotationDeg).toBe(93);
+		expect(
+			freeOf(engine.rotateFree(room, "a", 2, true), "a")?.rotationDeg,
+		).toBe(undefined);
 	});
 
 	it("reports a free footprint and a clear room", () => {

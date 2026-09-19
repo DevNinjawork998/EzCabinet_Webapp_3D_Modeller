@@ -159,6 +159,17 @@ export const SNAP_MM = 60;
  *  square — the angles in between are the rare case, not the target. */
 export const ROTATION_SNAP_DEG = 6;
 
+/** A turn in whole degrees in [0, 360); with `snap`, landed on the nearest
+ * eighth-turn when within `ROTATION_SNAP_DEG` of it — what a dragged ring
+ * does, so a cabinet can be put back square by hand. */
+export function settleTurnDeg(deg: number, snap = false): number {
+	const wrapped = ((Math.round(deg) % 360) + 360) % 360;
+	const eighth = Math.round(wrapped / 45) * 45;
+	return snap && Math.abs(eighth - wrapped) <= ROTATION_SNAP_DEG
+		? eighth % 360
+		: wrapped;
+}
+
 /** Tall units stand floor-to-ceiling, so they live in the floor row. */
 export const rowFor = (kind: ModuleKind): Row =>
 	kind === "wall" ? "wall" : "floor";
@@ -1241,12 +1252,7 @@ export function plannerEngine(catalogue: PlannerCatalogue) {
 		const found = find(layout, id);
 		if (!found) return layout;
 
-		const wrapped = ((Math.round(deg) % 360) + 360) % 360;
-		const eighth = Math.round(wrapped / 45) * 45;
-		const settled =
-			snap && Math.abs(eighth - wrapped) <= ROTATION_SNAP_DEG
-				? eighth % 360
-				: wrapped;
+		const settled = settleTurnDeg(deg, snap);
 
 		if ((found.placed.rotationDeg ?? 0) === settled) return layout;
 

@@ -16,6 +16,7 @@ import {
 	toWorldMm,
 	type Vec2,
 	vertexKind,
+	type WallFrame,
 	wallsOf,
 } from "./floorplan";
 import {
@@ -33,6 +34,7 @@ import {
 	type Row,
 	rowFor,
 	type Span,
+	settleTurnDeg,
 	spreadMm,
 } from "./layout";
 import { OVERLAY_OPEN_RAD } from "./swing";
@@ -102,6 +104,29 @@ const grounded = ({ hangAtMm: _lift, ...module }: FreeModule): FreeModule =>
 
 /** A dropped cabinet whose back edge lands this close to a wall joins it. */
 export const SNAP_TO_WALL_MM = 150;
+
+/** Whether a cabinet `depthMm` deep, centred at `centre`, stands further off
+ * wall `run` than a drop would snap back to it — a drag past this has left
+ * its wall and follows the floor. */
+export const offWall = (
+	plan: FloorPlan,
+	run: number,
+	centre: Vec2,
+	depthMm: number,
+): boolean =>
+	distanceToWallMm(plan, run, centre) - depthMm / 2 > SNAP_TO_WALL_MM;
+
+/** The wall a cabinet dropped at `centre` joins — the nearest, if its back
+ * edge is within `SNAP_TO_WALL_MM` of it — and the drop point along it; or
+ * `null` when it stands free. Ignores any turn, as `dropAt` does. */
+export function wallToJoin(
+	plan: FloorPlan,
+	centre: Vec2,
+	depthMm: number,
+): { run: number; xMm: number } | null {
+	const target = nearestWall(plan, centre);
+	return offWall(plan, target.run, centre, depthMm) ? null : target;
+}
 
 /** How much of each row an empty corner keeps: the depth of the cabinets that
  * meet there. The seed's depths, not the live catalogue's — see the history of
@@ -640,12 +665,47 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		return accepts(room, next) && !freeProblems(next).has(id) ? next : room;
 	}
 
-	/** Turn a free cabinet to `deg`. Refused if it would leave the room or
-	 * overlap anything. */
-	function rotateFree(room: RoomLayout, id: string, deg: number): RoomLayout {
+	/** Turn a free cabinet to `deg` — landed on square when `snap` and near
+	 * it, as `setRotation` does for a dragged ring. Refused if it would leave
+	 * the room or overlap anything. */
+	function rotateFree(
+		room: RoomLayout,
+		id: string,
+		deg: number,
+		snap = false,
+	): RoomLayout {
 		const found = room.free.find((m) => m.id === id);
 		if (!found) return room;
-		return placeFree(room, id, { xMm: found.xMm, zMm: found.zMm }, deg);
+		return placeFree(
+			room,
+			id,
+			{ xMm: found.xMm, zMm: found.zMm },
+			settleTurnDeg(deg, snap),
+		);
+	}
+
+	/**
+	 * What the scene draws a free cabinet as: its `freeView`, one `Run`, deep
+	 * enough that `Run` — which stands a cabinet's back a wall gap in front of
+	 * its wall at −depth/2 — centres it on the frame's origin; and the frame,
+	 * turned by its yaw and moved to its centre. The price reads the same view.
+	 */
+	function freeRun(
+		room: RoomLayout,
+		id: string,
+	): { view: PlannerLayout; frame: WallFrame } | null {
+		const found = room.free.find((m) => m.id === id);
+		const family = found && familyIn(catalogue, found.familyId);
+		const view = freeView(room, id);
+		if (!found || !family || !view) return null;
+		return {
+			view: { ...view, roomDepthMm: family.depthMm + 2 * WALL_GAP_MM },
+			frame: {
+				yawRad: ((found.rotationDeg ?? 0) * Math.PI) / 180,
+				xMm: found.xMm,
+				zMm: found.zMm,
+			},
+		};
 	}
 
 	/**
@@ -654,14 +714,12 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 	 * the drop point along it; anywhere else it stands free there.
 	 */
 	function dropAt(room: RoomLayout, id: string, centre: Vec2): RoomLayout {
-		const target = nearestWall(room.plan, centre);
 		const sourceRun = runIndexOf(room, id);
 		const found = findModule(room, id);
 		const family = found && familyIn(catalogue, found.familyId);
 		if (!found || !family) return room;
-		const gapMm =
-			distanceToWallMm(room.plan, target.run, centre) - family.depthMm / 2;
-		if (gapMm > SNAP_TO_WALL_MM) return placeFree(room, id, centre);
+		const target = wallToJoin(room.plan, centre, family.depthMm);
+		if (!target) return placeFree(room, id, centre);
 		const xMm = target.xMm - found.widthMm / 2;
 		return sourceRun === target.run
 			? inRunOf(wall.dropModule)(room, id, xMm)
@@ -1344,6 +1402,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		cornerWorktops,
 		cornerShutSides,
 		freeView,
+		freeRun,
 		freeFootprint,
 		runFootprints,
 		freeIsClear,
