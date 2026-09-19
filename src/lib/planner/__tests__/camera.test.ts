@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { clampPanTarget, type RoomBoundsMm } from "../camera";
+import { clampPanTarget, panTargetMm, type RoomBoundsMm } from "../camera";
+import type { WallFrame } from "../floorplan";
+import type { Vec3Mm } from "../parts";
 
 /** A 4.2m wall, a 3m deep room, a standard 2.7m ceiling, and a bare wall so
  * the whole floor is in bounds. */
@@ -65,5 +67,76 @@ describe("clampPanTarget", () => {
 		const silly = { ...ROOM, roomDepthMm: 1000, runDepthMm: 4000 };
 		expect(clampPanTarget({ x: 0, y: 0, z: -9000 }, silly).z).toBe(500);
 		expect(clampPanTarget({ x: 0, y: 0, z: 9000 }, silly).z).toBe(500);
+	});
+});
+
+const ALL = { x: true, y: true, z: true };
+const IDENTITY: WallFrame = { yawRad: 0, xMm: 0, zMm: 0 };
+/** A rectangle's left wall: turned a quarter, not moved. Its local +x runs
+ * along world −z, its local +z (into the room) along world +x. */
+const LEFT: WallFrame = { yawRad: Math.PI / 2, xMm: 0, zMm: 0 };
+/** That wall's own box: 3.6m long, the room 4.2m out from it. */
+const LEFT_ROOM: RoomBoundsMm = {
+	...ROOM,
+	runWidthMm: 3600,
+	roomDepthMm: 4200,
+};
+
+const close = (actual: Vec3Mm, expected: Vec3Mm) => {
+	expect(actual.x).toBeCloseTo(expected.x);
+	expect(actual.y).toBeCloseTo(expected.y);
+	expect(actual.z).toBeCloseTo(expected.z);
+};
+
+describe("panTargetMm", () => {
+	it("is the plain mask and clamp on the back wall", () => {
+		const point = { x: 9000, y: 1200, z: -9000 };
+		const anchor = { x: 0, y: 0, z: 300 };
+		close(
+			panTargetMm(point, anchor, ALL, IDENTITY, ROOM),
+			clampPanTarget(point, ROOM),
+		);
+		// The floor puck: y stays where the anchor is.
+		close(
+			panTargetMm(
+				point,
+				anchor,
+				{ x: true, y: false, z: true },
+				IDENTITY,
+				ROOM,
+			),
+			clampPanTarget({ x: 9000, y: 0, z: -9000 }, ROOM),
+		);
+	});
+
+	it("slides along a turned wall and stops at its ends", () => {
+		const anchor = { x: 0, y: 0, z: 0 };
+		// Dragged along world −z: along the left wall, clamped to its 3.6m.
+		close(panTargetMm({ x: 0, y: 0, z: -9000 }, anchor, ALL, LEFT, LEFT_ROOM), {
+			x: 0,
+			y: 0,
+			z: -1800,
+		});
+		close(panTargetMm({ x: 0, y: 0, z: 500 }, anchor, ALL, LEFT, LEFT_ROOM), {
+			x: 0,
+			y: 0,
+			z: 500,
+		});
+	});
+
+	it("masks in the wall's frame, not the world's", () => {
+		// Elevation of the left wall: along it and up, never toward it. The
+		// anchor's distance from that wall is world x, so x is what is kept.
+		const anchor = { x: -500, y: 0, z: 0 };
+		close(
+			panTargetMm(
+				{ x: 300, y: 1000, z: -700 },
+				anchor,
+				{ x: true, y: true, z: false },
+				LEFT,
+				LEFT_ROOM,
+			),
+			{ x: -500, y: 1000, z: -700 },
+		);
 	});
 });

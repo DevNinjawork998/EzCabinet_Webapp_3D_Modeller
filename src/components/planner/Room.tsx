@@ -3,11 +3,19 @@
 import { useMemo } from "react";
 import {
 	RepeatWrapping,
+	Shape,
 	SRGBColorSpace,
 	type Texture,
 	TextureLoader,
+	Vector2,
 } from "three";
 import { WALL_GAP_MM } from "@/lib/planner/catalogue";
+import { type FloorPlan, outlineOf } from "@/lib/planner/floorplan";
+
+const m = (mm: number) => mm / 1000;
+const WALL_COLOR = "#e8e6e1";
+/** The wall the add menu builds on: tinted just enough to find. */
+const TARGET_WALL_COLOR = "#dde7e0";
 
 /**
  * The SPC plank tile `pnpm generate:grain` draws to `public/floor.png`: two
@@ -36,100 +44,106 @@ function floorTexture(): Texture {
 	return floorSource;
 }
 
-/**
- * The scribe gap, in metres, held off **every** wall and not only the back one.
+/*
+ * The scribe gap, held off **every** wall and not only the one behind a run.
  *
- * The run is clamped to `[0, wallWidthMm]`, and the side walls stand at exactly
- * those two figures — so a cabinet pushed to either end put its side panel on
- * the very plane of the wall. Two coplanar surfaces do not read as "flush"; they
- * read as one eating the other, flickering between them as the camera moves, and
- * from outside the room the single-sided wall vanishes and leaves the carcass
- * hanging through where the wall was.
+ * A run is clamped to `[0, wallWidthMm]`, and the neighbouring walls stand at
+ * exactly those two figures — so a cabinet pushed to either end put its side
+ * panel on the very plane of the wall. Two coplanar surfaces do not read as
+ * "flush"; they read as one eating the other, flickering between them as the
+ * camera moves, and from outside the room the single-sided wall vanishes and
+ * leaves the carcass hanging through where the wall was.
  *
- * The back wall never had this problem because the run is already held off it by
- * `WALL_GAP_MM` — which is a real allowance, not a rendering trick: no fitter
- * pushes a carcass hard against plaster. The side walls get the same, given here
- * rather than by insetting the run, so `wallWidthMm` stays the length the
- * customer measured and a run built wall to wall still reaches both ends.
+ * The wall behind a run never had this problem because the run is already held
+ * off it by `WALL_GAP_MM` — which is a real allowance, not a rendering trick: no
+ * fitter pushes a carcass hard against plaster. The end walls get the same by
+ * pushing the whole outline out by `WALL_GAP_MM`, rather than by insetting the
+ * run, so `wallWidthMm` stays the length the customer measured and a run built
+ * wall to wall still reaches both ends.
  */
-const SCRIBE = WALL_GAP_MM / 1000;
 
 /**
- * Cutaway room: floor, back wall, and the two side walls when the run is built
- * between them. Planes are single-sided, so the missing front wall simply
- * vanishes when the camera swings around — that is the whole cutaway effect,
- * no clipping planes needed.
+ * Cutaway room: the floor plan's floor, and one single-sided plane per wall
+ * facing into the room. A wall seen from behind simply vanishes, so whichever
+ * walls stand between the camera and the room drop out on their own — the
+ * whole cutaway effect, for any outline, with no clipping planes.
  *
- * `width` is the wall the customer measured, not a padded stage. It used to be
- * drawn 1.2m wider with the run centred in it, which left bare wall past each
- * end and made a run built wall to wall impossible to show.
- *
- * The side walls follow `walls` rather than always being drawn, because
- * whether they exist is exactly what decides if the run's end cabinets need a
- * finished panel — see `exposure.ts`. A room that shows walls the price does
- * not believe in is worse than a room with none.
+ * Drawn on the outline pushed out by the scribe gap, so a carcass pushed hard
+ * into a corner never shares a plane with the wall behind it.
  */
 export function Room({
-	width,
-	depth,
+	plan,
 	height,
-	walls = { left: false, right: false },
+	targetWall,
+	onWallPick,
 }: {
-	width: number;
-	depth: number;
+	plan: FloorPlan;
 	height: number;
-	/** Which side walls stand: both for a run built wall to wall, the corner's
-	 * side for an L. */
-	walls?: { left: boolean; right: boolean };
+	targetWall: number;
+	/** Absent while measuring: a tap then picks a point, not a wall. */
+	onWallPick?: (wall: number) => void;
 }) {
-	const floorWidth = width + SCRIBE * 2;
+	const outline = useMemo(() => outlineOf(plan, WALL_GAP_MM), [plan]);
+	// The floor lies in the shape's XY plane, turned down onto XZ: plan z is
+	// shape −y. UVs are the shape's own coordinates, in metres.
+	const floorShape = useMemo(
+		() => new Shape(outline.map((p) => new Vector2(m(p.xMm), -m(p.zMm)))),
+		[outline],
+	);
 	const floorMap = useMemo(() => {
 		const map = floorTexture().clone();
-		map.repeat.set(floorWidth / FLOOR_TILE_M.x, depth / FLOOR_TILE_M.z);
-		// A fitter starts at the wall, so a whole plank row meets it and the cut
-		// row is at the open front, not the other way round.
-		map.offset.set(0, Math.ceil(map.repeat.y) - map.repeat.y);
+		// Planks run along the back wall, the way SPC is laid parallel to the
+		// longest one.
+		map.repeat.set(1 / FLOOR_TILE_M.x, 1 / FLOOR_TILE_M.z);
 		map.needsUpdate = true;
 		return map;
-	}, [floorWidth, depth]);
+	}, []);
 
 	return (
 		<group>
-			{/* Floor and back wall run the extra scribe each side, so the corner
-			    where they meet the side walls stays closed. Planks run along the
-			    wall, the way SPC is laid parallel to the longest one. */}
 			<mesh rotation={[-Math.PI / 2, 0, 0]}>
-				<planeGeometry args={[floorWidth, depth]} />
+				<shapeGeometry args={[floorShape]} />
 				<meshStandardMaterial
 					map={floorMap}
 					color={FLOOR_COLOR}
 					roughness={0.7}
 				/>
 			</mesh>
-
-			<mesh position={[0, height / 2, -depth / 2]}>
-				<planeGeometry args={[width + SCRIBE * 2, height]} />
-				<meshStandardMaterial color="#edebe7" roughness={0.95} />
-			</mesh>
-
-			{walls.left && (
-				<mesh
-					position={[-width / 2 - SCRIBE, height / 2, 0]}
-					rotation={[0, Math.PI / 2, 0]}
-				>
-					<planeGeometry args={[depth, height]} />
-					<meshStandardMaterial color="#e1dfda" roughness={0.95} />
-				</mesh>
-			)}
-			{walls.right && (
-				<mesh
-					position={[width / 2 + SCRIBE, height / 2, 0]}
-					rotation={[0, -Math.PI / 2, 0]}
-				>
-					<planeGeometry args={[depth, height]} />
-					<meshStandardMaterial color="#e1dfda" roughness={0.95} />
-				</mesh>
-			)}
+			{outline.map((start, i) => {
+				const end = outline[(i + 1) % outline.length];
+				const dx = end.xMm - start.xMm;
+				const dz = end.zMm - start.zMm;
+				return (
+					// A three.js mesh, not a DOM element: there is no role to give it.
+					// biome-ignore lint/a11y/noStaticElementInteractions: see above
+					<mesh
+						// A wall's place in the outline is its identity.
+						// biome-ignore lint/suspicious/noArrayIndexKey: see above
+						key={i}
+						position={[
+							m((start.xMm + end.xMm) / 2),
+							height / 2,
+							m((start.zMm + end.zMm) / 2),
+						]}
+						rotation={[0, Math.atan2(dz === 0 ? 0 : -dz, dx), 0]}
+						onClick={
+							onWallPick &&
+							((e) => {
+								// A drag that ended here was an orbit, not a tap.
+								if (e.delta > 4) return;
+								e.stopPropagation();
+								onWallPick(i);
+							})
+						}
+					>
+						<planeGeometry args={[m(Math.hypot(dx, dz)), height]} />
+						<meshStandardMaterial
+							color={i === targetWall ? TARGET_WALL_COLOR : WALL_COLOR}
+							roughness={0.95}
+						/>
+					</mesh>
+				);
+			})}
 		</group>
 	);
 }

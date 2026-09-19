@@ -1,12 +1,13 @@
 import { WALL_GAP_MM } from "./catalogue";
+import { toLocalMm, toWorldMm, type WallFrame } from "./floorplan";
 import type { Vec3Mm } from "./parts";
 
 /**
  * Where the camera is allowed to look.
  *
- * The planner's world is centred on the run: x runs along the wall from the
- * middle, y up from the floor, z out of the back wall into the room. So the
- * box is the room itself, and clamping to it is what stops a customer panning
+ * The box is drawn in the targeted wall's own frame: x runs along the wall
+ * from the middle, y up from the floor, z out of that wall into the room. So
+ * the box is the room as seen from that wall, and clamping to it is what stops a customer panning
  * until nothing is on screen but grey.
  */
 
@@ -52,4 +53,30 @@ export function clampPanTarget(
 		y: clamp(target.y, 0, ceilingHeightMm),
 		z: clamp(target.z, nearestZ, frontZ),
 	};
+}
+
+/**
+ * Where the orbit target goes when the puck is dragged to `point` (world mm).
+ *
+ * The view's axes and the room box both mean something only in the targeted
+ * wall's frame, so both points are carried into it, each axis taken from
+ * `point` where the view pans it and from `anchor` where it does not, clamped,
+ * and carried back out.
+ */
+export function panTargetMm(
+	point: Vec3Mm,
+	anchor: Vec3Mm,
+	axes: { x: boolean; y: boolean; z: boolean },
+	frame: WallFrame,
+	bounds: RoomBoundsMm,
+): Vec3Mm {
+	const p = toLocalMm(point, frame);
+	const a = toLocalMm(anchor, frame);
+	return toWorldMm(
+		clampPanTarget(
+			{ x: axes.x ? p.x : a.x, y: axes.y ? p.y : a.y, z: axes.z ? p.z : a.z },
+			bounds,
+		),
+		frame,
+	);
 }

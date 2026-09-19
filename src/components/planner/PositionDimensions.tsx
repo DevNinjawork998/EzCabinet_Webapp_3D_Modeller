@@ -14,7 +14,7 @@ const m = (mm: number) => mm / 1000;
 
 const LINE_COLOR = "#1f5138";
 
-const CHIP =
+export const CHIP =
 	"whitespace-nowrap rounded-[6px] border border-[#1f5138] bg-white/95 px-1.5 py-0.5 font-semibold text-[#1f5138] text-[11px] leading-none tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.16)]";
 
 /** How far in front of the cabinet's face the dimension line floats, so it
@@ -200,7 +200,7 @@ function Dimension({
  * cabinet being edited — or start a drag. */
 const keepFromScene = (e: SyntheticEvent) => e.stopPropagation();
 
-function EditableFigure({
+export function EditableFigure({
 	valueMm,
 	label,
 	onCommit,
