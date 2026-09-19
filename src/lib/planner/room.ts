@@ -1,17 +1,26 @@
-import { constructionOf, familyIn, isCorner } from "./catalogue";
+import { constructionOf, familyIn, isCorner, WALL_GAP_MM } from "./catalogue";
 import type { PlannerCatalogue } from "./catalogueSchema";
 import type { ExposedSides } from "./exposure";
 import {
+	distanceToWallMm,
 	type FloorPlan,
+	footprintInPlan,
+	frameOf,
+	nearestWall,
 	setWallLength as planWithWallLength,
 	type RoomShape,
+	rectCorners,
+	rectsOverlap,
 	reshape,
 	shapeOf,
+	toWorldMm,
+	type Vec2,
 	vertexKind,
 	wallsOf,
 } from "./floorplan";
 import {
 	canHangAt,
+	depthSpreadMm,
 	type EndPanel,
 	emptyLayout,
 	type HingeSide,
@@ -70,12 +79,24 @@ type Settings = Omit<
 	| "wallToWall"
 >;
 
+/**
+ * A cabinet standing on its own on the floor, against no wall. `xMm, zMm` are
+ * the centre of its footprint in plan millimetres; `rotationDeg` is its yaw
+ * from the back wall, in the same sense as a wall's `yawRad`.
+ */
+export type FreeModule = PlacedModule & { zMm: number };
+
 export type RoomLayout = Settings & {
 	plan: FloorPlan;
 	/** One per wall of `plan`, in wall order. */
 	runs: Run[];
 	corners: CornerUnits[];
+	/** Base and tall units standing free on the floor. */
+	free: FreeModule[];
 };
+
+/** A dropped cabinet whose back edge lands this close to a wall joins it. */
+export const SNAP_TO_WALL_MM = 150;
 
 /** How much of each row an empty corner keeps: the depth of the cabinets that
  * meet there. The seed's depths, not the live catalogue's — see the history of
@@ -102,6 +123,7 @@ export function asRoom(layout: PlannerLayout): RoomLayout {
 		plan: { template: "rect", widthMm: wallWidthMm, depthMm: roomDepthMm },
 		runs: [{ floor, wall }, emptyRun(), emptyRun(), emptyRun()],
 		corners: [],
+		free: [],
 	};
 }
 
@@ -210,7 +232,7 @@ function anchoredAtEnd(room: RoomLayout, run: number): boolean {
 }
 
 export function runView(room: RoomLayout, run: number): PlannerLayout {
-	const { plan, runs, corners: _corners, ...settings } = room;
+	const { plan, runs, corners: _corners, free: _free, ...settings } = room;
 	const wall = wallsOf(plan)[run];
 	const floor = cornerSpans(room, run, "floor").map((c) => c.span);
 	const hung = cornerSpans(room, run, "wall").map((c) => c.span);
@@ -292,6 +314,9 @@ function mapModule(
 			floor: corner.floor && hit(corner.floor),
 			wall: corner.wall && hit(corner.wall),
 		})),
+		free: room.free.map((module) =>
+			module.id === id ? { ...edit(module), zMm: module.zMm } : module,
+		),
 	};
 }
 
@@ -324,19 +349,23 @@ export function setDoors(
 export function roomEngine(catalogue: PlannerCatalogue) {
 	const wall = plannerEngine(catalogue);
 	const views = (room: RoomLayout) => room.runs.map((_, i) => runView(room, i));
+	/** Every run clear, and every free cabinet standing somewhere it can. */
 	const allClear = (room: RoomLayout) =>
-		views(room).every((v) => wall.isClear(v));
+		views(room).every((v) => wall.isClear(v)) && freeIsClear(room);
 
-	/** An id-addressed edit, applied in the run that holds the id. */
+	/** An id-addressed edit, applied in the run that holds the id. A run edit
+	 * that pushes a cabinet into a free one's footprint is refused. */
 	const inRunOf =
 		<A extends unknown[]>(
 			edit: (view: PlannerLayout, id: string, ...args: A) => PlannerLayout,
 		) =>
 		(room: RoomLayout, id: string, ...args: A): RoomLayout => {
 			const run = runIndexOf(room, id);
-			return run < 0
-				? room
-				: withRun(room, run, edit(runView(room, run), id, ...args));
+			if (run < 0) return room;
+			const next = withRun(room, run, edit(runView(room, run), id, ...args));
+			return next === room || room.free.length === 0 || freeIsClear(next)
+				? next
+				: room;
 		};
 
 	/** Every row pooled, for questions about height alone. Nothing that reads
@@ -350,7 +379,11 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			});
 		return {
 			...main,
-			floor: [...room.runs.flatMap((run) => run.floor), ...units("floor")],
+			floor: [
+				...room.runs.flatMap((run) => run.floor),
+				...units("floor"),
+				...room.free,
+			],
 			wall: [...room.runs.flatMap((run) => run.wall), ...units("wall")],
 		};
 	};
@@ -380,6 +413,224 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 
 	const cornerPositions = (room: RoomLayout): Positioned[] =>
 		room.runs.flatMap((_, run) => cornerPositionsOf(room, run));
+
+	/**
+	 * A free cabinet as a run of one: a wall exactly its width, with no wall at
+	 * either end, holding it square at x = 0. Its turn is the frame's, not its
+	 * own — so worktop, kick board and end panels all come out of the one-wall
+	 * engine unchanged, and the scene can draw it with `Run` in its own frame.
+	 */
+	function freeView(room: RoomLayout, id: string): PlannerLayout | null {
+		const found = room.free.find((m) => m.id === id);
+		if (!found) return null;
+		const { reserved: _reserved, ...main } = runView(room, 0);
+		const { zMm: _z, rotationDeg: _turn, ...placed } = found;
+		return {
+			...main,
+			wallWidthMm: found.widthMm,
+			endWalls: { left: false, right: false },
+			floor: [{ ...placed, xMm: 0 }],
+			wall: [],
+		};
+	}
+
+	const freeViews = (room: RoomLayout): PlannerLayout[] =>
+		room.free.flatMap((m) => {
+			const view = freeView(room, m.id);
+			return view ? [view] : [];
+		});
+
+	/** A free cabinet's footprint in plan, or null if it is not free or its
+	 * family is unknown. */
+	function freeFootprint(room: RoomLayout, id: string): Vec2[] | null {
+		const found = room.free.find((m) => m.id === id);
+		const family = found && familyIn(catalogue, found.familyId);
+		if (!found || !family) return null;
+		return rectCorners(
+			{ xMm: found.xMm, zMm: found.zMm },
+			found.widthMm,
+			family.depthMm,
+			((found.rotationDeg ?? 0) * Math.PI) / 180,
+		);
+	}
+
+	/** Every run cabinet's footprint in plan, in one row, its back at the wall
+	 * gap — where the scene draws it. Corner units count as their square. */
+	function runFootprints(
+		room: RoomLayout,
+		row: Row,
+	): { id: string; corners: Vec2[] }[] {
+		const walls = wallsOf(room.plan);
+		return room.runs.flatMap((_, run) => {
+			const w = walls[run];
+			const frame = frameOf(w);
+			const backMm = -w.depthMm / 2 + WALL_GAP_MM;
+			const at = (
+				xMm: number,
+				zMm: number,
+				widthMm: number,
+				depthMm: number,
+				turnDeg: number,
+			) => {
+				const centre = toWorldMm({ x: xMm, y: 0, z: zMm }, frame);
+				return rectCorners(
+					{ xMm: centre.x, zMm: centre.z },
+					widthMm,
+					depthMm,
+					w.yawRad + (turnDeg * Math.PI) / 180,
+				);
+			};
+			const inRow = wall.positionsOf(runView(room, run), row).map((p) => {
+				const turn = p.placed.rotationDeg ?? 0;
+				const depthMm = p.family.depthMm;
+				return {
+					id: p.placed.id,
+					corners: at(
+						p.xMm + p.widthMm / 2 - w.lengthMm / 2,
+						backMm + depthMm / 2 + depthSpreadMm(p.widthMm, depthMm, turn),
+						p.widthMm,
+						depthMm,
+						turn,
+					),
+				};
+			});
+			const corners = cornerPositionsOf(room, run)
+				.filter((p) => rowFor(p.family.kind) === row)
+				.map((p) => ({
+					id: p.placed.id,
+					corners: at(
+						p.widthMm / 2 - w.lengthMm / 2,
+						backMm + p.widthMm / 2,
+						p.widthMm,
+						p.widthMm,
+						0,
+					),
+				}));
+			return [...inRow, ...corners];
+		});
+	}
+
+	/**
+	 * Whether every free cabinet can stand where it is: a base or tall unit,
+	 * not a corner design, wholly inside the room, clear of every other free
+	 * cabinet and every floor cabinet on a wall — and a tall one clear of the
+	 * hung row too.
+	 */
+	function freeIsClear(room: RoomLayout): boolean {
+		if (room.free.length === 0) return true;
+		const floor = runFootprints(room, "floor").map((f) => f.corners);
+		const hung = runFootprints(room, "wall").map((f) => f.corners);
+		const placed: Vec2[][] = [];
+		for (const m of room.free) {
+			const family = familyIn(catalogue, m.familyId);
+			const corners = freeFootprint(room, m.id);
+			if (!family || !corners || family.kind === "wall" || isCorner(family))
+				return false;
+			if (!footprintInPlan(room.plan, corners)) return false;
+			const others = [
+				...placed,
+				...floor,
+				...(family.kind === "tall" ? hung : []),
+			];
+			if (others.some((other) => rectsOverlap(corners, other))) return false;
+			placed.push(corners);
+		}
+		return true;
+	}
+
+	/** A run or free cabinet by id. Corner units are neither. */
+	const findModule = (room: RoomLayout, id: string): PlacedModule | undefined =>
+		room.free.find((m) => m.id === id) ??
+		room.runs.flatMap((r) => [...r.floor, ...r.wall]).find((m) => m.id === id);
+
+	/** A free cabinet's ladder, each width asked whether it would still stand
+	 * where it is. */
+	function freeWidthOptions(room: RoomLayout, id: string) {
+		const found = room.free.find((m) => m.id === id);
+		const family = found && familyIn(catalogue, found.familyId);
+		if (!found || !family) return [];
+		return family.sizes.map((size) => ({
+			widthMm: size.widthMm,
+			priceRm: size.priceRm,
+			fits: freeIsClear({
+				...room,
+				free: room.free.map((m) =>
+					m.id === id ? { ...m, widthMm: size.widthMm } : m,
+				),
+			}),
+		}));
+	}
+
+	/** Whole degrees in [0, 360). */
+	const normalDeg = (deg: number) => ((Math.round(deg) % 360) + 360) % 360;
+
+	/**
+	 * Stand a run or free cabinet free on the floor at `centre`. Refused,
+	 * unchanged, for a wall or corner unit, outside the room, or overlapping.
+	 * Off a wall it keeps facing the way that wall faced it; a free one keeps
+	 * its own turn unless handed another.
+	 */
+	function placeFree(
+		room: RoomLayout,
+		id: string,
+		centre: Vec2,
+		rotationDeg?: number,
+	): RoomLayout {
+		const run = runIndexOf(room, id);
+		const free = room.free.find((m) => m.id === id);
+		const found = findModule(room, id);
+		const family = found && familyIn(catalogue, found.familyId);
+		if (!found || !family || family.kind === "wall" || isCorner(family))
+			return room;
+		const turnDeg = normalDeg(
+			rotationDeg ??
+				(free
+					? (free.rotationDeg ?? 0)
+					: (wallsOf(room.plan)[run].yawRad * 180) / Math.PI +
+						(found.rotationDeg ?? 0)),
+		);
+		const module: FreeModule = {
+			id,
+			familyId: found.familyId,
+			widthMm: found.widthMm,
+			doorStyleId: found.doorStyleId,
+			hinge: found.hinge,
+			xMm: centre.xMm,
+			zMm: centre.zMm,
+			...(turnDeg ? { rotationDeg: turnDeg } : {}),
+		};
+		const removed = removeModules(room, [id]);
+		const next = { ...removed, free: [...removed.free, module] };
+		return allClear(next) ? next : room;
+	}
+
+	/** Turn a free cabinet to `deg`. Refused if it would leave the room or
+	 * overlap anything. */
+	function rotateFree(room: RoomLayout, id: string, deg: number): RoomLayout {
+		const found = room.free.find((m) => m.id === id);
+		if (!found) return room;
+		return placeFree(room, id, { xMm: found.xMm, zMm: found.zMm }, deg);
+	}
+
+	/**
+	 * Where a dragged cabinet lands on release. Its back edge within
+	 * `SNAP_TO_WALL_MM` of the nearest wall joins that wall's run, centred on
+	 * the drop point along it; anywhere else it stands free there.
+	 */
+	function dropAt(room: RoomLayout, id: string, centre: Vec2): RoomLayout {
+		const target = nearestWall(room.plan, centre);
+		const sourceRun = runIndexOf(room, id);
+		const found = findModule(room, id);
+		const family = found && familyIn(catalogue, found.familyId);
+		if (!found || !family) return room;
+		const gapMm =
+			distanceToWallMm(room.plan, target.run, centre) - family.depthMm / 2;
+		if (gapMm > SNAP_TO_WALL_MM) return placeFree(room, id, centre);
+		const xMm = target.xMm - found.widthMm / 2;
+		return sourceRun === target.run
+			? inRunOf(wall.dropModule)(room, id, xMm)
+			: moveToRun(room, id, target.run, target.xMm);
+	}
 
 	/**
 	 * Make room for one corner's square along one run, by sliding cabinets,
@@ -605,12 +856,16 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		for (const position of cornerPositions(room)) {
 			exposure.set(position.placed.id, { left: false, right: false });
 		}
+		// A free cabinet is a run of one with no wall at either end: both open.
+		for (const view of freeViews(room)) {
+			for (const [id, sides] of wall.exposureOf(view)) exposure.set(id, sides);
+		}
 		return exposure;
 	}
 
 	function endPanels(room: RoomLayout): EndPanel[] {
 		const exposure = exposureOf(room);
-		return views(room)
+		return [...views(room), ...freeViews(room)]
 			.flatMap((view) => wall.endPanels(view))
 			.filter((panel) => exposure.get(panel.moduleId)?.[panel.side]);
 	}
@@ -828,9 +1083,9 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 
 	/**
 	 * Hand a cabinet to another wall — the target a drag is dropped nearest.
-	 * Refused, unchanged, for an unknown id, a corner unit (never in a run, so
-	 * `runIndexOf` already answers -1), the cabinet's own wall, or a target with
-	 * nowhere for it. `xMm` is the pointer's drop point; the cabinet centres on
+	 * Also takes a free cabinet back to a wall. Refused, unchanged, for an
+	 * unknown id, a corner unit (never in a run or free), the cabinet's own
+	 * wall, or a target with nowhere for it. `xMm` is the pointer's drop point; the cabinet centres on
 	 * it, same as `nearestWall` hands back a drop point rather than an edge.
 	 */
 	function moveToRun(
@@ -839,11 +1094,8 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		run: number,
 		xMm: number,
 	): RoomLayout {
-		const sourceRun = runIndexOf(room, id);
-		if (sourceRun < 0 || sourceRun === run) return room;
-		const found =
-			room.runs[sourceRun].floor.find((m) => m.id === id) ??
-			room.runs[sourceRun].wall.find((m) => m.id === id);
+		if (runIndexOf(room, id) === run) return room;
+		const found = findModule(room, id);
 		if (!found) return room;
 		const removed = removeModules(room, [id]);
 		const added = addModule(
@@ -905,6 +1157,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 					wall: keep(corner.wall),
 				}))
 				.filter((corner) => corner.floor || corner.wall),
+			free: room.free.filter((module) => !gone.has(module.id)),
 		};
 	}
 
@@ -947,6 +1200,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		allPositions: (room: RoomLayout): Positioned[] => [
 			...views(room).flatMap((view) => wall.allPositions(view)),
 			...cornerPositions(room),
+			...freeViews(room).flatMap((view) => wall.allPositions(view)),
 		],
 		rowEndMm: (room: RoomLayout, row: Row, run = 0) =>
 			wall.rowEndMm(runView(room, run), row),
@@ -971,7 +1225,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 							fits: true,
 						},
 					]
-				: [];
+				: freeWidthOptions(room, id);
 		},
 		setGap: inRunOf(wall.setGap),
 		moveModule: inRunOf(wall.moveModule),
@@ -1036,8 +1290,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		},
 		overhangingIds: (room: RoomLayout): ReadonlySet<string> =>
 			new Set(views(room).flatMap((view) => [...wall.overhangingIds(view)])),
-		isClear: (room: RoomLayout) =>
-			views(room).every((view) => wall.isClear(view)),
+		isClear: allClear,
 		skirtingSpans: (room: RoomLayout, run = 0) =>
 			wall.skirtingSpans(runView(room, run)),
 		setShape,
@@ -1050,6 +1303,13 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		endPanels,
 		cornerWorktops,
 		cornerShutSides,
+		freeView,
+		freeFootprint,
+		runFootprints,
+		freeIsClear,
+		placeFree,
+		dropAt,
+		rotateFree,
 	};
 }
 

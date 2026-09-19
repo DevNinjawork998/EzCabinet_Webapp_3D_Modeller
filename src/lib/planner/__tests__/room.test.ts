@@ -12,6 +12,7 @@ import {
 	roomEngine,
 	runIndexOf,
 	runView,
+	SNAP_TO_WALL_MM,
 	setDoor,
 	setHinge,
 	withRun,
@@ -716,5 +717,184 @@ describe("restored from the v2 file, adapted to v3's vertex-keyed corners", () =
 		expect(isActiveCorner(room, 3)).toBe(true);
 		const attempt = engine.addModule(room, "base-cabinet", 0, "r", 600, 1);
 		expect(attempt).toBe(room);
+	});
+});
+
+describe("free-standing cabinets", () => {
+	// 4200 × 3600: back wall at z = -1800, left wall (run 3) at x = -2100. A
+	// base unit is 607 deep, so its centre stands 303.5 off its back edge.
+	const HALF = 303.5;
+	const withBase = () => {
+		let room = engine.addModule(kitchen(), "base-cabinet", 0, "a", 600);
+		room = setDoor(room, "a", "shaker");
+		return setHinge(room, "a", "right");
+	};
+	const freeOf = (room: RoomLayout, id: string) =>
+		room.free.find((m) => m.id === id);
+
+	it("starts every room with none", () => {
+		expect(kitchen().free).toEqual([]);
+		expect(SNAP_TO_WALL_MM).toBe(150);
+	});
+
+	it("frees a run cabinet dropped mid-room, keeping id, door and hinge", () => {
+		const next = engine.dropAt(withBase(), "a", { xMm: 0, zMm: 0 });
+		expect(next.runs[0].floor).toEqual([]);
+		expect(runIndexOf(next, "a")).toBe(-1);
+		expect(freeOf(next, "a")).toMatchObject({
+			id: "a",
+			familyId: "base-cabinet",
+			widthMm: 600,
+			doorStyleId: "shaker",
+			hinge: "right",
+			xMm: 0,
+			zMm: 0,
+		});
+		expect(freeOf(next, "a")?.rotationDeg ?? 0).toBe(0);
+	});
+
+	it("keeps facing the way its wall faced it", () => {
+		const room = engine.addModule(kitchen(), "base-cabinet", 1500, "s", 600, 3);
+		const next = engine.dropAt(room, "s", { xMm: 0, zMm: 0 });
+		expect(freeOf(next, "s")?.rotationDeg).toBe(90);
+	});
+
+	it("joins the left wall when its back edge lands 100 mm off it", () => {
+		const free = engine.dropAt(withBase(), "a", { xMm: 0, zMm: 0 });
+		const next = engine.dropAt(free, "a", {
+			xMm: -2100 + 100 + HALF,
+			zMm: 0,
+		});
+		expect(next.free).toEqual([]);
+		expect(runIndexOf(next, "a")).toBe(3);
+		expect(next.runs[3].floor[0]).toMatchObject({
+			doorStyleId: "shaker",
+			hinge: "right",
+		});
+	});
+
+	it("stays free when its back edge lands 400 mm off", () => {
+		const next = engine.dropAt(withBase(), "a", {
+			xMm: -2100 + 400 + HALF,
+			zMm: 0,
+		});
+		expect(runIndexOf(next, "a")).toBe(-1);
+		expect(freeOf(next, "a")).toMatchObject({ xMm: -2100 + 400 + HALF });
+	});
+
+	it("moves free to free", () => {
+		const free = engine.dropAt(withBase(), "a", { xMm: 0, zMm: 0 });
+		const next = engine.dropAt(free, "a", { xMm: 500, zMm: 300 });
+		expect(next.free).toHaveLength(1);
+		expect(freeOf(next, "a")).toMatchObject({ xMm: 500, zMm: 300 });
+	});
+
+	it("rejoins the back wall when dragged back to it", () => {
+		const free = engine.dropAt(withBase(), "a", { xMm: 0, zMm: 0 });
+		const next = engine.dropAt(free, "a", { xMm: 0, zMm: -1800 + 50 + HALF });
+		expect(next.free).toEqual([]);
+		expect(runIndexOf(next, "a")).toBe(0);
+		expect(xOf(next, "a")).toBe(1800);
+	});
+
+	it("re-places a cabinet along its own wall when dropped near it", () => {
+		const next = engine.dropAt(withBase(), "a", {
+			xMm: 0,
+			zMm: -1800 + 50 + HALF,
+		});
+		expect(runIndexOf(next, "a")).toBe(0);
+		expect(xOf(next, "a")).toBe(1800);
+	});
+
+	it("refuses a wall unit and a corner unit", () => {
+		const hung = engine.addModule(kitchen(), "wall-cabinet", 0, "w", 400);
+		expect(engine.placeFree(hung, "w", { xMm: 0, zMm: 0 })).toBe(hung);
+		expect(engine.dropAt(hung, "w", { xMm: 0, zMm: 0 })).toBe(hung);
+		const corner = engine.addModule(kitchen(), "corner-base", 0, "c");
+		expect(engine.placeFree(corner, "c", { xMm: 0, zMm: 0 })).toBe(corner);
+	});
+
+	it("refuses the L's notch", () => {
+		let room: RoomLayout = {
+			...emptyRoom(5500),
+			plan: lPlan,
+			runs: Array.from({ length: 6 }, () => ({ floor: [], wall: [] })),
+		};
+		room = engine.addModule(room, "base-cabinet", 0, "a", 600);
+		expect(engine.placeFree(room, "a", { xMm: 2000, zMm: 1500 })).toBe(room);
+		expect(
+			runIndexOf(engine.placeFree(room, "a", { xMm: 0, zMm: 0 }), "a"),
+		).toBe(-1);
+	});
+
+	it("refuses overlapping another free cabinet", () => {
+		let room = engine.addModule(withBase(), "base-cabinet", 600, "b", 600);
+		room = engine.placeFree(room, "a", { xMm: 0, zMm: 0 });
+		expect(engine.placeFree(room, "b", { xMm: 300, zMm: 0 })).toBe(room);
+		// Touching is not overlapping.
+		expect(
+			freeOf(engine.placeFree(room, "b", { xMm: 600, zMm: 0 }), "b"),
+		).toBeDefined();
+	});
+
+	it("refuses overlapping a run cabinet", () => {
+		// A base unit centred on the back wall: its front edge is at z ≈ -1188.
+		let room = engine.addModule(kitchen(), "base-cabinet", 1800, "r", 600);
+		room = engine.addModule(room, "base-cabinet", 0, "a", 600, 2);
+		expect(engine.placeFree(room, "a", { xMm: 0, zMm: -1000 })).toBe(room);
+		expect(
+			freeOf(engine.placeFree(room, "a", { xMm: 0, zMm: -800 }), "a"),
+		).toBeDefined();
+	});
+
+	it("keeps a free tall unit out from under a wall unit, but not a base", () => {
+		let room = engine.addModule(kitchen(), "wall-cabinet", 1800, "w", 600);
+		room = engine.addModule(room, "tall-cabinet", 0, "t", 600, 2);
+		room = engine.addModule(room, "base-cabinet", 1000, "b", 600, 2);
+		expect(engine.placeFree(room, "t", { xMm: 0, zMm: -1200 })).toBe(room);
+		expect(
+			freeOf(engine.placeFree(room, "b", { xMm: 0, zMm: -1200 }), "b"),
+		).toBeDefined();
+	});
+
+	it("refuses a turn that swings a corner through a wall", () => {
+		const room = engine.placeFree(withBase(), "a", {
+			xMm: 0,
+			zMm: -1800 + 350,
+		});
+		expect(engine.rotateFree(room, "a", 45)).toBe(room);
+		expect(freeOf(engine.rotateFree(room, "a", 180), "a")?.rotationDeg).toBe(
+			180,
+		);
+	});
+
+	it("removes a free cabinet", () => {
+		const room = engine.placeFree(withBase(), "a", { xMm: 0, zMm: 0 });
+		expect(engine.removeModule(room, "a").free).toEqual([]);
+	});
+
+	it("gives a free cabinet both ends as panels", () => {
+		const room = engine.placeFree(withBase(), "a", { xMm: 0, zMm: 0 });
+		expect(engine.exposureOf(room).get("a")).toEqual({
+			left: true,
+			right: true,
+		});
+		const panels = engine.endPanels(room);
+		expect(panels.filter((p) => p.moduleId === "a")).toHaveLength(2);
+		expect(engine.allPositions(room).map((p) => p.placed.id)).toEqual(["a"]);
+	});
+
+	it("edits a free cabinet's door and hinge by id", () => {
+		const room = engine.placeFree(withBase(), "a", { xMm: 0, zMm: 0 });
+		expect(freeOf(setDoor(room, "a", null), "a")?.doorStyleId).toBeNull();
+		expect(freeOf(setHinge(room, "a", "left"), "a")?.hinge).toBe("left");
+	});
+
+	it("reports a free footprint and a clear room", () => {
+		const room = engine.placeFree(withBase(), "a", { xMm: 0, zMm: 0 });
+		expect(engine.freeFootprint(room, "a")).toHaveLength(4);
+		expect(engine.freeFootprint(room, "nope")).toBeNull();
+		expect(engine.freeIsClear(room)).toBe(true);
+		expect(engine.runFootprints(withBase(), "floor")).toHaveLength(1);
 	});
 });
