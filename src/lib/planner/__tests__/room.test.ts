@@ -829,7 +829,33 @@ describe("free-standing cabinets", () => {
 		).toBe(-1);
 	});
 
-	it("snaps back a drop whose centre is outside the room, not onto the wall behind it", () => {
+	it("joins the back wall when a drag overshoots it", () => {
+		const free = engine.dropAt(withBase(), "a", { xMm: 0, zMm: 0 });
+		// Behind the back wall (z = -1800): outside the room, but not in a notch.
+		const overshoot = { xMm: 0, zMm: -1850 };
+		const next = engine.dropAt(free, "a", overshoot);
+		expect(runIndexOf(next, "a")).toBe(0);
+		expect(wallToJoin(kitchen().plan, overshoot, 607)).toEqual({
+			run: 0,
+			xMm: 2100,
+		});
+	});
+
+	it("keeps a free cabinet as the same object when nothing changes", () => {
+		let room = engine.placeFree(withBase(), "a", { xMm: 0, zMm: 0 });
+		room = engine.addModule(room, "base-cabinet", 0, "b", 600);
+		room = engine.placeFree(room, "b", { xMm: 900, zMm: 0 });
+		room = engine.rotateFree(room, "a", 90);
+		expect(engine.rotateFree(room, "a", 90)).toBe(room);
+		// Snapped to the same eighth: still no change.
+		expect(engine.rotateFree(room, "a", 93, true)).toBe(room);
+		expect(engine.placeFree(room, "a", { xMm: 0, zMm: 0 })).toBe(room);
+		// A moved free cabinet keeps its place in `free`.
+		const moved = engine.placeFree(room, "a", { xMm: 0, zMm: 500 });
+		expect(moved.free.map((m) => m.id)).toEqual(["a", "b"]);
+	});
+
+	it("snaps back a drop whose centre is in the L's notch, not onto the wall behind it", () => {
 		let room: RoomLayout = {
 			...emptyRoom(5500),
 			plan: lPlan,

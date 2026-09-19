@@ -117,16 +117,24 @@ export const offWall = (
 ): boolean =>
 	distanceToWallMm(plan, run, centre) - depthMm / 2 > SNAP_TO_WALL_MM;
 
+/** Whether `centre` is in the L's notch: inside the plan's bounding box but
+ * not in the room. Past an ordinary wall is not — a drag onto a wall readily
+ * overshoots it, and that is still a drop on that wall. */
+const inNotch = (plan: FloorPlan, centre: Vec2): boolean =>
+	Math.abs(centre.xMm) <= plan.widthMm / 2 &&
+	Math.abs(centre.zMm) <= plan.depthMm / 2 &&
+	!pointInPlan(plan, centre);
+
 /** The wall a cabinet dropped at `centre` joins — the nearest, if its back
- * edge is within `SNAP_TO_WALL_MM` of it — and the drop point along it; or
- * `null` when it stands free, or when `centre` is outside the room: behind a
- * wall is not near it. Ignores any turn, as `dropAt` does. */
+ * edge is within `SNAP_TO_WALL_MM` of it (behind a wall counts, by the signed
+ * distance) — and the drop point along it; or `null` when it stands free, or
+ * when `centre` is in the L's notch. Ignores any turn, as `dropAt` does. */
 export function wallToJoin(
 	plan: FloorPlan,
 	centre: Vec2,
 	depthMm: number,
 ): { run: number; xMm: number } | null {
-	if (!pointInPlan(plan, centre)) return null;
+	if (inNotch(plan, centre)) return null;
 	const target = nearestWall(plan, centre);
 	return offWall(plan, target.run, centre, depthMm) ? null : target;
 }
@@ -661,8 +669,24 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			zMm: centre.zMm,
 			...(turnDeg ? { rotationDeg: turnDeg } : {}),
 		};
-		const removed = removeModules(room, [id]);
-		const next = { ...removed, free: [...removed.free, module] };
+		// Nothing moved: the same room, so a ring held still costs no render.
+		if (
+			free &&
+			free.xMm === centre.xMm &&
+			free.zMm === centre.zMm &&
+			(free.rotationDeg ?? 0) === turnDeg
+		)
+			return room;
+		// A free cabinet keeps its place in `free`; one off a wall joins the end.
+		const next = free
+			? {
+					...room,
+					free: room.free.map((m) => (m.id === id ? module : m)),
+				}
+			: (() => {
+					const removed = removeModules(room, [id]);
+					return { ...removed, free: [...removed.free, module] };
+				})();
 		// The cabinet being placed must itself land clear, even if it was
 		// already in trouble where it stood.
 		return accepts(room, next) && !freeProblems(next).has(id) ? next : room;
@@ -678,7 +702,8 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		snap = false,
 	): RoomLayout {
 		const found = room.free.find((m) => m.id === id);
-		if (!found) return room;
+		if (!found || settleTurnDeg(deg, snap) === (found.rotationDeg ?? 0))
+			return room;
 		return placeFree(
 			room,
 			id,
@@ -720,9 +745,9 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		const sourceRun = runIndexOf(room, id);
 		const found = findModule(room, id);
 		const family = found && familyIn(catalogue, found.familyId);
-		// Outside the room — the L's notch, say — is refused, not handed to the
-		// wall it happens to be behind.
-		if (!found || !family || !pointInPlan(room.plan, centre)) return room;
+		// In the L's notch is refused, not handed to the wall it happens to be
+		// behind. An overshoot past an ordinary wall still joins it.
+		if (!found || !family || inNotch(room.plan, centre)) return room;
 		const target = wallToJoin(room.plan, centre, family.depthMm);
 		if (!target) return placeFree(room, id, centre);
 		const xMm = target.xMm - found.widthMm / 2;
