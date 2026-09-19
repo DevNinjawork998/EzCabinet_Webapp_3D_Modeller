@@ -521,8 +521,36 @@ describe("a free-standing cabinet", () => {
 		const room = standing("tall-cabinet", 600);
 		expect(room.free).toHaveLength(1);
 		expect(roomWorktopFt(room, PLANNER_CATALOGUE)).toBe(0);
-		expect(roomSkirtingFt(room, PLANNER_CATALOGUE)).toBe(0);
 		const panels = rooms.endPanels(room);
 		expect(panels.map((p) => p.kind)).toEqual(["tall", "tall"]);
+	});
+
+	it("bills a tall unit the same kick board free as on a wall", () => {
+		const onWall = rooms.addModule(
+			emptyRoom(4200),
+			"tall-cabinet",
+			1000,
+			"f",
+			600,
+		);
+		const wallFt = roomSkirtingFt(onWall, PLANNER_CATALOGUE);
+		expect(wallFt).toBeGreaterThan(0);
+		expect(
+			roomSkirtingFt(standing("tall-cabinet", 600), PLANNER_CATALOGUE),
+		).toBeCloseTo(wallFt);
+	});
+
+	it("ignores a hangAtMm smuggled onto a free row", () => {
+		const room = standing("base-cabinet", 600);
+		const lifted = {
+			...room,
+			free: room.free.map((m) => ({ ...m, hangAtMm: 400 })),
+		};
+		expect(roomWorktopFt(lifted, PLANNER_CATALOGUE)).toBeCloseTo(
+			roomWorktopFt(room, PLANNER_CATALOGUE),
+		);
+		expect(roomSkirtingFt(lifted, PLANNER_CATALOGUE)).toBeCloseTo(
+			roomSkirtingFt(room, PLANNER_CATALOGUE),
+		);
 	});
 });

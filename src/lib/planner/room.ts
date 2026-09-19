@@ -95,6 +95,11 @@ export type RoomLayout = Settings & {
 	free: FreeModule[];
 };
 
+/** A free cabinet as the engine reads it: on the floor, whatever a client
+ * sent. A free row never carries `hangAtMm`. */
+const grounded = ({ hangAtMm: _lift, ...module }: FreeModule): FreeModule =>
+	module;
+
 /** A dropped cabinet whose back edge lands this close to a wall joins it. */
 export const SNAP_TO_WALL_MM = 150;
 
@@ -349,9 +354,24 @@ export function setDoors(
 export function roomEngine(catalogue: PlannerCatalogue) {
 	const wall = plannerEngine(catalogue);
 	const views = (room: RoomLayout) => room.runs.map((_, i) => runView(room, i));
-	/** Every run clear, and every free cabinet standing somewhere it can. */
+	/** Every run clear, and every free cabinet known and standing somewhere it
+	 * can. Strict: what checkout asks. */
 	const allClear = (room: RoomLayout) =>
 		views(room).every((v) => wall.isClear(v)) && freeIsClear(room);
+
+	/**
+	 * Whether an edit may land: every run clear, and no free cabinet newly in
+	 * trouble. Not `allClear` — one stale free cabinet (its family gone after a
+	 * catalogue change, or a saved design now overlapping) must not freeze
+	 * every other edit in the room, so only problems the edit *creates* refuse
+	 * it.
+	 */
+	const accepts = (room: RoomLayout, next: RoomLayout) => {
+		if (!views(next).every((v) => wall.isClear(v))) return false;
+		if (next.free.length === 0) return true;
+		const before = freeProblems(room);
+		return [...freeProblems(next)].every((id) => before.has(id));
+	};
 
 	/** An id-addressed edit, applied in the run that holds the id. A run edit
 	 * that pushes a cabinet into a free one's footprint is refused. */
@@ -363,7 +383,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			const run = runIndexOf(room, id);
 			if (run < 0) return room;
 			const next = withRun(room, run, edit(runView(room, run), id, ...args));
-			return next === room || room.free.length === 0 || freeIsClear(next)
+			return next === room || room.free.length === 0 || accepts(room, next)
 				? next
 				: room;
 		};
@@ -382,7 +402,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			floor: [
 				...room.runs.flatMap((run) => run.floor),
 				...units("floor"),
-				...room.free,
+				...room.free.map(grounded),
 			],
 			wall: [...room.runs.flatMap((run) => run.wall), ...units("wall")],
 		};
@@ -424,7 +444,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		const found = room.free.find((m) => m.id === id);
 		if (!found) return null;
 		const { reserved: _reserved, ...main } = runView(room, 0);
-		const { zMm: _z, rotationDeg: _turn, ...placed } = found;
+		const { zMm: _z, rotationDeg: _turn, ...placed } = grounded(found);
 		return {
 			...main,
 			wallWidthMm: found.widthMm,
@@ -511,32 +531,46 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 	}
 
 	/**
-	 * Whether every free cabinet can stand where it is: a base or tall unit,
-	 * not a corner design, wholly inside the room, clear of every other free
-	 * cabinet and every floor cabinet on a wall — and a tall one clear of the
-	 * hung row too.
+	 * The free cabinets standing where they cannot: a wall or corner design,
+	 * outside the room, or overlapping another free cabinet or a floor cabinet
+	 * on a wall — and a tall one the hung row too. Both of an overlapping pair
+	 * are named. A free cabinet whose family is unknown is skipped, as
+	 * `positionsOf` skips one in a run; `freeIsClear` is what refuses it.
 	 */
-	function freeIsClear(room: RoomLayout): boolean {
-		if (room.free.length === 0) return true;
+	function freeProblems(room: RoomLayout): Set<string> {
+		const bad = new Set<string>();
+		if (room.free.length === 0) return bad;
 		const floor = runFootprints(room, "floor").map((f) => f.corners);
 		const hung = runFootprints(room, "wall").map((f) => f.corners);
-		const placed: Vec2[][] = [];
-		for (const m of room.free) {
+		const known = room.free.flatMap((m) => {
 			const family = familyIn(catalogue, m.familyId);
 			const corners = freeFootprint(room, m.id);
-			if (!family || !corners || family.kind === "wall" || isCorner(family))
-				return false;
-			if (!footprintInPlan(room.plan, corners)) return false;
-			const others = [
-				...placed,
-				...floor,
-				...(family.kind === "tall" ? hung : []),
-			];
-			if (others.some((other) => rectsOverlap(corners, other))) return false;
-			placed.push(corners);
-		}
-		return true;
+			return family && corners ? [{ id: m.id, family, corners }] : [];
+		});
+		known.forEach((a, i) => {
+			const overlaps = (other: Vec2[]) => rectsOverlap(a.corners, other);
+			if (
+				a.family.kind === "wall" ||
+				isCorner(a.family) ||
+				!footprintInPlan(room.plan, a.corners) ||
+				floor.some(overlaps) ||
+				(a.family.kind === "tall" && hung.some(overlaps))
+			)
+				bad.add(a.id);
+			for (const b of known.slice(i + 1)) {
+				if (overlaps(b.corners)) {
+					bad.add(a.id);
+					bad.add(b.id);
+				}
+			}
+		});
+		return bad;
 	}
+
+	/** Every free cabinet known, and none standing where it cannot. */
+	const freeIsClear = (room: RoomLayout): boolean =>
+		room.free.every((m) => familyIn(catalogue, m.familyId)) &&
+		freeProblems(room).size === 0;
 
 	/** A run or free cabinet by id. Corner units are neither. */
 	const findModule = (room: RoomLayout, id: string): PlacedModule | undefined =>
@@ -552,12 +586,12 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		return family.sizes.map((size) => ({
 			widthMm: size.widthMm,
 			priceRm: size.priceRm,
-			fits: freeIsClear({
+			fits: !freeProblems({
 				...room,
 				free: room.free.map((m) =>
 					m.id === id ? { ...m, widthMm: size.widthMm } : m,
 				),
-			}),
+			}).has(id),
 		}));
 	}
 
@@ -601,7 +635,9 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		};
 		const removed = removeModules(room, [id]);
 		const next = { ...removed, free: [...removed.free, module] };
-		return allClear(next) ? next : room;
+		// The cabinet being placed must itself land clear, even if it was
+		// already in trouble where it stood.
+		return accepts(room, next) && !freeProblems(next).has(id) ? next : room;
 	}
 
 	/** Turn a free cabinet to `deg`. Refused if it would leave the room or
@@ -744,7 +780,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			},
 			vertex,
 		);
-		return allClear(next) ? next : room;
+		return accepts(room, next) ? next : room;
 	}
 
 	/** Another template. Refused while any wall but the back wall, or any
@@ -761,7 +797,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			runs: wallsOf(plan).map((_, i) => (i === 0 ? room.runs[0] : emptyRun())),
 			corners: [],
 		};
-		return allClear(next) ? next : room;
+		return accepts(room, next) ? next : room;
 	}
 
 	/** The room with a new plan of the same template, or null if a run no longer
@@ -783,7 +819,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 				return { floor: run.floor.map(shift), wall: run.wall.map(shift) };
 			}),
 		};
-		return allClear(next) ? next : null;
+		return accepts(room, next) ? next : null;
 	}
 
 	/**
@@ -1050,7 +1086,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 		if (placed === room) return room;
 		// The first cabinet on a second wall is what switches a corner on.
 		const next = cascadeAll(placed);
-		return allClear(next) ? next : room;
+		return accepts(room, next) ? next : room;
 	}
 
 	function fits(
@@ -1134,9 +1170,13 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			range !== undefined &&
 			hangAtMm >= range.minMm &&
 			hangAtMm <= range.maxMm;
-		if (!validHere) return allClear(next) ? next : room;
+		if (!validHere) return accepts(room, next) ? next : room;
 		const withHang = mapModule(next, id, (module) => ({ ...module, hangAtMm }));
-		return allClear(withHang) ? withHang : allClear(next) ? next : room;
+		return accepts(room, withHang)
+			? withHang
+			: accepts(room, next)
+				? next
+				: room;
 	}
 
 	function removeModules(room: RoomLayout, ids: Iterable<string>): RoomLayout {

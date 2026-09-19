@@ -406,4 +406,20 @@ describe("a free-standing order", () => {
 		room.free.push({ ...room.free[0], id: "g", xMm: 100 });
 		expect(checkRoom(room)).toMatchObject({ problem: "does_not_fit" });
 	});
+
+	it("refuses a stale free cabinet whose family is gone", () => {
+		const room = structuredClone(island());
+		room.free[0].familyId = "gone";
+		expect(checkRoom(room)).toMatchObject({ ok: false });
+	});
+
+	it("refuses a free row carrying hangAtMm rather than repricing it", () => {
+		const room = structuredClone(island());
+		const tampered = {
+			...room,
+			free: room.free.map((m) => ({ ...m, hangAtMm: 400 })),
+		};
+		expect(roomLayoutSchema.safeParse(tampered).success).toBe(false);
+		expect(roomLayoutSchema.safeParse(room).success).toBe(true);
+	});
 });

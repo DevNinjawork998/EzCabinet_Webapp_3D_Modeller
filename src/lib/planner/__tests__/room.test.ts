@@ -897,4 +897,48 @@ describe("free-standing cabinets", () => {
 		expect(engine.freeIsClear(room)).toBe(true);
 		expect(engine.runFootprints(withBase(), "floor")).toHaveLength(1);
 	});
+
+	describe("a stale free cabinet", () => {
+		// A catalogue change removed its family: the engine skips it, as it
+		// skips an unknown run cabinet, and the rest of the room stays editable.
+		const stale = () => {
+			const room = engine.placeFree(withBase(), "a", { xMm: 0, zMm: 0 });
+			return {
+				...room,
+				free: room.free.map((m) => ({ ...m, familyId: "gone" })),
+			};
+		};
+
+		it("does not freeze the room", () => {
+			const room = stale();
+			const added = engine.addModule(room, "base-cabinet", 0, "b", 600, 2);
+			expect(runIndexOf(added, "b")).toBe(2);
+			const freed = engine.placeFree(added, "b", { xMm: 1000, zMm: 0 });
+			expect(freeOf(freed, "b")).toBeDefined();
+			// Checkout stays strict.
+			expect(engine.isClear(freed)).toBe(false);
+		});
+
+		it("still refuses an edit that creates an overlap", () => {
+			let room = engine.addModule(stale(), "base-cabinet", 0, "b", 600, 2);
+			room = engine.placeFree(room, "b", { xMm: 1000, zMm: 0 });
+			room = engine.addModule(room, "base-cabinet", 0, "c", 600, 2);
+			expect(engine.placeFree(room, "c", { xMm: 1200, zMm: 0 })).toBe(room);
+		});
+
+		it("lets the room be edited around an existing overlap, but not worsened", () => {
+			let room = engine.addModule(withBase(), "base-cabinet", 600, "b", 600);
+			room = engine.placeFree(room, "a", { xMm: 0, zMm: 0 });
+			room = engine.placeFree(room, "b", { xMm: 1000, zMm: 0 });
+			// Tampered or stale: b now overlaps a.
+			const bad = {
+				...room,
+				free: room.free.map((m) => (m.id === "b" ? { ...m, xMm: 300 } : m)),
+			};
+			const added = engine.addModule(bad, "base-cabinet", 0, "c", 600, 2);
+			expect(runIndexOf(added, "c")).toBe(2);
+			expect(engine.placeFree(added, "c", { xMm: 200, zMm: 0 })).toBe(added);
+			expect(engine.isClear(added)).toBe(false);
+		});
+	});
 });

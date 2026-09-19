@@ -110,6 +110,10 @@ export const roomLayoutSchema = z
 				placedModuleSchema.extend({
 					xMm: z.number().min(-20_000).max(20_000),
 					zMm: z.number().min(-20_000).max(20_000),
+					// A free cabinet stands on the floor. Refused, not stripped: a lift
+					// would take its worktop and kick board off the bill, so a payload
+					// carrying one is tampered and must not be silently repriced.
+					hangAtMm: z.never().optional(),
 				}),
 			)
 			.max(30)

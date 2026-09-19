@@ -2,7 +2,6 @@ import {
 	doorPriceRmIn,
 	doorStyleIn,
 	type FinishId,
-	familyIn,
 	type ModuleKind,
 	type ResolvedRates,
 	ratesOf,
@@ -95,18 +94,16 @@ type KitchenPrice = {
 
 const ftOf = (mm: number) => mm / MM_PER_FT;
 
-/** Each free **base** cabinet as the run of one it is priced as. A free tall
- * unit has no worktop and, by the spec, no kick board of its own. */
-const freeBaseViews = (
+/** Each free cabinet as the run of one it is priced as — exactly what a run
+ * would bill, no rule of its own. */
+const freeViews = (
 	layout: RoomLayout,
 	catalogue: PlannerCatalogue,
 ): PlannerLayout[] => {
 	const engine = roomEngine(catalogue);
 	return layout.free.flatMap((m) => {
 		const view = engine.freeView(layout, m.id);
-		return view && familyIn(catalogue, m.familyId)?.kind === "base"
-			? [view]
-			: [];
+		return view ? [view] : [];
 	});
 };
 
@@ -150,8 +147,9 @@ export function worktopFt(
 		.filter(inRun)
 		.reduce((total, position) => total + position.widthMm, 0);
 	// A free base unit carries its own top, cut to its width.
-	const freeMm = freeBaseViews(layout, catalogue)
+	const freeMm = freeViews(layout, catalogue)
 		.flatMap((view) => plannerEngine(catalogue).positionsOf(view, "floor"))
+		.filter((position) => position.family.kind === "base")
 		.filter(inRun)
 		.reduce((total, position) => total + position.widthMm, 0);
 	// Each square where two runs meet is one piece of worktop, counted once.
@@ -192,7 +190,8 @@ export function skirtingFt(
 	const oneWall = plannerEngine(catalogue);
 	const mm = [
 		...layout.runs.flatMap((_, run) => engine.skirtingSpans(layout, run)),
-		...freeBaseViews(layout, catalogue).flatMap((view) =>
+		// Wherever a run would bill one: a base unit, or a tall unit on legs.
+		...freeViews(layout, catalogue).flatMap((view) =>
 			oneWall.skirtingSpans(view),
 		),
 	].reduce((total, span) => total + (span.endMm - span.startMm), 0);
