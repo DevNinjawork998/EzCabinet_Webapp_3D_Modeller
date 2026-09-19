@@ -1,3 +1,4 @@
+import { Analytics as VercelAnalytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Libre_Caslon_Display } from "next/font/google";
@@ -83,6 +84,7 @@ export default async function RootLayout({
 				{children}
 				<Analytics copy={dict.consent} lang={lang} />
 				<SpeedInsights />
+				<VercelAnalytics />
 			</body>
 		</html>
 	);

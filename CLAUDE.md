@@ -468,7 +468,7 @@ This is the one place the app streams something it did not generate. It is a sep
 
 ### Telemetry
 
-PostHog **Cloud EU**, installed from the Vercel Marketplace, so we can see where customers drop out of the funnel and what broke in their browser. Vercel Web Analytics was rejected for this: anonymous aggregate counts, no per-visitor journeys, no replay, no alerts.
+PostHog **Cloud EU**, installed from the Vercel Marketplace, so we can see where customers drop out of the funnel and what broke in their browser. Vercel Web Analytics could not do that job — anonymous aggregate counts, no per-visitor journeys, no replay, no alerts — so it runs beside PostHog as a plain page-view count, never instead of it.
 
 - **One module:** `lib/analytics.ts` — `track`, `captureError`, consent. `posthog-js` is imported on idle, never on the LCP path. `<Analytics>` mounts in `app/[lang]/layout.tsx` only; **admin is not tracked**.
 - **Through our origin:** `next.config.ts` rewrites `/api/ph/*` to the EU hosts, so ad blockers do not hide drop-offs. `/api/` already bypasses the locale redirect and the admin gate. The region is hardcoded there and in `analytics.ts` because PostHog fixes it at install.
@@ -477,7 +477,7 @@ PostHog **Cloud EU**, installed from the Vercel Marketplace, so we can see where
 - **Journey events** are a typed union in `analytics.ts`, fired from existing handlers — one per customer decision, never per pointer move. `quote_submitted` fires after `POST /api/orders` answers 201 — a placed order, not a button press.
 - **Breakage:** `error.tsx`, `global-error.tsx`, WebGL context loss in `PlannerScene`, and mesh-load failures in `DesignedCabinet` (the procedural fallback hides them on screen).
 - **Room shapes changed two event payloads.** `room_shape_changed.shape` is now `rect | l | l-mirror` (was `straight | left | right`); `quote_viewed.wallMm` now means the back wall's length (`wallsOf(plan)[0].lengthMm`), not the room's one wall. Update any PostHog insight or funnel filtering on these values.
-- **Speed Insights** (`@vercel/speed-insights`, mounted beside `<Analytics>`, so public pages only): real-device LCP / INP / CLS per route. Cookieless, so no consent gate. A paid add-on on Pro — the component sends nothing until it is enabled in the project dashboard. `_vercel` is excluded from the `proxy.ts` matcher, or the beacon gets a locale redirect. It measures speed and has no failure alerting; that is PostHog and the 5xx rule below.
+- **Vercel Speed Insights and Web Analytics** (`@vercel/speed-insights`, `@vercel/analytics`), mounted beside `<Analytics>`, so public pages only. Both are cookieless, so no consent gate, and both send nothing until toggled on in the project dashboard. Speed Insights is the free tier: the Real Experience Score only, 10,000 events per 30 days shared across the team, and ingestion pauses for 14 days past that cap (Plus is US$10 per project per month). Web Analytics on Pro has no free events: US$0.03 per 1,000 page views, drawn from the Pro usage credit. Page views only — no custom events; journeys stay in PostHog. Together they add ~6 KB gzipped, deferred, and one beacon per page view. `_vercel` is excluded from the `proxy.ts` matcher, or the beacons get a locale redirect. Neither alerts on failures; that is PostHog and the 5xx rule below.
 - **Alerts → Slack:** PostHog error-tracking alerts (new/reopened issue, spike) and a funnel insight alert; server 5xx via the Vercel rule in `docs/ops/vercel-5xx-alert.json`.
 
 ## Auth
