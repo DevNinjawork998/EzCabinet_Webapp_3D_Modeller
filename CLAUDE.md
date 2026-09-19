@@ -38,10 +38,12 @@ A design is a set of cabinets placed in rows against one wall. Each placed cabin
 ```
 Room document (JSON) — RoomLayout, src/lib/planner/room.ts
   ├─ roomId:     kitchen | living | bedroom | foyer
-  ├─ wallWidthMm, roomDepthMm, ceilingHeightMm, …   shared settings
-  ├─ runs[]:     one per wall — [main] or [main, side]; each { floor[], wall[] }
+  ├─ plan:       { template: rect | l, widthMm, depthMm, notch…, mirror }   lib/planner/floorplan.ts
+  ├─ ceilingHeightMm, hangingHeightMm, …   shared settings
+  ├─ runs[]:     one per wall of the plan; each { floor[], wall[] }
   │                modules: familyId, widthMm, xMm, doorStyleId
-  └─ corner:     { side: left|right, floor, wall } | null — the L's corner units
+  ├─ corners[]:  { vertex, floor, wall } — corner units, inside corners only
+  └─ free[]:     free-standing cabinets — centre + yaw, never against a wall
 ```
 
 ### One design, one cabinet
@@ -56,29 +58,96 @@ An earlier design grouped the widths into one family with a ladder, matched by s
 
 `familySchema.sizes` is still an array and `layout.ts` still places against it, so a multi-width family (the seed, older published versions) still works; the resize control only shows when a family has more than one size. The add-cabinet menu groups cabinets by the design library's category.
 
-### One wall or an L
+### Room shapes
 
-A room is **runs**. Each run is still the one-dimensional thing `layout.ts`
-places: `runView` hands a run to that engine as an ordinary `PlannerLayout`,
-with the corner square as a `reserved` span, and `withRun` writes its rows back.
-No placement rule knows about corners — a corner is one more neighbour in
-`occupiedSpans`. A run's `xMm` reads left to right facing that wall from inside
-the room, which is what lets the scene draw the side wall with the same `Run`
-turned ±90°.
+A room is a **floor plan** (`plan: FloorPlan`, `lib/planner/floorplan.ts`) —
+a template with editable wall lengths, not a wall list. `rect` has four walls,
+`l` has six (a notch cut from one front corner, mirrorable); a U template is
+one more shape later. Every corner is 90° and closure is guaranteed by
+construction: there is no wall list to leave open. `wallsOf(plan)` derives the
+walls (start, end, length, yaw, inward normal) and `setWallLength(plan, wall,
+mm)` edits one, clamped so a wall never goes shorter than what its cabinets and
+corner squares need.
 
-A **corner unit** is an uploaded design filed as `CORNER_BASE_CABINET` or
-`CORNER_WALL_CABINET` (`isCorner`), drawn for the **left-hand** corner. The right
-corner turns it 270°, never mirrors it. An empty corner still reserves 607 mm
-(floor) / 397 mm (wall), so an L is usable before any corner design exists.
-Stored orders are design v2; v1 reads as a one-wall room.
+A room is still **runs** — `runs[i]` belongs to wall *i*. Each run is still the
+one-dimensional thing `layout.ts` places: `runView` hands a run to that engine
+as an ordinary `PlannerLayout`, with an active corner as a `reserved` span, and
+`withRun` writes its rows back. No placement rule knows about corners — a
+corner is one more neighbour in `occupiedSpans`.
+
+**Winding rule (load-bearing).** Facing any wall from inside the room, its
+start is on the left, so every inside vertex is the **left-hand corner of the
+wall after it**. A corner unit is drawn for the left-hand corner and is never
+turned or mirrored to fit — it always sits at the start of the wall it
+belongs to. This is also why a migrated v2 run keeps its `xMm`: v2 already
+placed left to right facing the wall from inside.
+
+A vertex is an **active corner** when both walls meeting there hold cabinets,
+or the vertex holds a corner unit (`CORNER_BASE_CABINET` / `CORNER_WALL_CABINET`,
+`isCorner`) — never stored, always derived. Adding the first cabinet to a
+wall's neighbour activates its shared corner and runs `cascadeCorner` to slide
+cabinets clear; the edit is refused if a wall has no room. An active corner
+reserves 607 mm (floor) / 397 mm (wall) empty, or the unit's width once one is
+placed, on **both** walls. Removing the last cabinet from either wall frees the
+square; nothing is pulled back toward it. An **outside corner** (the L notch's
+inner corner) never holds a unit and never reserves anything — a run ending
+there has an open end.
+
+Every room now has walls all round, so a cabinet flush against a side wall
+(within one board) wears no end panel — see Open questions. Stored orders are
+design v3; v1 and v2 are migrated to v3 on read (a straight room becomes
+`rect` with the run on wall 0; an L's corner and side run map onto the vertex
+and wall the winding rule puts them at).
+
+### Wall numbering
+
+Once a room has more than one wall, "which wall" needs a name a customer and
+the admin both use. The Room panel shows a small floor-plan map (`WallMap`,
+`RoomPanel.tsx`) with every wall numbered in a matching badge, and each wall's
+length field carries the same number. The scene mirrors it: `showWallNumbers`
+turns on floor badges at the foot of every wall while the Room panel is open —
+off by default, since they're clutter once the shape is settled — and plan
+view labels each wall "Wall n" on its `DimensionField`. The pan gizmo
+(`showPanPuck`) hides while the Room panel is open so it doesn't sit on top of
+the wall-length labels; orbit and zoom stay live regardless.
+
+### Drag to another wall
+
+A floor-row cabinet dragged near a different wall than the one it's on rejoins
+there: `transferTarget` finds the candidate wall and `moveToRun` (`room.ts`)
+moves it, keeping its id, door style and hinge and dropping whatever turn it
+had on its old wall. A custom hang height survives the move only if it's still
+valid on the new wall; otherwise it resets.
+
+### Free-standing cabinets
+
+A base or tall unit can stand away from every wall — `RoomLayout.free`, each
+entry a centre (`xMm`, `zMm`) and a yaw, never a `hangAtMm`: a free cabinet
+always stands on the floor. Wall-hung and corner units can't go free — they
+need a wall or a corner to exist.
+
+On drop, if the cabinet's back edge lands within **150 mm**
+(`SNAP_TO_WALL_MM`, `room.ts`) of a wall, it joins that wall's run through the
+same `moveToRun` path; otherwise it stays free at the drop point. The only
+thing that refuses a drop is the L notch's outside area — everywhere else
+inside the room outline, clear of other cabinets' footprints, is valid. A free
+cabinet is drawn as a one-cabinet `Run` built from `freeView` — the same view
+`pricing.ts` reads — so the worktop, kick board, doors and end panels are the
+existing `Run` code, not a special case. It prices as a run of one: its own
+worktop (base only), its own kick board wherever a run would bill one, both
+sides charged as end panels. The exposed back is not charged — see Open
+questions. While a free cabinet stands, the engine only gates further edits on
+"does this create a new free-cabinet problem" (still overlapping, still
+outside the room); checkout stays strict and re-validates fully.
 
 ### Directory layout
 
 ```text
 src/
   lib/planner/           ← PURE TypeScript. No React, no three.js imports.
+    floorplan.ts         ← template + measurements → walls, corners, frames
     layout.ts            ← placement, collision, snapping
-    room.ts              ← the stored document: runs + corner; each run placed by layout.ts
+    room.ts              ← the stored document: runs + corners + free; each run placed by layout.ts
     parts.ts             ← every box a cabinet is drawn from, as numbers
     exposure.ts          ← which outer sides of a cabinet nothing sits against
   lib/catalogue/         ← DB-backed catalogue: read path, versions, diffs, blob
@@ -369,8 +438,9 @@ Ship 8–10 **preset designs** as their own indexable routes ("2.4m 3-door kitch
 ### The studio's own chrome
 
 - **A breadcrumb header** (`PlannerHeader.tsx`) instead of a stepper — the planner is one screen you stay on, not a wizard.
-- **3D / elevation / plan toggle** (`PlannerView` in `PlannerScene.tsx`). Elevation and plan are orthographic and axis-locked: the point of an elevation is that it stays square, so one stray drag must not knock it off.
+- **3D / elevation / plan toggle** (`PlannerView` in `PlannerScene.tsx`). Elevation faces the **target wall** — whichever wall is tapped in 3D or plan view becomes the target, and elevation reframes to face it; there is no separate side view any more. Elevation and plan are orthographic and axis-locked: the point of an elevation is that it stays square, so one stray drag must not knock it off.
 - **Room dimensions are editable in place** (`DimensionField.tsx`), ceiling height among them — it is a layout dimension in `PlannerLayout`, clamped by `CEILING_LIMITS`, not a constant, because it decides whether a tall unit fits.
+- **Room shape and wall lengths** are in the Room panel and, in plan view, on the walls themselves (`WallLengths.tsx`).
 
 ### Tutorials
 
@@ -388,6 +458,7 @@ PostHog **Cloud EU**, installed from the Vercel Marketplace, so we can see where
 - **Never send form fields.** No `identify()` with phone or email, nothing a customer types in any event payload. Replay masks inputs.
 - **Journey events** are a typed union in `analytics.ts`, fired from existing handlers — one per customer decision, never per pointer move. `quote_submitted` fires after `POST /api/orders` answers 201 — a placed order, not a button press.
 - **Breakage:** `error.tsx`, `global-error.tsx`, WebGL context loss in `PlannerScene`, and mesh-load failures in `DesignedCabinet` (the procedural fallback hides them on screen).
+- **Room shapes changed two event payloads.** `room_shape_changed.shape` is now `rect | l | l-mirror` (was `straight | left | right`); `quote_viewed.wallMm` now means the back wall's length (`wallsOf(plan)[0].lengthMm`), not the room's one wall. Update any PostHog insight or funnel filtering on these values.
 - **Alerts → Slack:** PostHog error-tracking alerts (new/reopened issue, spike) and a funnel insight alert; server 5xx via the Vercel rule in `docs/ops/vercel-5xx-alert.json`.
 
 ## Auth
@@ -423,10 +494,19 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
 3. **EasyParcel's webhooks are unsigned.** Nothing in their payload identifies the sender, so the callback URL carries a secret query token and that is the entire check — see `verifyWebhook` in `adapters/easyparcel.ts`.
 4. **`pnpm easyparcel:ping` is the only thing that checks EasyParcel's real API shape**; CI runs against recorded fixtures and cannot see a renamed field. Run it before a release that touches `lib/logistics`, or wire it to a scheduled workflow with the credentials as repository secrets. It is deliberately not in PR CI: it needs secrets in the runner, it fails on EasyParcel's downtime rather than on our bugs, and a partner outage must not block an unrelated merge.
 5. **City-Link is still a stub, and its API cannot price.** Its guide (Testing V1.21) documents a login, a shipment request and tracking — no rate operation, no cancel, no webhook — so a City-Link row would carry no price, an admin would undo a booking by phoning them, and tracking would be the cron poll only. The booking body's nesting is unverified: the guide groups the fields but prints no sample request. Plan and payloads in `docs/superpowers/plans/2026-09-16-citylink-carrier-adapter.md`; nothing is built.
-6. **Corner doors stay shut on the doors-open toggle.** A drafted leaf deeper than half its width — an L corner unit's two touching leaves merge into one L-shaped leaf in `splitDoorLeaves` — is kept shut in `DesignedCabinet.tsx`, because `swingOf` assumes every leaf faces +z and would pivot it through the carcass. The procedural fallback of a corner unit is a plain box whose front the side run half covers, so it is not turned for a right-hand corner and its doors stay shut too. Revisit both once EzCabinet's real corner export is seen.
+6. **Corner doors stay shut on the doors-open toggle.** A drafted leaf deeper than half its width — an L corner unit's two touching leaves merge into one L-shaped leaf in `splitDoorLeaves` — is kept shut in `DesignedCabinet.tsx`, because `swingOf` assumes every leaf faces +z and would pivot it through the carcass. The procedural fallback of a corner unit is a plain box whose front the side run half covers, so it is never turned — every corner is the left-hand corner of the wall after it — and its doors stay shut too. Revisit both once EzCabinet's real corner export is seen.
+7. **Free cabinets have no resize, replace or duplicate yet** — those controls are hidden on a free selection. **No floor-follow drag in elevation view**, since elevation is a flat wall-facing projection with nowhere for "off the wall" to go. **Switching to an L is refused silently** while a free cabinet stands in the notch's would-be area — the room panel just doesn't move. **A free cabinet can stand under an empty corner square's billed worktop**: `runFootprints` ignores an empty reserved corner square, so nothing stops a free cabinet occupying the same floor space that corner's worktop is priced over.
 
 ## Open questions — resolve before trusting pricing.ts
 
+- **Flush ends are no longer charged.** Every room now has side walls all
+  round, so a cabinet flush against one (within one board) wears no end
+  panel — a straight run re-priced under the new floor plan can drop a
+  panel it used to be charged. Tell EzCabinet before an old design's price
+  changes on them.
+- **Is a free-standing cabinet's exposed back charged as a panel?** The
+  engine currently says no — only its two sides are billed as end panels,
+  the same as a run's ends. Confirm with EzCabinet.
 - **Are a corner unit's ends charged as end panels?** The engine assumes not —
   its ends are part of the drawing (`exposureOf` in `room.ts`). Confirm with
   EzCabinet, and ask whether a kick board runs along a corner unit's faces
