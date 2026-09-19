@@ -3,11 +3,11 @@ import {
 	doorStyleIn,
 	familyIn,
 	isCorner,
-	ROOM_DEPTH_LIMITS,
 	WALL_HANG_LIMITS,
 } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
-import { rowFor, WALL_LIMITS } from "@/lib/planner/layout";
+import { planIsValid } from "@/lib/planner/floorplan";
+import { rowFor } from "@/lib/planner/layout";
 import { type RoomLayout, roomEngine } from "@/lib/planner/room";
 
 /**
@@ -55,9 +55,8 @@ export function validateOrder(
 	}
 
 	if (
-		!within(layout.wallWidthMm, WALL_LIMITS) ||
+		!planIsValid(layout.plan) ||
 		!within(layout.ceilingHeightMm, CEILING_LIMITS) ||
-		!within(layout.roomDepthMm, ROOM_DEPTH_LIMITS) ||
 		!within(layout.hangingHeightMm, WALL_HANG_LIMITS)
 	) {
 		return { ok: false, problem: "out_of_range" };
@@ -76,10 +75,12 @@ export function validateOrder(
 				corner: false,
 			})),
 		]),
-		...(["floor", "wall"] as const).flatMap((row) => {
-			const placed = layout.corner?.[row];
-			return placed ? [{ placed, row, corner: true }] : [];
-		}),
+		...layout.corners.flatMap((corner) =>
+			(["floor", "wall"] as const).flatMap((row) => {
+				const placed = corner[row];
+				return placed ? [{ placed, row, corner: true }] : [];
+			}),
+		),
 	];
 	if (rows.length === 0) return { ok: false, problem: "empty" };
 
@@ -130,8 +131,8 @@ export function validateOrder(
 		return { ok: false, problem: "does_not_fit", moduleId: overhanging[0] };
 	}
 
-	// A cabinet inside the corner square, or a corner square grown into a run,
-	// is not a design anyone can fit.
+	// A cabinet inside a corner square, or a square grown into a run, is not a
+	// design anyone can fit.
 	if (!engine.isClear(layout)) return { ok: false, problem: "does_not_fit" };
 
 	return { ok: true };

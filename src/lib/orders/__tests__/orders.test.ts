@@ -180,14 +180,9 @@ describe("orderRef", () => {
 describe("an L-shaped order", () => {
 	const rooms = roomEngine(catalogue);
 	const lKitchen = () => {
-		let room = rooms.setShape(emptyRoom(4200), "left");
-		room = rooms.addModule(
-			room,
-			inKitchen.id,
-			0,
-			"m",
-			inKitchen.sizes[0].widthMm,
-		);
+		const width = inKitchen.sizes[0].widthMm;
+		let room = rooms.addModule(emptyRoom(4200), inKitchen.id, 0, "m", width);
+		room = rooms.addModule(room, inKitchen.id, 3600, "s", width, 3);
 		return rooms.addModule(room, "corner-base", 0, "c");
 	};
 	const checkRoom = (room: ReturnType<typeof lKitchen>) =>
@@ -198,50 +193,33 @@ describe("an L-shaped order", () => {
 	});
 
 	it("refuses a corner unit standing in a run", () => {
-		const room = lKitchen();
-		const corner = room.corner?.floor;
-		if (!room.corner || !corner) throw new Error("fixture lost its corner");
-		const tampered = {
-			...room,
-			corner: { ...room.corner, floor: null },
-			runs: [
-				{
-					...room.runs[0],
-					floor: [...room.runs[0].floor, { ...corner, xMm: 2000 }],
-				},
-				room.runs[1],
-			],
-		};
-		expect(checkRoom(tampered)).toMatchObject({
+		const room = structuredClone(lKitchen());
+		const unit = room.corners[0].floor;
+		if (!unit) throw new Error("fixture lost its corner");
+		room.corners = [];
+		room.runs[0].floor.push({ ...unit, xMm: 2000 });
+		expect(checkRoom(room)).toMatchObject({
 			problem: "does_not_fit",
 			moduleId: "c",
 		});
 	});
 
 	it("refuses an ordinary cabinet in the corner slot", () => {
-		const room = lKitchen();
-		const floor = room.corner?.floor;
-		if (!room.corner || !floor) throw new Error("fixture lost its corner");
-		const tampered = {
-			...room,
-			corner: {
-				...room.corner,
-				floor: {
-					...floor,
-					familyId: inKitchen.id,
-					widthMm: inKitchen.sizes[0].widthMm,
-				},
-			},
+		const room = structuredClone(lKitchen());
+		const unit = room.corners[0].floor;
+		if (!unit) throw new Error("fixture lost its corner");
+		room.corners[0].floor = {
+			...unit,
+			familyId: inKitchen.id,
+			widthMm: inKitchen.sizes[0].widthMm,
 		};
-		expect(checkRoom(tampered)).toMatchObject({
+		expect(checkRoom(room)).toMatchObject({
 			problem: "does_not_fit",
 			moduleId: "c",
 		});
 	});
 
 	it("refuses a turned cabinet whose footprint reaches into the corner", () => {
-		// Its width clears the corner square, so only the footprint check in
-		// `isClear` sees the turned carcass swing into it.
 		const room = structuredClone(lKitchen());
 		room.runs[0].floor[0].rotationDeg = 45;
 		expect(rooms.widthOptionsFor(room, "m")[0]?.fits).toBe(true);
@@ -253,34 +231,122 @@ describe("an L-shaped order", () => {
 		room.runs[0].floor[0].xMm = 0;
 		expect(checkRoom(room)).toMatchObject({ problem: "does_not_fit" });
 	});
+
+	it("refuses a room outside its template's limits", () => {
+		const room = structuredClone(lKitchen());
+		room.plan = { template: "rect", widthMm: 50_000, depthMm: 3600 };
+		expect(checkRoom(room)).toMatchObject({ problem: "out_of_range" });
+	});
 });
 
 describe("roomLayoutSchema", () => {
-	it("refuses a side wall with no corner, and a corner with no side wall", () => {
+	const l = {
+		...emptyRoom(5500),
+		plan: {
+			template: "l" as const,
+			widthMm: 5500,
+			depthMm: 5075,
+			notchWidthMm: 1500,
+			notchDepthMm: 3000,
+			mirror: false,
+		},
+		runs: Array.from({ length: 6 }, () => ({ floor: [], wall: [] })),
+	};
+
+	it("accepts a room the planner made", () => {
+		expect(roomLayoutSchema.safeParse(emptyRoom(4200)).success).toBe(true);
+		expect(roomLayoutSchema.safeParse(l).success).toBe(true);
+	});
+
+	it("refuses a run count that is not the wall count", () => {
 		const straight = emptyRoom(4200);
 		expect(
 			roomLayoutSchema.safeParse({
 				...straight,
-				runs: [straight.runs[0], { floor: [], wall: [] }],
+				runs: straight.runs.slice(0, 2),
 			}).success,
+		).toBe(false);
+	});
+
+	it("refuses a corner unit at an outside corner, and two at one corner", () => {
+		const slot = { floor: null, wall: null };
+		expect(
+			roomLayoutSchema.safeParse({ ...l, corners: [{ vertex: 2, ...slot }] })
+				.success,
 		).toBe(false);
 		expect(
 			roomLayoutSchema.safeParse({
-				...straight,
-				corner: { side: "left", floor: null, wall: null },
+				...l,
+				corners: [
+					{ vertex: 3, ...slot },
+					{ vertex: 3, ...slot },
+				],
+			}).success,
+		).toBe(false);
+	});
+
+	it("refuses a notch that leaves no room", () => {
+		expect(
+			roomLayoutSchema.safeParse({
+				...l,
+				plan: { ...l.plan, notchWidthMm: 5400 },
 			}).success,
 		).toBe(false);
 	});
 });
 
 describe("orderDesignSchema", () => {
-	it("reads an order placed before L-shapes as a one-wall room", () => {
+	it("reads an order placed before L-shapes as a rectangle's back wall", () => {
 		const layout = twoCabinets();
 		const parsed = orderDesignSchema.parse({ schemaVersion: 1, layout });
-		expect(parsed.schemaVersion).toBe(2);
-		expect(parsed.layout.runs).toEqual([
-			{ floor: layout.floor, wall: layout.wall },
+		expect(parsed.schemaVersion).toBe(3);
+		expect(parsed.layout.plan).toEqual({
+			template: "rect",
+			widthMm: 4200,
+			depthMm: 3600,
+		});
+		expect(parsed.layout.runs[0]).toEqual({
+			floor: layout.floor,
+			wall: layout.wall,
+		});
+		expect(parsed.layout.corners).toEqual([]);
+	});
+
+	it("reads a version-2 L onto the same walls", () => {
+		const layout = twoCabinets();
+		const side = [{ ...layout.floor[0], id: "s", xMm: 1000 }];
+		const unit = {
+			...layout.floor[0],
+			id: "c",
+			familyId: "corner-base",
+			xMm: 55,
+			rotationDeg: 270,
+		};
+		const v2 = (sideOf: "left" | "right") => ({
+			schemaVersion: 2,
+			layout: {
+				...layout,
+				runs: [
+					{ floor: layout.floor, wall: [] },
+					{ floor: side, wall: [] },
+				],
+				corner: { side: sideOf, floor: unit, wall: null },
+			},
+		});
+
+		const left = orderDesignSchema.parse(v2("left")).layout;
+		expect(left.runs[3].floor).toEqual(side);
+		expect(left.corners).toEqual([
+			{
+				vertex: 3,
+				floor: expect.not.objectContaining({ rotationDeg: 270 }),
+				wall: null,
+			},
 		]);
-		expect(parsed.layout.corner).toBeNull();
+
+		const right = orderDesignSchema.parse(v2("right")).layout;
+		expect(right.runs[1].floor).toEqual(side);
+		expect(right.corners[0].vertex).toBe(0);
+		expect("wallToWall" in right).toBe(false);
 	});
 });
