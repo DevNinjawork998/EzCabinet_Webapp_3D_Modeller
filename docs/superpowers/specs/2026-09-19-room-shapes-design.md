@@ -229,3 +229,15 @@ Each step is its own commit.
 
 Openings, the U-room template, freeform or angled walls, and a per-wall "open"
 flag. Add the last when an open-plan room needs it.
+
+## 5. Free-standing cabinets (added 2026-09-19, user decision)
+
+A cabinet can stand anywhere on the floor, not only against a wall.
+
+- **Document:** `RoomLayout.free: FreeModule[]`, where `FreeModule = PlacedModule` with `xMm, zMm` = the centre of its footprint in plan mm, and `rotationDeg` = its yaw relative to the back wall. In zod it is optional and defaults to `[]`, so saved v3 designs still parse with no version bump.
+- **Who may go free:** base and tall units only. Wall-hung units need a wall; corner units need their corner.
+- **Drop rule:** on release, if the cabinet's back edge is within **150 mm** (`SNAP_TO_WALL_MM`) of the nearest wall, it joins that wall's run (the Task 8 `moveToRun` path). Otherwise it becomes, or stays, free at the drop point. A cabinet going from a wall to free keeps facing the way its wall faced it.
+- **Validity:** a free cabinet's rotated footprint must lie inside the room outline. It must not overlap another free cabinet or the footprint of any floor-row cabinet in a run; a free tall unit also must not overlap wall-row footprints. An invalid drop snaps back.
+- **Pricing:** a free cabinet is priced as a run of one: its own worktop (base only, by width), its own kick board (base only, by width), and both sides charged as end panels. **The exposed back is not charged** — an open question for EzCabinet.
+- **Checkout:** `validateOrder` checks free cabinets like run cabinets (known family, on-ladder width, room offers it, kind base/tall, not a corner design) plus inside-the-room and no-overlap.
+- **Scene:** a free cabinet is drawn as a one-cabinet run with its own frame (yaw = its rotation, position = its centre), so the worktop, kick board, end panels and doors reuse `Run` unchanged. Dragging reads the floor plane; a wall cabinet dragged more than the snap distance off its wall follows the pointer on the floor.

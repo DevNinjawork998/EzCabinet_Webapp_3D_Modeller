@@ -3314,3 +3314,78 @@ Today a placed cabinet stores only `xMm` along its own wall, `hangAtMm` and `rot
     - The corner square switches on or off as walls fill and empty.
     - Undo still works, if the studio has undo.
 - [ ] **Step 6:** Commit, ending the message with the two attribution lines.
+
+---
+
+### Task 9: Free-standing cabinets — engine, schema, pricing (added 2026-09-19, user decision)
+
+Spec §5. TDD throughout; `lib/planner` stays framework-free. Runs after Task 8's fix round is committed.
+
+**Files:** `src/lib/planner/room.ts`, `src/lib/planner/floorplan.ts` (pure geometry helpers), `src/lib/planner/pricing.ts`, `src/lib/orders/layoutSchema.ts`, `src/lib/orders/validate.ts`, their tests.
+
+**Interfaces (produce exactly these):**
+- `floorplan.ts`:
+  - `pointInPlan(plan, p: Vec2): boolean` — ray casting against `outlineOf(plan)`; points on the boundary count as inside.
+  - `rectCorners(centre: Vec2, widthMm, depthMm, yawRad): Vec2[]` — 4 corners, where the front faces local +z turned by yaw (same sense as `WallGeom.yawRad`).
+  - `rectsOverlap(a: Vec2[], b: Vec2[]): boolean` — SAT for two convex quads; touching edges do not overlap (use a 0.5 mm slack like `layout.ts`'s `SLACK_MM`).
+  - `distanceToWallMm(plan, wall, p: Vec2): number` — perpendicular distance from `p` to wall `wall`'s line, measured inward.
+- `room.ts`:
+  - `export type FreeModule = PlacedModule & { zMm: number }` (for a free module, `xMm`/`zMm` are the footprint centre in plan mm, and `rotationDeg` is yaw from the back wall in degrees).
+  - `RoomLayout.free: FreeModule[]`; `asRoom`/`emptyRoom` set `[]`; `mapModule`/`setDoor`/`setHinge`/`removeModules`/`runIndexOf`-style lookups include `free`.
+  - `export const SNAP_TO_WALL_MM = 150`.
+  - Engine:
+    - `freeFootprint(room, id): Vec2[] | null`
+    - `runFootprints(room, row): { id; corners: Vec2[] }[]` — each run cabinet's world footprint via `frameOf` + `toWorldMm`, with its back at the wall gap.
+    - `freeIsClear(room): boolean`
+    - `placeFree(room, id, centre: Vec2, rotationDeg?): RoomLayout` — moves a run or free cabinet to free at `centre`. It refuses (returns `room`) for a wall/corner family, when outside, or when overlapping. A run → free move sets `rotationDeg` to the wall's yaw in degrees + the cabinet's own turn.
+    - `dropAt(room, id, centre: Vec2): RoomLayout` — the unified release. Nearest wall via `nearestWall`. If `distanceToWallMm(...) − depthMm/2 <= SNAP_TO_WALL_MM`, it calls `moveToRun(room, id, run, alongMm)`: from free too, in which case `moveToRun` must accept free ids, and a same-run move re-places it along its wall. Otherwise it calls `placeFree`.
+    - `rotateFree(room, id, deg)` — refused if the result overlaps or leaves the room.
+  - `allPositions` includes free cabinets as `Positioned` (`xMm: 0`); `exposureOf` marks free cabinets `{ left: true, right: true }`.
+  - `endPanels` includes both sides of each free cabinet.
+- `pricing.ts`: `worktopFt` and `skirtingFt` add each free **base** cabinet's width. End panels come through `endPanels`.
+- `layoutSchema.ts`: `free: z.array(placedModuleSchema.extend({ xMm: z.number().min(-20_000).max(20_000), zMm: z.number().min(-20_000).max(20_000) })).max(30).default([])` on the v3 room; `fromV2` sets `free: []`. It must still satisfy `z.ZodType<RoomLayout>` — use `z.input`/`z.output` care as needed.
+- `validate.ts`: free rows go through the same per-cabinet checks. A wall/corner family in `free` → `does_not_fit`. `!freeIsClear` → `does_not_fit`.
+
+**Tests first (minimum):**
+- floorplan: `pointInPlan` (rect inside/outside; the L's notch is outside); `rectsOverlap` (disjoint, overlapping, touching-not-overlapping, rotated 45°); `distanceToWallMm`.
+- room:
+  - A run base cabinet dropped at the room centre becomes free: it is gone from the run, is in `free`, and keeps id/door/hinge.
+  - A drop 100 mm (back edge) from the left wall joins run 3.
+  - A drop 400 mm off joins nothing and stays free.
+  - A free → free move.
+  - A free cabinet dragged back to a wall joins that wall's run.
+  - Refusals: a wall unit; a corner unit; outside the L's notch; overlapping another free cabinet; overlapping a run cabinet.
+  - `rotateFree` refused into a wall.
+  - Removing a free cabinet.
+  - `exposureOf`/`endPanels` give 2 panels.
+- pricing: one free base cabinet 600 → worktop 600 mm, skirting 600 mm, 2 base end panels; a free tall unit → 2 tall panels, no worktop.
+- orders: a v3 design without `free` parses to `free: []`; a free wall unit → `does_not_fit`; a free cabinet outside the room → `does_not_fit`; overlapping free cabinets → `does_not_fit`.
+
+**Gates:** `pnpm vitest run --dir src`. `pnpm typecheck` may fail only in `src/components` (Task 10 wires it); report the list.
+
+### Task 10: Free-standing cabinets — scene and studio (added 2026-09-19)
+
+**Files:** `src/components/planner/PlannerScene.tsx`, `StudioScreen.tsx` (and only what else typecheck forces).
+
+- **Drawing.** Each free cabinet is drawn as a one-cabinet `Run`:
+  - Build a `PlannerLayout` view: `wallWidthMm = widthMm`, `roomDepthMm = depthMm + 2 × WALL_GAP_MM`, the cabinet at `xMm 0`, `endWalls {false,false}`, no `reserved`.
+  - Give it a frame `{ yawRad: rotationDeg·π/180, xMm, zMm }` (the cabinet's local centre is then at the frame origin).
+  - Add a `freeStanding` prop to `Run` that skips the bare-wall catcher plane, and makes drags solve against the floor plane.
+- **Drag.**
+  - A free cabinet follows the pointer's floor point (via `floorPointFromRay`) live. Keep the preview position in a ref plus a light state update; no three.js allocations per move.
+  - A wall cabinet whose floor point goes more than `SNAP_TO_WALL_MM + depth/2` from its own wall switches to the same floor-following preview.
+  - On release, call `rooms.dropAt(room, id, centre)`. If the result is the same room (refused), snap back.
+  - After a drop, retarget the wall when it joined one.
+- **Rotate.** The rotate ring on a free cabinet calls `rotateFree`.
+- **Everything else keys by id** (selection, doors open, measure): check free cabinets work with them. Measure snapping on a free cabinet may use the surface point only (as turned cabinets already do).
+- **Gates:** `pnpm vitest run --dir src`, `pnpm typecheck` and `pnpm lint` all pass.
+- **Browser pass** (GIF), checking each of these:
+  - Drag a base cabinet to the centre of the room: it stays there, has its own worktop, and the price adds 2 end panels.
+  - Drag it to within 100 mm of a wall: it joins that wall's run.
+  - Drop it overlapping another cabinet: it snaps back.
+  - Drop it into the L's notch (outside the room): it snaps back.
+  - A wall unit cannot go free.
+  - Rotate a free cabinet.
+  - Checkout with a free cabinet returns 201.
+
+Then Task 7 (docs) covers §5 as well: the CLAUDE.md "Room shapes" section, and the open question "is a free-standing cabinet's back charged as a panel?".
