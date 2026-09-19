@@ -3389,3 +3389,32 @@ Spec §5. TDD throughout; `lib/planner` stays framework-free. Runs after Task 8'
   - Checkout with a free cabinet returns 201.
 
 Then Task 7 (docs) covers §5 as well: the CLAUDE.md "Room shapes" section, and the open question "is a free-standing cabinet's back charged as a panel?".
+
+---
+
+### Task 11: Keep a dragged cabinet inside the room (added 2026-09-19, user report)
+
+While being dragged on the floor, a free cabinet (or a floor cabinet floated off its wall) follows the pointer with no limit, so it visibly passes through a wall before release. Fix: the floor-follow preview is clamped so the rotated footprint stays inside the room. It slides along a wall instead of passing through it. The drop uses the same clamped centre, so a cabinet pushed against a wall lands with its back at the wall and joins it under the 150 mm rule.
+
+**Files:** `src/lib/planner/floorplan.ts` (+ test), `src/components/planner/PlannerScene.tsx` (floor-follow drag), `src/lib/planner/room.ts` (only if `dropAt` needs the clamped centre).
+
+**Interface:** `clampIntoPlan(plan: FloorPlan, centre: Vec2, widthMm: number, depthMm: number, yawRad: number): Vec2`. It returns `centre` unchanged (same object) when the footprint (`rectCorners`) is already inside (`footprintInPlan`). Otherwise it pushes the centre along each offending wall's inward normal by that wall's penetration, running two passes so a corner of the room is resolved. `// ponytail:` note: two passes resolve every 90° corner; a general polygon would need iteration to convergence.
+
+**Tests first:**
+- Rect 4200×3600, a 600×580 cabinet at yaw 0 with centre `{0, −1900}` (through the back wall) → its back edge sits on the back wall (`zMm = −1800 + 290`) and x is unchanged.
+- A centre past both the back and left walls ends in that corner.
+- An inside centre returns the same object.
+- A 45°-turned cabinet against a wall: its corner touches and doesn't cross.
+- L notch: a centre inside the notch is pushed out of it, onto the nearer of the two notch walls.
+
+**Scene:**
+- The floor-follow drag (free cabinets, and floor cabinets floated off their wall) positions the preview at `clampIntoPlan(...)` of the pointer-derived centre.
+- The release passes that same clamped centre to `dropAt`.
+- No new three.js allocations per move.
+
+**Gates:** `pnpm vitest run --dir src`, `pnpm typecheck` and `pnpm lint` all pass.
+
+**Browser:**
+- Drag a free cabinet hard into the back wall: it stops at the wall, and on release joins it.
+- Drag into a room corner: it stops in the corner.
+- Drag toward the L's notch: it stays out of it.
