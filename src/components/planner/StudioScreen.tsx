@@ -417,9 +417,9 @@ export function StudioScreen({
 	// is what lies past the longer of the run and the square.
 	const cornerMm = Math.max(
 		0,
-		...Object.values(runView(layout, 0).reserved ?? {}).map(
-			(span) => span.endMm - span.startMm,
-		),
+		...Object.values(runView(layout, 0).reserved ?? {})
+			.flat()
+			.map((span) => span.endMm - span.startMm),
 	);
 	const freeMm = Math.round(
 		layout.wallWidthMm - Math.max(cornerMm, runExtentMm(layout)),

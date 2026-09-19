@@ -85,28 +85,25 @@ describe("runView", () => {
 
 	it("reserves the corner at the start of the main wall for a left corner", () => {
 		expect(runView(lRoom("left"), 0).reserved).toEqual({
-			floor: { startMm: 0, endMm: 607 },
-			wall: { startMm: 0, endMm: 397 },
+			floor: [{ startMm: 0, endMm: 607 }],
+			wall: [{ startMm: 0, endMm: 397 }],
 		});
 	});
 
 	it("reserves the far end of the side wall for a left corner", () => {
-		expect(runView(lRoom("left"), 1).reserved?.floor).toEqual({
-			startMm: 2993,
-			endMm: 3600,
-		});
+		expect(runView(lRoom("left"), 1).reserved?.floor).toEqual([
+			{ startMm: 2993, endMm: 3600 },
+		]);
 	});
 
 	it("mirrors both for a right corner", () => {
 		const room = lRoom("right");
-		expect(runView(room, 0).reserved?.floor).toEqual({
-			startMm: 3593,
-			endMm: 4200,
-		});
-		expect(runView(room, 1).reserved?.floor).toEqual({
-			startMm: 0,
-			endMm: 607,
-		});
+		expect(runView(room, 0).reserved?.floor).toEqual([
+			{ startMm: 3593, endMm: 4200 },
+		]);
+		expect(runView(room, 1).reserved?.floor).toEqual([
+			{ startMm: 0, endMm: 607 },
+		]);
 	});
 });
 

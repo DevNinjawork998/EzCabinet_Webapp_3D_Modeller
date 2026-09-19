@@ -1199,7 +1199,8 @@ function Run({
 		// built into an alcove must not veneer the two faces inside the walls.
 		const walls = {
 			wallWidthMm: layout.wallWidthMm,
-			enclosed: layout.wallToWall,
+			left: layout.endWalls?.left ?? layout.wallToWall,
+			right: layout.endWalls?.right ?? layout.wallToWall,
 		};
 		// The distance as well as the yes/no: an end panel only needs to know
 		// whether a side is buried, but a door needs to know how far away the
@@ -1214,7 +1215,7 @@ function Run({
 					(corner) => (corner.family.kind === "wall") === (row === "wall"),
 				),
 			];
-			const span = cornerFilled[row] ? layout.reserved?.[row] : undefined;
+			const span = cornerFilled[row] ? layout.reserved?.[row]?.[0] : undefined;
 			positions.forEach((position, i) => {
 				const own = sideGapsMm(positions, i, walls);
 				const end = position.xMm + position.widthMm;
@@ -1269,11 +1270,11 @@ function Run({
 			    carry the front lip, so an overhang here is a ledge standing proud
 			    of them and a strip overlapping the side run's slab at the same
 			    height. */}
-			{cornerWorktop && layout.reserved?.floor && (
+			{cornerWorktop && layout.reserved?.floor?.[0] && (
 				<mesh
 					position={[
 						m(
-							layout.reserved.floor.startMm +
+							layout.reserved.floor[0].startMm +
 								cornerWorktop.sizeMm / 2 -
 								runWidthMm / 2,
 						),

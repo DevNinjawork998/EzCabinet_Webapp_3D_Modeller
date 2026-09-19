@@ -127,8 +127,10 @@ function fromCorner(room: RoomLayout, run: number): PlannerLayout {
 	const view = runView(room, run);
 	if (!cornerAtEnd(room, run)) return view;
 	const L = view.wallWidthMm;
-	const flip = (span: Span | undefined) =>
-		span && { startMm: L - span.endMm, endMm: L - span.startMm };
+	const flip = (span: Span): Span => ({
+		startMm: L - span.endMm,
+		endMm: L - span.startMm,
+	});
 	return {
 		...view,
 		floor: view.floor.map(mirrorModule(L)),
@@ -136,8 +138,8 @@ function fromCorner(room: RoomLayout, run: number): PlannerLayout {
 		...(view.reserved
 			? {
 					reserved: {
-						floor: flip(view.reserved.floor),
-						wall: flip(view.reserved.wall),
+						floor: view.reserved.floor?.map(flip),
+						wall: view.reserved.wall?.map(flip),
 					},
 				}
 			: {}),
@@ -174,7 +176,7 @@ export function runView(room: RoomLayout, run: number): PlannerLayout {
 		wallToWall: isSide ? false : room.wallToWall,
 		floor: runs[run].floor,
 		wall: runs[run].wall,
-		...(floor && wall ? { reserved: { floor, wall } } : {}),
+		...(floor && wall ? { reserved: { floor: [floor], wall: [wall] } } : {}),
 	};
 }
 
@@ -460,7 +462,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			const view = runView(room, run);
 			for (const [id, sides] of wall.exposureOf(view)) exposure.set(id, sides);
 			for (const row of ["floor", "wall"] as const) {
-				const span = view.reserved?.[row];
+				const span = view.reserved?.[row]?.[0];
 				// An empty corner leaves the ends beside it in the open.
 				if (!span || !room.corner?.[row]) continue;
 				for (const position of wall.positionsOf(view, row)) {
@@ -518,7 +520,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			};
 		}
 		for (const view of views(room)) {
-			const span = view.reserved?.floor;
+			const span = view.reserved?.floor?.[0];
 			if (!span) continue;
 			const meeting = wall
 				.positionsOf(view, "floor")
@@ -584,7 +586,7 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			// the same distance whether or not it starts against the square.
 			const facing = [];
 			for (const view of views(room)) {
-				const span = view.reserved?.[row];
+				const span = view.reserved?.[row]?.[0];
 				if (!span) continue;
 				// A run's corner is at x = 0 or at its far end; distance from it is
 				// measured from whichever end that is.

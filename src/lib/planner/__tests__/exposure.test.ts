@@ -114,8 +114,8 @@ describe("a wider touching tolerance", () => {
 });
 
 describe("walls bury a side the way a neighbour does", () => {
-	const enclosed = { wallWidthMm: WALL_MM, enclosed: true };
-	const open = { wallWidthMm: WALL_MM, enclosed: false };
+	const enclosed = { wallWidthMm: WALL_MM, left: true, right: true };
+	const open = { wallWidthMm: WALL_MM, left: false, right: false };
 
 	/** One 900 cabinet hard against the left wall, and one hard against the
 	 *  right, on a 4200 wall. */
@@ -190,7 +190,9 @@ describe("sideGapsMm", () => {
 
 	it("counts a return wall as a neighbour", () => {
 		const row = [at(200, 900)];
-		expect(sideGapsMm(row, 0, { wallWidthMm: 4200, enclosed: true })).toEqual({
+		expect(
+			sideGapsMm(row, 0, { wallWidthMm: 4200, left: true, right: true }),
+		).toEqual({
 			left: 200,
 			right: 3100,
 		});
@@ -199,7 +201,7 @@ describe("sideGapsMm", () => {
 	it("ignores the walls when the run stands in open space", () => {
 		const row = [at(200, 900)];
 		expect(
-			sideGapsMm(row, 0, { wallWidthMm: 4200, enclosed: false }).left,
+			sideGapsMm(row, 0, { wallWidthMm: 4200, left: false, right: false }).left,
 		).toBe(Number.POSITIVE_INFINITY);
 	});
 });

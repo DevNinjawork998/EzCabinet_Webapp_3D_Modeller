@@ -10,7 +10,7 @@ import type { Positioned } from "./layout";
  * in the default 3/4 view the one wrong material in the picture.
  *
  * A neighbour is not the only thing that can bury a side: so can a wall. Pass
- * `EndWalls` and the run's two outer ends stop counting as exposed, which is
+ * `EndWalls` and an end with a wall at it stops counting as exposed, which is
  * what a kitchen built into an alcove actually looks like.
  *
  * Pure, and framework-free per `lib/planner`: it reads a row the way
@@ -35,7 +35,7 @@ export type ExposedSides = { left: boolean; right: boolean };
  * always reported exposed, and a kitchen built into an alcove gets veneer — and
  * a charge — for two faces nobody can see.
  */
-export type EndWalls = { wallWidthMm: number; enclosed: boolean };
+export type EndWalls = { wallWidthMm: number; left: boolean; right: boolean };
 
 /** Both sides — what a cabinet standing on its own wears. */
 export const FULLY_EXPOSED: ExposedSides = { left: true, right: true };
@@ -75,10 +75,9 @@ export function exposedSides(
 	// A wall buries a side exactly as a neighbour does, and the same tolerance
 	// decides it: these are the run's own end coordinates, so "touching" here
 	// means the same thing it means between two cabinets.
-	if (walls?.enclosed) {
-		if (Math.abs(self.xMm) <= touchingMm) left = false;
-		if (Math.abs(walls.wallWidthMm - selfEnd) <= touchingMm) right = false;
-	}
+	if (walls?.left && Math.abs(self.xMm) <= touchingMm) left = false;
+	if (walls?.right && Math.abs(walls.wallWidthMm - selfEnd) <= touchingMm)
+		right = false;
 
 	return { left, right };
 }
@@ -140,10 +139,9 @@ export function sideGapsMm(
 	}
 
 	// A return wall bounds a side exactly as a neighbour does.
-	if (walls?.enclosed) {
-		left = Math.min(left, Math.max(0, self.xMm));
+	if (walls?.left) left = Math.min(left, Math.max(0, self.xMm));
+	if (walls?.right)
 		right = Math.min(right, Math.max(0, walls.wallWidthMm - selfEnd));
-	}
 
 	return { left, right };
 }
