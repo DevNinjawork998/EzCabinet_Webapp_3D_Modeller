@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { ROLE_LABELS, type Role, STAFF_ROLES } from "@/lib/auth/permissions";
+import { shortTime } from "../logistics/time";
 
 type UserRow = {
 	id: string;
@@ -17,7 +18,13 @@ type UserRow = {
  * Staff only, by default: without it the list fills with real customers and
  * the one colleague on the screen is a needle in that haystack.
  */
-export function UsersTable({ initial }: { initial: UserRow[] }) {
+export function UsersTable({
+	initial,
+	selfId,
+}: {
+	initial: UserRow[];
+	selfId: string;
+}) {
 	const router = useRouter();
 	const [users, setUsers] = useState(initial);
 	const [staffOnly, setStaffOnly] = useState(true);
@@ -104,50 +111,67 @@ export function UsersTable({ initial }: { initial: UserRow[] }) {
 			{error && <p className="text-[13px] text-red-600">{error}</p>}
 
 			<ul className="flex flex-col gap-2">
-				{users.map((user) => (
-					<li
-						key={user.id}
-						className="flex flex-wrap items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3"
-					>
-						<span className="min-w-[180px] flex-1">
-							<span className="block font-medium text-[14px]">{user.name}</span>
-							<span className="block text-[12px] text-neutral-500">
-								{user.email}
+				{users.map((user) => {
+					const isSelf = user.id === selfId;
+					return (
+						<li
+							key={user.id}
+							className="flex flex-wrap items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3"
+						>
+							<span className="min-w-[180px] flex-1">
+								<span className="block font-medium text-[14px]">
+									{user.name}
+									{isSelf && (
+										<span className="ml-1.5 font-normal text-[11px] text-neutral-400">
+											(you)
+										</span>
+									)}
+								</span>
+								<span className="block text-[12px] text-neutral-500">
+									{user.email}
+								</span>
 							</span>
-						</span>
-						{user.role === "CUSTOMER" ? (
-							<span className="text-[13px] text-neutral-500">Customer</span>
-						) : (
-							<select
-								value={user.role}
-								disabled={busyId === user.id}
-								onChange={(e) => changeRole(user.id, e.target.value as Role)}
-								className="rounded-lg border border-neutral-300 px-2 py-1.5 text-[13px]"
-							>
-								{STAFF_ROLES.map((role) => (
-									<option key={role} value={role}>
-										{ROLE_LABELS[role]}
-									</option>
-								))}
-							</select>
-						)}
-						{user.disabled && (
-							<span className="rounded-full bg-red-100 px-2.5 py-1 font-medium text-[11px] text-red-700">
-								Disabled
+							<span className="w-[140px] shrink-0 text-[12px] text-neutral-500">
+								{user.lastLoginAt
+									? `Last in ${shortTime(new Date(user.lastLoginAt).toISOString())}`
+									: "Never signed in"}
 							</span>
-						)}
-						{user.role !== "CUSTOMER" && (
-							<button
-								type="button"
-								disabled={busyId === user.id}
-								onClick={() => toggleDisabled(user.id, !user.disabled)}
-								className="rounded-lg border border-neutral-300 px-3 py-1.5 text-[13px] hover:bg-neutral-50"
-							>
-								{user.disabled ? "Enable" : "Disable"}
-							</button>
-						)}
-					</li>
-				))}
+							{user.role === "CUSTOMER" ? (
+								<span className="text-[13px] text-neutral-500">Customer</span>
+							) : (
+								<select
+									value={user.role}
+									disabled={isSelf || busyId === user.id}
+									title={isSelf ? "You can't change your own role" : undefined}
+									onChange={(e) => changeRole(user.id, e.target.value as Role)}
+									className="rounded-lg border border-neutral-300 px-2 py-1.5 text-[13px] disabled:cursor-not-allowed disabled:opacity-50"
+								>
+									{STAFF_ROLES.map((role) => (
+										<option key={role} value={role}>
+											{ROLE_LABELS[role]}
+										</option>
+									))}
+								</select>
+							)}
+							{user.disabled && (
+								<span className="rounded-full bg-red-100 px-2.5 py-1 font-medium text-[11px] text-red-700">
+									Disabled
+								</span>
+							)}
+							{user.role !== "CUSTOMER" && (
+								<button
+									type="button"
+									disabled={isSelf || busyId === user.id}
+									title={isSelf ? "You can't disable yourself" : undefined}
+									onClick={() => toggleDisabled(user.id, !user.disabled)}
+									className="rounded-lg border border-neutral-300 px-3 py-1.5 text-[13px] hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+								>
+									{user.disabled ? "Enable" : "Disable"}
+								</button>
+							)}
+						</li>
+					);
+				})}
 				{users.length === 0 && (
 					<p className="rounded-xl border border-neutral-200 bg-white px-4 py-8 text-center text-[13px] text-neutral-500">
 						No accounts match.

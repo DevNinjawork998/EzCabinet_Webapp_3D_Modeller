@@ -67,6 +67,17 @@ describe("roleChangeAllowed", () => {
 		).toBe(false);
 	});
 
+	it("refuses to change your own role even if you were never a superadmin", () => {
+		expect(
+			roleChangeAllowed({
+				superadminCount: 3,
+				isSelf: true,
+				wasSuperadmin: false,
+				next: "SUPERADMIN",
+			}),
+		).toBe(false);
+	});
+
 	it("allows any change to someone who was not a superadmin", () => {
 		expect(
 			roleChangeAllowed({

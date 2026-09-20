@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AdminUserProvider } from "@/app/admin/AdminUserContext";
+import { authEnabled } from "@/lib/auth/enabled";
+import { BYPASS_USER } from "@/lib/auth/requireAuth";
 import { currentUser } from "@/lib/auth/session";
 import "../globals.css";
 
@@ -28,7 +30,12 @@ export default async function AdminRootLayout({
 }: {
 	children: React.ReactNode;
 }) {
-	const user = await currentUser();
+	// Bypass lives here, not in `currentUser()` — that function's contract is
+	// "the signed-in row, read fresh from the database", and `BYPASS_USER.id`
+	// is not a real row. Each display site decides what "no auth" should look
+	// like for itself; `POST /api/orders` (a later task) reads the same
+	// `authEnabled()` and chooses `null` instead.
+	const user = authEnabled() ? await currentUser() : BYPASS_USER;
 
 	return (
 		<html

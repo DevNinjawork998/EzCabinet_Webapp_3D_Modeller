@@ -17,16 +17,25 @@ import { prisma } from "@/lib/catalogue/db";
  * POST away from being decorative. Do not relax it to make a form easier.
  *
  * A server-side call to `auth.api.signUpEmail(...)` (Tasks 7 and 8, staff
- * invites) must pass `asResponse: true` and discard the returned `Response`.
- * `nextCookies()` below attaches `Set-Cookie` from any server-side auth API
- * call onto the ambient response; without `asResponse` a superadmin creating
- * a staff account would be silently signed in as the account they just
- * created.
+ * invites) still passes `asResponse: true` and discards the returned
+ * `Response` — that keeps the caller from reading a session out of it by
+ * accident, and the route separately re-reads the new row by email. But
+ * `asResponse` does **not** stop the cookie: `nextCookies()`'s after-hook
+ * matcher is unconditional (`better-auth/dist/integrations/next-js.mjs`),
+ * so it still runs and still writes `Set-Cookie` for whatever session
+ * `signUpEmail` created, onto the ambient response, regardless of
+ * `asResponse`. `autoSignIn: false` below is what actually prevents it — it
+ * stops `signUpEmail` creating a `Session` row at all, so there is no
+ * cookie for the after-hook to attach. Without it, a superadmin pressing
+ * "Invite" is silently signed in as the account they just created.
  */
 export const auth = betterAuth({
 	database: prismaAdapter(prisma, { provider: "postgresql" }),
 	emailAndPassword: {
 		enabled: true,
+		// See the module comment above: this is the line that stops a staff
+		// invite from signing the inviting superadmin in as the invitee.
+		autoSignIn: false,
 		// No reset mail: three internal users in one office, and the superadmin
 		// sets the initial password by hand. Adding self-serve reset means
 		// adding an email vendor.

@@ -73,9 +73,11 @@ export const POST = withAuth("users:manage", async (request, _ctx, actor) => {
 
 	// Better Auth owns password hashing and the credential Account row, so the
 	// invite goes through its own sign-up rather than writing a hash by hand.
-	// `asResponse: true` keeps `nextCookies()` from attaching the new
-	// account's Set-Cookie onto this response — otherwise the superadmin
-	// pressing "Invite" would be signed in as the person they just invited.
+	// `asResponse: true` keeps the caller from reading a session out of the
+	// return value; `autoSignIn: false` on `auth` (src/lib/auth.ts) is what
+	// actually stops the superadmin pressing "Invite" from being signed in as
+	// the person they just invited — see that file's comment for why
+	// `asResponse` alone does not.
 	await auth.api.signUpEmail({
 		body: { email, name, password },
 		asResponse: true,
@@ -84,6 +86,17 @@ export const POST = withAuth("users:manage", async (request, _ctx, actor) => {
 	const created = await prisma.user.findUnique({ where: { email } });
 	if (!created) {
 		return NextResponse.json({ error: "create_failed" }, { status: 500 });
+	}
+
+	// Two superadmins inviting the same address at once both pass the
+	// `existing` check above. The loser's sign-up is swallowed as a generic
+	// duplicate response (Better Auth's `shouldReturnGenericDuplicateResponse`,
+	// which `autoSignIn: false` also enables), and this read then finds the
+	// winner's row — which must not be re-roled as if we had created it. A
+	// row we just created sits at the CUSTOMER database default, so the
+	// legitimate path is unaffected.
+	if (created.role !== "CUSTOMER") {
+		return NextResponse.json({ error: "already_staff" }, { status: 409 });
 	}
 
 	// The role is set here, never by the sign-up body — `input: false` in the

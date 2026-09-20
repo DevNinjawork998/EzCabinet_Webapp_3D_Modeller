@@ -5,7 +5,7 @@ import { InviteStaff } from "./InviteStaff";
 import { UsersTable } from "./UsersTable";
 
 export default async function UsersPage() {
-	await requirePage("users:manage");
+	const actor = await requirePage("users:manage");
 
 	const users = await prisma.user.findMany({
 		where: { NOT: { role: "CUSTOMER" } },
@@ -35,7 +35,7 @@ export default async function UsersPage() {
 					</div>
 					<InviteStaff />
 				</div>
-				<UsersTable initial={users} />
+				<UsersTable initial={users} selfId={actor.id} />
 			</main>
 		</div>
 	);
