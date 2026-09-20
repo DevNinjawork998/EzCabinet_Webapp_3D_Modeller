@@ -73,7 +73,7 @@ export function InviteStaff() {
 
 	return (
 		<div className="rounded-[14px] border border-[#e5e5e5] bg-white p-5">
-			<p className="mb-3 font-semibold text-[11px] text-neutral-500 uppercase tracking-wide">
+			<p className="mb-3 font-semibold text-[#525252] text-[12px] uppercase tracking-[.06em]">
 				Invite a member
 			</p>
 			{result ? (
@@ -162,7 +162,7 @@ export function InviteStaff() {
 						<button
 							type="submit"
 							disabled={submitting}
-							className="rounded-full bg-[#1f5138] px-5 py-2.5 font-medium text-[13px] text-white hover:bg-[#193f2c] disabled:cursor-not-allowed disabled:opacity-50"
+							className="min-h-10 flex-none rounded-full bg-[#1f5138] px-5 py-[11px] font-semibold text-[13px] text-white hover:bg-[#193f2c] disabled:cursor-not-allowed disabled:opacity-50"
 						>
 							{submitting ? "Inviting…" : "Invite"}
 						</button>

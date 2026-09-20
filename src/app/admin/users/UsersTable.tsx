@@ -23,10 +23,14 @@ const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
 };
 
 function initialsOf(name: string): string {
-	const parts = name.trim().split(/\s+/).filter(Boolean);
-	const first = parts[0]?.[0] ?? "";
-	const second = parts.length > 1 ? parts[parts.length - 1][0] : "";
-	return (first + second).toUpperCase();
+	return name
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean)
+		.slice(0, 2)
+		.map((part) => part[0])
+		.join("")
+		.toUpperCase();
 }
 
 /**
@@ -132,10 +136,10 @@ export function UsersTable({
 							type="button"
 							aria-pressed={status === f}
 							onClick={() => setStatus(f)}
-							className={`rounded-full border px-3 py-1.5 text-[13px] ${
+							className={`min-h-9 rounded-full border px-3.5 py-2 text-[12px] ${
 								status === f
-									? "border-[#1f5138] bg-[#1f5138]/10 font-medium text-[#1f5138]"
-									: "border-[#e5e5e5] text-neutral-600 hover:bg-neutral-50"
+									? "border-[#171717] bg-[#171717] font-semibold text-white"
+									: "border-[#d4d4d4] bg-white text-[#404040] hover:bg-neutral-50"
 							}`}
 						>
 							{STATUS_FILTER_LABEL[f]} ({counts[f]})
@@ -152,7 +156,7 @@ export function UsersTable({
 						placeholder="Search by name or email"
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
-						className="w-full rounded-lg border border-[#e5e5e5] px-3 py-2 text-[13px]"
+						className="min-h-[38px] w-full rounded-[9px] border border-[#d4d4d4] px-3 py-2 text-[13px]"
 					/>
 				</div>
 			</div>
@@ -160,11 +164,11 @@ export function UsersTable({
 			{error && <p className="text-[13px] text-[#7f1d1d]">{error}</p>}
 
 			<div className="overflow-hidden rounded-[14px] border border-[#e5e5e5] bg-white">
-				<div className="grid grid-cols-[1fr_150px_140px_110px] items-center gap-3 border-[#e5e5e5] border-b bg-[#f7f6f4] px-4 py-2.5 font-semibold text-[11px] text-neutral-500 uppercase tracking-wide">
+				<div className="grid grid-cols-[minmax(0,2.1fr)_minmax(0,1.1fr)_minmax(0,1fr)_172px] items-center gap-3.5 border-[#ecebe7] border-b bg-[#faf9f7] px-[18px] py-[11px] font-semibold text-[#6b6b6b] text-[11px] uppercase tracking-[.05em]">
 					<span>Member</span>
 					<span>Role</span>
 					<span>Last active</span>
-					<span className="text-right">Actions</span>
+					<span />
 				</div>
 				<ul>
 					{shown.map((user) => {
@@ -172,36 +176,36 @@ export function UsersTable({
 						return (
 							<li
 								key={user.id}
-								className="grid grid-cols-[1fr_150px_140px_110px] items-center gap-3 border-[#e5e5e5] border-b px-4 py-3 last:border-b-0"
+								className="grid grid-cols-[minmax(0,2.1fr)_minmax(0,1.1fr)_minmax(0,1fr)_172px] items-center gap-3.5 border-[#f1f0ec] border-b px-[18px] py-3 last:border-b-0"
 							>
-								<div className="flex min-w-0 items-center gap-3">
+								<div className="flex min-w-0 items-center gap-[11px]">
 									<span
 										aria-hidden="true"
-										className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1f5138]/10 font-semibold text-[12px] text-[#1f5138]"
+										className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full font-semibold text-[12px] ${
+											user.disabled
+												? "bg-[#ecebe7] text-[#6b6b6b]"
+												: "bg-[#171717] text-white"
+										}`}
 									>
 										{initialsOf(user.name)}
 									</span>
 									<span className="min-w-0">
-										<span className="flex flex-wrap items-center gap-1.5">
-											<span className="truncate font-medium text-[14px]">
+										<span className="flex flex-wrap items-center gap-[7px]">
+											<span className="truncate font-semibold text-[13px] text-[#171717]">
 												{user.name}
 											</span>
 											{isSelf && (
-												<span className="rounded-full bg-neutral-100 px-2 py-0.5 font-medium text-[11px] text-neutral-500">
+												<span className="shrink-0 rounded-full bg-[#f1f0ec] px-[7px] py-0.5 font-semibold text-[#525252] text-[10px]">
 													you
 												</span>
 											)}
-											<span
-												className={`rounded-full px-2 py-0.5 font-medium text-[11px] ${
-													user.disabled
-														? "bg-[#7f1d1d]/10 text-[#7f1d1d]"
-														: "bg-[#1f5138]/10 text-[#1f5138]"
-												}`}
-											>
-												{user.disabled ? "Suspended" : "Active"}
-											</span>
+											{user.disabled && (
+												<span className="shrink-0 rounded-full bg-[#fef2f2] px-2 py-0.5 font-semibold text-[#7f1d1d] text-[10px] tracking-[.04em]">
+													Suspended
+												</span>
+											)}
 										</span>
-										<span className="block truncate text-[12px] text-neutral-500">
+										<span className="block truncate text-[#737373] text-[12px]">
 											{user.email}
 										</span>
 									</span>
@@ -215,7 +219,7 @@ export function UsersTable({
 									disabled={isSelf || busyId === user.id}
 									title={isSelf ? "You can't change your own role" : undefined}
 									onChange={(e) => changeRole(user.id, e.target.value as Role)}
-									className="w-fit rounded-lg border border-[#e5e5e5] px-2 py-1.5 text-[13px] disabled:cursor-not-allowed disabled:opacity-50"
+									className="min-h-9 w-fit rounded-lg border border-[#d4d4d4] px-[9px] py-[7px] text-[#404040] text-[12px] disabled:cursor-not-allowed disabled:opacity-50"
 								>
 									{STAFF_ROLES.map((role) => (
 										<option key={role} value={role}>
@@ -223,12 +227,12 @@ export function UsersTable({
 										</option>
 									))}
 								</select>
-								<span className="text-[12px] text-neutral-500">
+								<span className="text-[#5c574e] text-[12px]">
 									{user.lastLoginAt
 										? `Last in ${shortTime(new Date(user.lastLoginAt).toISOString())}`
 										: "Never signed in"}
 								</span>
-								<div className="flex justify-end">
+								<div className="flex w-[172px] justify-end gap-[7px]">
 									<button
 										type="button"
 										aria-label={
@@ -241,7 +245,7 @@ export function UsersTable({
 										disabled={isSelf || busyId === user.id}
 										title={isSelf ? "You can't disable yourself" : undefined}
 										onClick={() => toggleDisabled(user.id, !user.disabled)}
-										className="rounded-full border border-[#e5e5e5] px-3 py-1.5 text-[13px] hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+										className="min-h-9 rounded-lg border border-[#d4d4d4] px-[11px] text-[#404040] text-[12px] hover:bg-[#f4f3f1] disabled:cursor-not-allowed disabled:opacity-50"
 									>
 										{user.disabled ? "Restore" : "Suspend"}
 									</button>
@@ -250,16 +254,17 @@ export function UsersTable({
 						);
 					})}
 					{shown.length === 0 && (
-						<li className="px-4 py-8 text-center text-[13px] text-neutral-500">
+						<li className="px-6 py-10 text-center text-[#5c574e] text-[13px]">
 							No member matches that.
 						</li>
 					)}
 				</ul>
+				<div className="flex items-center justify-between gap-3 px-[18px] py-[11px] text-[#5c574e] text-[12px]">
+					<span>
+						Showing {shown.length} of {users.length} members
+					</span>
+				</div>
 			</div>
-
-			<p className="text-[12px] text-neutral-500">
-				Showing {shown.length} of {users.length} members
-			</p>
 		</div>
 	);
 }
