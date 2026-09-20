@@ -68,5 +68,41 @@ export const auth = betterAuth({
 		// the very next request.
 		cookieCache: { enabled: false },
 	},
+	databaseHooks: {
+		session: {
+			create: {
+				// Stamped on session creation rather than on each request:
+				// /admin/users wants "has anyone used this account lately", not a
+				// precise last-seen, and a write per request would be a write per
+				// page view. This fires for every path that creates a session —
+				// credential sign-in and Google sign-in alike, both funnel through
+				// the same `internalAdapter.createSession` — so a Google-only
+				// staff member's row updates too.
+				//
+				// Verified against node_modules/better-auth/dist/db/with-hooks.mjs:
+				// `createWithHooks` calls `hooks[model].create.after(created,
+				// context)` — one argument is the created row (here the session,
+				// carrying `userId`), not the `{ user }`/`{ session }` shape the
+				// brief's own snippet assumed — and awaits it via
+				// `queueAfterTransactionHook`, which runs and is awaited after the
+				// transaction commits, before the API response is sent.
+				//
+				// Wrapped in try/catch: this hook has no `onError`, so an
+				// unhandled throw here would propagate out of session creation and
+				// fail the sign-in itself. A stale `lastLoginAt` is a cosmetic
+				// miss; a failed sign-in is not an acceptable price for it.
+				after: async (session) => {
+					try {
+						await prisma.user.update({
+							where: { id: session.userId },
+							data: { lastLoginAt: new Date() },
+						});
+					} catch (error) {
+						console.error("Failed to stamp lastLoginAt", error);
+					}
+				},
+			},
+		},
+	},
 	plugins: [nextCookies()],
 });
