@@ -255,7 +255,7 @@ published. "Which catalogue is live" is now a value with an owner.
 - **Zod is the single source of truth for types.** Define the schema once, infer TS types from it, validate every API payload. Malformed input on a public endpoint is guaranteed.
 - **Sizes are validated against the family's ladder.** Reject off-ladder widths server-side.
 - **The catalogue lives in the database.** Cabinets and their prices are `CabinetDesign` rows, rebuilt into a `CatalogueVersion` on every publish — the version table is the price history. The disaster-recovery copy for cabinets is Postgres plus the design files in Blob; `lib/planner/catalogue.ts` seeds only settings. Ship seed changes as their own commit.
-- **Every admin route calls `requireAuth`.** `lib/auth/route.ts`'s `withAuth` wraps every handler under `src/app/api/admin`, and a coverage test fails the build on any exported method it does not see gated — see [Auth](#auth).
+- **Every admin route calls `requireAuth`.** `lib/auth/route.ts`'s `withAuth` wraps every handler under `src/app/api/admin`, with one named exemption in the coverage test's allow-list (`logistics/easyparcel/callback/route.ts` — EasyParcel's own redirect, checked by its `state` cookie instead), and the test fails the build on any other exported method it does not see gated — see [Auth](#auth).
 
 ## 3D
 
@@ -448,9 +448,9 @@ Three screens. Rooms open on an **empty wall**: there is no invented starter run
 
 **An order is priced on the server, never by the client.** `POST /api/orders` (public, guarded by BotID) runs `validateOrder` — the engine forgives an unknown family or an off-ladder width silently, which is fine on a canvas and wrong for a payment — then `priceOrder` against the published catalogue, and stores the design as `{ schemaVersion, layout }` with the catalogue version it was priced against. A paid order's **Create delivery** (`/admin/logistics?fromOrder=`) fills the delivery form with one row per cabinet at its designed size and the design row's weight; the delivery create route refuses an order that is not paid.
 
-**No login to configure — but checkout now requires an account.** Browsing, planning and pricing stay anonymous; `POST /api/orders` is the one hard stop — signed out, placing an order bounces to `/[lang]/sign-in?next=…` and back to the same quote, the design intact via the autosaved draft (`lib/plannerDraft.ts`). The email/WhatsApp gate for **"save & share"** sits earlier and separately, at the point the customer has sunk time into a design and will trade a phone number to keep it. `AUTH_ENABLED=false` skips the checkout gate too, for local work.
+**No login to configure — but checkout now requires an account.** Browsing, planning and pricing stay anonymous; `POST /api/orders` is the one hard stop — signed out, placing an order bounces to `/[lang]/sign-in?next=…` and back to the same quote, the design intact via the autosaved draft (`lib/plannerDraft.ts`). A separate, earlier email/WhatsApp gate at **"save & share"** — for the customer who has sunk time into a design and will trade a phone number to keep it — is designed but **not yet built**; see Status and Phasing.
 
-Save writes the layout to Postgres under a `nanoid` slug, returns a short URL, creates the lead record, and attaches the screenshot. Then a `wa.me` deep link with the design URL prefilled.
+**Not yet built.** Save writes the layout to Postgres under a `nanoid` slug, returns a short URL, creates the lead record, and attaches the screenshot. Then a `wa.me` deep link with the design URL prefilled.
 
 Ship 8–10 **preset designs** as their own indexable routes ("2.4m 3-door kitchen run", etc). Each is an SEO landing page and an entry point into the planner — solves the blank-canvas problem and the traffic problem together.
 
@@ -485,9 +485,12 @@ PostHog **Cloud EU**, installed from the Vercel Marketplace, so we can see where
 
 Accounts, with three roles: `SUPERADMIN`, `ADMIN`, `CUSTOMER`. Customers sign
 in with Google. Staff are invited by a superadmin and can use either Google or
-the password that superadmin set, so there is always a way in when the OAuth
-app is misconfigured. Public sign-up can only ever produce a `CUSTOMER`; a role
-is granted only by a superadmin acting on `/admin/users`.
+the password that superadmin set. A staff account promoted from an existing
+customer row keeps only the sign-in it already had, so a Google-only staff
+member has no password fallback — the OAuth-misconfigured escape hatch only
+exists for a row the superadmin created directly. Public sign-up can only ever
+produce a `CUSTOMER`; a role is granted only by a superadmin acting on
+`/admin/users`.
 
 `lib/auth/permissions.ts` is the whole access model: nine permissions and a
 `Role → Permission[]` constant, with a table-driven test that is its
@@ -545,6 +548,9 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
 7. **Free cabinets have no resize, replace or duplicate yet** — those controls are hidden on a free selection. **No floor-follow drag in elevation view**, since elevation is a flat wall-facing projection with nowhere for "off the wall" to go. **Switching to an L is refused silently** while a free cabinet stands in the notch's would-be area — the room panel just doesn't move. **A free cabinet can stand under an empty corner square's billed worktop**: `runFootprints` ignores an empty reserved corner square, so nothing stops a free cabinet occupying the same floor space that corner's worktop is priced over.
 8. **A journey event fired next to a redirect can be lost.** `track()` in `lib/analytics.ts` loads `posthog-js` on idle and captures asynchronously, with no `sendBeacon` or `keepalive`. `sign_in_nudge` with `action: "accepted"` fires and is immediately followed by the Google OAuth redirect, so that leg of the sign-in funnel will under-count — the browser can navigate away before the beacon goes out. Not new, and not unique to that event: any event fired next to a redirect has the same problem. The fix, when someone wants one, is a `keepalive` fetch or firing the event server-side after the callback, and both are decisions about the funnel rather than cleanup.
 9. **The Customers filter on `/admin/users` narrows client-side over a capped list.** `GET /api/admin/users` has `take: 200`, and `staff=0` drops the `NOT: { role: "CUSTOMER" }` clause rather than adding a customer-only one, so that cap is shared across staff and customers and the browser filters the result afterwards. A public planner accumulates customer sign-ups steadily, so once total accounts pass 200 the Customers view silently shows an incomplete list with nothing in the UI saying so. The fix is a `role` parameter on the endpoint's existing `where`, which removes both the truncation and the over-fetch of rows the customer view discards. Growth debt on an endpoint that is already reviewed and gated, not a defect: with three accounts today it cannot bite.
+10. **`mustChangePassword` is written and never enforced.** Both the invite and the seed set it on a fresh password-holding row, and nothing checks it — no screen forces the change, so a superadmin hands over a password the employee simply keeps. Recorded as deliberate in the plan's own self-review (the forcing screen belongs with the customer-account work in a later sub-project) rather than half-built now, but it is a bigger hole than either of the two Task 10 review carry-forwards written down alongside it.
+11. **`advance` takes its actor from the session; `book` and `split` still take a client-typed one.** `DeliveryDetail.tsx`'s name field feeds `bookedBy` and `split`'s `actor`, and `split` falls back to the literal `"Admin"` when the field is left blank — so the delivery activity log has mixed provenance, a session user's real name on some rows and whatever an admin typed (or nothing) on others. Narrowed, not closed.
+12. **`prisma.config.ts` sets no `shadowDatabaseUrl`.** That is why `prisma migrate dev` refuses non-interactively and `prisma migrate diff --from-migrations` cannot run — both need a shadow database to diff against. Until it is set, a migration written outside an interactive terminal has to be hand-written and independently verified (`prisma migrate diff --from-config-datasource --to-schema`) rather than generated. The fix is two lines in `prisma.config.ts` pointing at a disposable shadow database URL; not done here.
 
 ## Open questions — resolve before trusting pricing.ts
 

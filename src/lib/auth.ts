@@ -5,12 +5,15 @@ import { nextCookies } from "better-auth/next-js";
 import { prisma } from "@/lib/catalogue/db";
 
 /**
- * Two doors that never cross.
+ * One door, gated by who created the row — not by which provider they used.
  *
- * Customers arrive through Google. Staff arrive through email and password,
- * on an account a superadmin created for them — public sign-up can only ever
- * produce a CUSTOMER, so there is no code path by which a customer account
- * becomes staff.
+ * Customers arrive through Google, self-service. Staff sign in with either
+ * Google or the password a superadmin set for them, on an account a
+ * superadmin created (or promoted from an existing customer row) — public
+ * sign-up can only ever produce a CUSTOMER, so there is no code path by
+ * which a customer account grants itself a role. A staff row promoted from
+ * an existing customer keeps only the sign-in it already had (Google), since
+ * the promotion sets no password — see `POST /api/admin/users`.
  *
  * `input: false` on every field below is the load-bearing line. Without it a
  * crafted sign-up body could post its own `role`, and the whole model is one
