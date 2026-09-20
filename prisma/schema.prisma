@@ -11,6 +11,14 @@ enum Product {
   PLANNER
 }
 
+enum Role {
+  SUPERADMIN
+  ADMIN
+  SALES
+  CATALOGUE
+  CUSTOMER
+}
+
 enum CatalogueStatus {
   DRAFT
   PUBLISHED
@@ -357,6 +365,13 @@ model Order {
 
   deliveries Delivery[]
 
+  /// Null on a pre-cutover or anonymous order. `publicToken` still opens it.
+  userId       String?
+  user         User?   @relation("OrderCustomer", fields: [userId], references: [id])
+  /// Replaces the typed-in `paidBy`: admin auth now knows who it is.
+  paidByUserId String?
+  paidByUser   User?   @relation("OrderPaidBy", fields: [paidByUserId], references: [id])
+
   @@index([status, createdAt])
 }
 
@@ -408,4 +423,79 @@ model CarrierToken {
   connectedBy           String?
   connectedAt           DateTime @default(now())
   updatedAt             DateTime @updatedAt
+}
+
+/// Customers arrive through Google; staff are invited by a superadmin and sign
+/// in with email and password. A row is never hard-deleted — `disabled` is the
+/// offboarding switch, because a departed employee's name must stay readable on
+/// the orders they marked paid.
+model User {
+  id                 String    @id
+  name               String
+  email              String
+  emailVerified      Boolean   @default(false)
+  image              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  role               Role      @default(CUSTOMER)
+  disabled           Boolean   @default(false)
+  mustChangePassword Boolean   @default(false)
+  invitedById        String?
+  lastLoginAt        DateTime?
+  sessions           Session[]
+  accounts           Account[]
+
+  orders     Order[] @relation("OrderCustomer")
+  ordersPaid Order[] @relation("OrderPaidBy")
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
 }
