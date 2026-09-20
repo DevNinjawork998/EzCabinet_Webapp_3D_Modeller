@@ -23,8 +23,7 @@ them.
 
 In:
 
-- Better Auth wired to Google and Facebook (customers) and email+password
-  (staff)
+- Better Auth wired to Google (customers) and email+password (staff)
 - A `User` table with a `role` column, and the permission vocabulary the roles
   map onto
 - `/admin/users` — invite staff, change role, disable
@@ -46,7 +45,7 @@ Out — sub-project C, its own spec:
 | --- | --- | --- |
 | Library | **Better Auth** | Social-only for customers means no password-reset mail and no transactional email vendor, which is most of what a hosted provider is paid for. Users stay in our own Postgres: no per-MAU bill as checkout-requires-login grows MAU with sales, and no PDPA question about where Malaysian customer data sits. |
 | Staff sign-in | email + password | Two doors that never cross. A customer account has no path to a staff role. |
-| Customer sign-in | Google, Facebook | The client's ask. Facebook matters in Malaysia. |
+| Customer sign-in | **Google only** | Facebook is deferred, not rejected — see below. |
 | Staff onboarding | invite-only | Public sign-up can only ever produce a `CUSTOMER`. Escalation is not a code path that exists. |
 | Permission model | fixed roles | Five roles, each a constant permission set in code. No permission-matrix UI, no DB read per gate, and the mapping is one table-driven test. |
 | Staff passwords | set by the superadmin, handed over in person | Three internal users, one office. Avoids an email sender entirely. |
@@ -77,6 +76,15 @@ every gate from a code constant to a DB read, for three internal users.
 answered better by autosave — see below. `CLAUDE.md` records the conversion
 reason for keeping entry free: "by then the customer has sunk time into a
 design and will trade a phone number to keep it."
+
+### Deferred
+
+**Facebook Login.** Wanted, and it matters in Malaysia — but it needs the app
+Live and the business verified with EzCabinet's company documents before it
+returns `email`, which is a lead time nothing else here waits on. In Better
+Auth it is one provider block, one environment variable pair and one more
+button on the sign-in screen, so adding it later costs nothing this spec has
+to plan around. Do not let it block the build.
 
 ## Permissions
 
@@ -211,7 +219,7 @@ request; disabling a user kills their live sessions.
 dismissible bar: "Sign in to save this design"   [Sign in] [Not now]
   ↓ layout autosaves to localStorage on every mutation
 checkout → sign-in required, the only hard stop
-  ↓ [Continue with Google] [Continue with Facebook]
+  ↓ [Continue with Google]
   ↓ layout stashed → OAuth → /api/auth/callback → back to checkout
 User row created with role CUSTOMER, layout rehydrated, order placed
 ```
@@ -271,11 +279,11 @@ the surface is there.
 src/lib/auth/permissions.ts   Role → Permission[]. Pure. Tested before it has a caller.
 src/lib/auth/enabled.ts       AUTH_ENABLED, ignored in production
 src/lib/auth/requireAuth.ts   server-only: session → user → permission → throw
-src/lib/auth.ts               Better Auth config: Google, Facebook, credentials
+src/lib/auth.ts               Better Auth config: Google, credentials
 src/app/api/auth/[...all]/    Better Auth handler
 src/app/admin/users/          the superadmin screen
 src/app/admin/login/          rewritten for email + password
-src/app/[lang]/sign-in/       customer: Google + Facebook
+src/app/[lang]/sign-in/       customer: Google
 src/proxy.ts                  cookie check replaces isValidAdminSession
 src/components/planner/       autosave, rehydrate, dismissible nudge
 src/app/api/orders/route.ts   requires a session unless authEnabled() is false
@@ -313,14 +321,12 @@ Nothing is back-filled.
 
 ## Client dependencies
 
-Neither is a code task, and both have lead times worth starting now:
+Not a code task, and it has a lead time worth starting now:
 
-- **Facebook Business Verification.** Facebook Login needs the app Live and
-  the business verified before it returns `email`. Needs EzCabinet's company
-  documents.
-- **Google OAuth consent screen.** Lighter, still needs a verified domain and
-  a privacy policy URL — which points at `/[lang]/privacy`, still a draft
-  awaiting EzCabinet's counsel.
+- **Google OAuth consent screen.** Needs a verified domain and a privacy
+  policy URL — which points at `/[lang]/privacy`, still a draft awaiting
+  EzCabinet's counsel. Until the app is verified, Google caps it at 100 test
+  users, which is fine for development and not for launch.
 
 ## Consequences for CLAUDE.md
 
