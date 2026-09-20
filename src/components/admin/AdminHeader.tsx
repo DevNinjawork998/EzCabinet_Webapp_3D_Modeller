@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AdminSignOut } from "@/app/admin/AdminSignOut";
-import { useAdminUserName } from "@/app/admin/AdminUserContext";
+import {
+	useAdminUserName,
+	useAdminUserRole,
+} from "@/app/admin/AdminUserContext";
 
 /**
  * The admin chrome: a breadcrumb row over a tab bar.
@@ -25,6 +28,8 @@ const TABS = [
 	{ label: "Tutorials", href: "/admin/tutorials" },
 ];
 
+const SUPERADMIN_TABS = [{ label: "People", href: "/admin/users" }];
+
 /**
  * `trail` is where a page sits under "EzCabinet /" — a delivery's own
  * page reads "Deliveries / #14". Left out, the crumb just says "Admin". The
@@ -37,6 +42,8 @@ export function AdminHeader({
 }) {
 	const pathname = usePathname();
 	const name = useAdminUserName();
+	const role = useAdminUserRole();
+	const tabs = role === "SUPERADMIN" ? [...TABS, ...SUPERADMIN_TABS] : TABS;
 
 	return (
 		<header className="flex shrink-0 flex-col border-neutral-200 border-b bg-white">
@@ -95,7 +102,7 @@ export function AdminHeader({
 			</div>
 
 			<nav className="flex items-center gap-1 px-6 pt-3">
-				{TABS.map((tab) => {
+				{tabs.map((tab) => {
 					const active = pathname.startsWith(tab.href);
 					return (
 						<Link

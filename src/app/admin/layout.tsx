@@ -36,7 +36,7 @@ export default async function AdminRootLayout({
 			className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
 		>
 			<body className="flex min-h-full flex-col font-sans">
-				<AdminUserProvider name={user?.name ?? null}>
+				<AdminUserProvider name={user?.name ?? null} role={user?.role ?? null}>
 					{children}
 				</AdminUserProvider>
 			</body>
