@@ -26,6 +26,10 @@ export function GoogleSignInButton({
 		setBusy(true);
 		setFailed(false);
 		try {
+			// `callbackURL` here traces back to this page's `?next=`, so it is
+			// attacker-controllable — but Better Auth validates it against
+			// trustedOrigins (origin-check middleware) before ever redirecting,
+			// so it can't be used to send the browser off-origin.
 			const { error } = await authClient.signIn.social({
 				provider: "google",
 				callbackURL,

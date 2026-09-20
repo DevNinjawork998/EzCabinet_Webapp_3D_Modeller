@@ -27,8 +27,16 @@ export default function AdminLoginPage() {
 			setError("Wrong email or password");
 			return;
 		}
+		// `next` comes from the query string, so it is attacker-controllable: a
+		// bare router.push would follow `//evil.com` or an absolute URL to another
+		// origin, and it would do it right after a successful sign-in. Only a
+		// same-origin absolute path is allowed through.
 		const next = new URLSearchParams(window.location.search).get("next");
-		router.push(next || "/admin/cabinet-designs");
+		const dest =
+			next?.startsWith("/") && !next.startsWith("//")
+				? next
+				: "/admin/cabinet-designs";
+		router.push(dest);
 	}
 
 	async function continueWithGoogle() {
@@ -37,6 +45,9 @@ export default function AdminLoginPage() {
 		try {
 			const { error: failure } = await authClient.signIn.social({
 				provider: "google",
+				// Better Auth validates callbackURL against trustedOrigins
+				// (origin-check middleware), so an attacker-controlled `next`
+				// cannot redirect off-origin here the way a raw router.push would.
 				callbackURL:
 					new URLSearchParams(window.location.search).get("next") ??
 					"/admin/cabinet-designs",
