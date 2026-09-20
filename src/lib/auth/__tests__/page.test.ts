@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthUser } from "@/lib/auth/session";
 
 const requireAuth = vi.hoisted(() => vi.fn());
@@ -35,6 +35,10 @@ const user: AuthUser = {
 };
 
 describe("requirePage", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
 	it("returns the user when permission is granted", async () => {
 		requireAuth.mockResolvedValue(user);
 		await expect(requirePage("catalogue:read")).resolves.toBe(user);
@@ -58,5 +62,27 @@ describe("requirePage", () => {
 		requireAuth.mockRejectedValue(new AuthError(404));
 		await expect(requirePage("catalogue:read")).rejects.toThrow("notFound");
 		expect(notFound).toHaveBeenCalled();
+	});
+
+	it("propagates a non-AuthError instead of rendering notFound", async () => {
+		requireAuth.mockRejectedValue(new Error("db unreachable"));
+		await expect(requirePage("catalogue:read")).rejects.toThrow(
+			"db unreachable",
+		);
+		expect(notFound).not.toHaveBeenCalled();
+	});
+
+	it("redirects to /admin/change-password when the user must change their password", async () => {
+		requireAuth.mockResolvedValue({ ...user, mustChangePassword: true });
+		await expect(requirePage("catalogue:read")).rejects.toThrow("redirect");
+		expect(redirect).toHaveBeenCalledWith("/admin/change-password");
+	});
+
+	it("does not redirect when mustChangePassword is false", async () => {
+		requireAuth.mockResolvedValue({ ...user, mustChangePassword: false });
+		await expect(requirePage("catalogue:read")).resolves.toEqual(
+			expect.objectContaining({ mustChangePassword: false }),
+		);
+		expect(redirect).not.toHaveBeenCalled();
 	});
 });

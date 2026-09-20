@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { safeNext } from "@/app/admin/login/safeNext";
 import { authClient } from "@/lib/auth/client";
 import { HERO_EXPLODED_FRAME, heroFrameSrc } from "@/lib/scroll/sequence";
 
@@ -27,8 +28,10 @@ export default function AdminLoginPage() {
 			setError("Wrong email or password");
 			return;
 		}
+		// `next` comes from the query string, so it is attacker-controllable — see
+		// safeNext's own comment for why a prefix check isn't enough.
 		const next = new URLSearchParams(window.location.search).get("next");
-		router.push(next || "/admin/cabinet-designs");
+		router.push(safeNext(next, window.location.origin));
 	}
 
 	async function continueWithGoogle() {
@@ -37,6 +40,9 @@ export default function AdminLoginPage() {
 		try {
 			const { error: failure } = await authClient.signIn.social({
 				provider: "google",
+				// Better Auth validates callbackURL against trustedOrigins
+				// (origin-check middleware), so an attacker-controlled `next`
+				// cannot redirect off-origin here the way a raw router.push would.
 				callbackURL:
 					new URLSearchParams(window.location.search).get("next") ??
 					"/admin/cabinet-designs",

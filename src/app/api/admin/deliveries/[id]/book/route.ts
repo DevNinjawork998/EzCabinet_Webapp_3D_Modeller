@@ -25,9 +25,12 @@ export const runtime = "nodejs";
  *    racing requests can claim it.
  * 3. The booking call is never retried. `carrierFetch` only retries calls the
  *    adapter marks idempotent, and booking is not one of them.
- * 4. `bookedBy` is required. Admin auth is a single shared password, so the
- *    name typed on the confirm step plus the event row is the entire record of
- *    who committed the spend.
+ * 4. `bookedBy` is required. The handler now runs behind `withAuth`, which
+ *    resolves the real signed-in actor — but `book`/`split` still record the
+ *    name typed on the confirm step, not that session actor; moving them onto
+ *    it is a scheduled follow-up (Known issue 11, CLAUDE.md). Until then, this
+ *    client-supplied name plus the event row is the entire record of who
+ *    committed the spend.
  */
 export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 	"logistics:book",

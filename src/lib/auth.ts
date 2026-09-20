@@ -42,6 +42,16 @@ export const auth = betterAuth({
 		// No reset mail: three internal users in one office, and the superadmin
 		// sets the initial password by hand. Adding self-serve reset means
 		// adding an email vendor.
+		//
+		// Better Auth's own default is 8
+		// (node_modules/better-auth/dist/context/create-context.mjs:
+		// `minPasswordLength: options.emailAndPassword?.minPasswordLength || 8`),
+		// read by every password-accepting endpoint — sign-up, `set-password`,
+		// and `change-password` alike — off `ctx.context.password.config`. Set
+		// here so all of them share the one floor, matching the invite's own
+		// 12-character minimum (`src/lib/auth/invite.ts`) rather than leaving a
+		// server-side gap under a client-side check.
+		minPasswordLength: 12,
 	},
 	socialProviders: {
 		google: {
@@ -67,6 +77,42 @@ export const auth = betterAuth({
 		// lifetime, and the spec requires a role change or a disable to bite on
 		// the very next request.
 		cookieCache: { enabled: false },
+	},
+	databaseHooks: {
+		session: {
+			create: {
+				// Stamped on session creation rather than on each request:
+				// /admin/users wants "has anyone used this account lately", not a
+				// precise last-seen, and a write per request would be a write per
+				// page view. This fires for every path that creates a session —
+				// credential sign-in and Google sign-in alike, both funnel through
+				// the same `internalAdapter.createSession` — so a Google-only
+				// staff member's row updates too.
+				//
+				// Verified against node_modules/better-auth/dist/db/with-hooks.mjs:
+				// `createWithHooks` calls `hooks[model].create.after(created,
+				// context)` — one argument is the created row (here the session,
+				// carrying `userId`), not the `{ user }`/`{ session }` shape the
+				// brief's own snippet assumed — and awaits it via
+				// `queueAfterTransactionHook`, which runs and is awaited after the
+				// transaction commits, before the API response is sent.
+				//
+				// Wrapped in try/catch: this hook has no `onError`, so an
+				// unhandled throw here would propagate out of session creation and
+				// fail the sign-in itself. A stale `lastLoginAt` is a cosmetic
+				// miss; a failed sign-in is not an acceptable price for it.
+				after: async (session) => {
+					try {
+						await prisma.user.update({
+							where: { id: session.userId },
+							data: { lastLoginAt: new Date() },
+						});
+					} catch (error) {
+						console.error("Failed to stamp lastLoginAt", error);
+					}
+				},
+			},
+		},
 	},
 	plugins: [nextCookies()],
 });

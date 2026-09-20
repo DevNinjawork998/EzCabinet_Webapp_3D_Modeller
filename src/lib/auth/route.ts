@@ -32,6 +32,15 @@ export function withAuth<Ctx>(
 			}
 			throw error;
 		}
+		// A staff member mid-forced-change must not be able to drive the admin
+		// API from a stale tab. The change-password flow itself does not run
+		// through `withAuth`, so this cannot lock it out.
+		if (user.mustChangePassword) {
+			return NextResponse.json(
+				{ error: "password_change_required" },
+				{ status: 403 },
+			);
+		}
 		return handler(request, context, user);
 	};
 }

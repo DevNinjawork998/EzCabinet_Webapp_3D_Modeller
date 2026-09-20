@@ -291,9 +291,10 @@ model Delivery {
   lastLatitude      Float?
   lastLongitude     Float?
   lastLocationAt    DateTime?
-  /// Typed on the confirm step. Admin auth is one shared password with no
-  /// per-user identity, so this plus DeliveryEvent is the whole audit story
-  /// until accounts exist.
+  /// Typed on the confirm step, not yet the session actor `withAuth` resolves —
+  /// moving `book`/`split` onto that actor is a scheduled follow-up (see
+  /// Known issue 11 in CLAUDE.md). Until then this plus DeliveryEvent is the
+  /// whole audit story.
   bookedBy          String?
   /// The job this one was cut out of, as the number staff say out loud.
   ///

@@ -67,7 +67,9 @@ export function SignInNudge({ cabinetCount }: { cabinetCount: number }) {
 	return (
 		<div className="fixed inset-x-3 bottom-24 z-30 mx-auto flex max-w-[420px] flex-col gap-1.5 rounded-[10px] border border-neutral-300 bg-white px-4 py-3 shadow-lg md:inset-x-auto md:right-6">
 			<div className="flex items-center gap-3">
-				<p className="flex-1 text-sm">Sign in to save this design.</p>
+				<p className="flex-1 text-sm">
+					This design is saved on this device — sign in to check out.
+				</p>
 				<button
 					type="button"
 					onClick={signIn}

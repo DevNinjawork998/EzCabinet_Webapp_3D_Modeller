@@ -111,6 +111,10 @@ describe("every admin surface is gated", () => {
 
 		const ungated = files.filter((f) => {
 			if (f === "src/app/admin/login/page.tsx") return false; // the sign-in page itself
+			// Calls `currentUser()` directly instead: `requirePage` now redirects
+			// a user with `mustChangePassword` set straight back to this page,
+			// which would loop forever.
+			if (f === "src/app/admin/change-password/page.tsx") return false;
 			const source = readFileSync(f, "utf8");
 			return !source.includes("requireAuth") && !source.includes("requirePage");
 		});

@@ -39,8 +39,9 @@ export async function GET(request: NextRequest) {
 	}
 
 	try {
-		// Admin auth is one shared password, so there is no name to record beyond
-		// the fact that someone holding it did this.
+		// Real accounts exist now, but this callback isn't behind `withAuth` and
+		// carries no session — so "admin" is still the only actor recorded here,
+		// not a specific signed-in name.
 		await exchangeCode(code, "admin");
 	} catch {
 		return done("failed");
