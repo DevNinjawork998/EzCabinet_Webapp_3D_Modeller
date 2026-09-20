@@ -50,6 +50,7 @@ import { DimensionField } from "./DimensionField";
 import { AdminLink, PlannerHeader } from "./PlannerHeader";
 import type { PlannerView } from "./PlannerScene";
 import { priceLineDetail, priceLineLabel } from "./priceLineCopy";
+import { SignInNudge } from "./SignInNudge";
 import { CabinetMenu } from "./studio/CabinetMenu";
 import { DesignRecap } from "./studio/DesignRecap";
 import { PriceFooter } from "./studio/PriceFooter";
@@ -1289,6 +1290,8 @@ export function StudioScreen({
 					/>
 				</aside>
 			</div>
+
+			<SignInNudge cabinetCount={placed.length} />
 		</main>
 	);
 }

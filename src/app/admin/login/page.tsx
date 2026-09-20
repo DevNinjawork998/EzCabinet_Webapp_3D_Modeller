@@ -31,6 +31,28 @@ export default function AdminLoginPage() {
 		router.push(next || "/admin/cabinet-designs");
 	}
 
+	async function continueWithGoogle() {
+		setBusy(true);
+		setError(null);
+		try {
+			const { error: failure } = await authClient.signIn.social({
+				provider: "google",
+				callbackURL:
+					new URLSearchParams(window.location.search).get("next") ??
+					"/admin/cabinet-designs",
+			});
+			if (failure) {
+				setError("Could not open Google sign-in. Try again");
+				setBusy(false);
+			}
+			// On success the browser is mid-redirect; leave `busy` set so the
+			// button stays disabled rather than flashing back to normal.
+		} catch {
+			setError("Could not open Google sign-in. Try again");
+			setBusy(false);
+		}
+	}
+
 	return (
 		<main className="flex min-h-screen bg-[#f4f3f1] text-neutral-900">
 			<div className="flex flex-1 items-center justify-center p-10">
@@ -69,15 +91,9 @@ export default function AdminLoginPage() {
 
 					<button
 						type="button"
-						onClick={() =>
-							authClient.signIn.social({
-								provider: "google",
-								callbackURL:
-									new URLSearchParams(window.location.search).get("next") ??
-									"/admin/cabinet-designs",
-							})
-						}
-						className="flex items-center justify-center gap-2 rounded-[9px] border border-neutral-300 bg-white py-2.5 font-medium text-sm"
+						onClick={continueWithGoogle}
+						disabled={busy}
+						className="flex items-center justify-center gap-2 rounded-[9px] border border-neutral-300 bg-white py-2.5 font-medium text-sm disabled:opacity-60"
 					>
 						Continue with Google
 					</button>
