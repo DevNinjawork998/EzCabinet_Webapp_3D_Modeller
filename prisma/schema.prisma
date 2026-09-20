@@ -356,8 +356,6 @@ model Order {
   paymentProvider    String      @default("manual")
   paymentRef         String?
   paidAt             DateTime?
-  /// Admin auth is one shared password, so this typed name is the record.
-  paidBy             String?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
@@ -366,7 +364,7 @@ model Order {
   /// Null on a pre-cutover or anonymous order. `publicToken` still opens it.
   userId       String?
   user         User?   @relation("OrderCustomer", fields: [userId], references: [id])
-  /// Replaces the typed-in `paidBy`: admin auth now knows who it is.
+  /// Null on a pre-cutover order marked paid before accounts existed.
   paidByUserId String?
   paidByUser   User?   @relation("OrderPaidBy", fields: [paidByUserId], references: [id])
 

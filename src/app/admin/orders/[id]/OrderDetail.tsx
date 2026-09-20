@@ -35,7 +35,7 @@ export type OrderView = {
 	paymentProvider: string;
 	paymentRef: string | null;
 	paidAt: string | null;
-	paidBy: string | null;
+	paidByName: string | null;
 	deliveries: { id: string; number: number; status: DeliveryStatusName }[];
 };
 
@@ -189,7 +189,7 @@ export function OrderDetail({ order }: { order: OrderView }) {
 						{paid && (
 							<p className="text-[13px] text-neutral-600">
 								Paid {order.paidAt ? shortTime(order.paidAt) : ""}
-								{order.paidBy ? ` · marked by ${order.paidBy}` : ""}
+								{order.paidByName ? ` · marked by ${order.paidByName}` : ""}
 								{order.paymentRef ? ` · ref ${order.paymentRef}` : ""} ·{" "}
 								{order.paymentProvider}
 							</p>

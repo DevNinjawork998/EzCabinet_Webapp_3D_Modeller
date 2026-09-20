@@ -16,10 +16,8 @@ const bodySchema = z.object({
  * A conditional update rather than read-then-write, so two admins pressing at
  * once cannot both mark it, and a cancelled order cannot be revived as paid.
  *
- * `paidBy` is still written alongside `paidByUserId` because the column is
- * still there until Task 12, and an order marked paid between these two
- * tasks should not lose its record either way. `BYPASS_USER.id` is not a
- * real row, so it must not go into a foreign key.
+ * `BYPASS_USER.id` is not a real row, so it must not go into a foreign key —
+ * a bypass admin marking an order paid still leaves `paidByUserId` null.
  */
 export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 	"orders:markPaid",
@@ -38,7 +36,6 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 			data: {
 				status: "PAID",
 				paidAt: new Date(),
-				paidBy: user.name,
 				paidByUserId: user.id === BYPASS_USER.id ? null : user.id,
 				paymentRef: parsed.data.paymentRef,
 			},

@@ -22,6 +22,7 @@ export default async function OrderAdminPage({
 					select: { id: true, number: true, status: true },
 					orderBy: { createdAt: "desc" },
 				},
+				paidByUser: { select: { name: true } },
 			},
 		}),
 		readPublishedPlannerCatalogue(),
@@ -64,7 +65,7 @@ export default async function OrderAdminPage({
 					paymentProvider: order.paymentProvider,
 					paymentRef: order.paymentRef,
 					paidAt: order.paidAt?.toISOString() ?? null,
-					paidBy: order.paidBy,
+					paidByName: order.paidByUser?.name ?? null,
 					deliveries: order.deliveries,
 				}}
 			/>
