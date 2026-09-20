@@ -1,5 +1,6 @@
 import { type HandleUploadBody, handleUpload } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/route";
 import {
 	SITE_IMAGE_CONTENT_TYPES,
 	SITE_IMAGE_MAX_BYTES,
@@ -18,7 +19,7 @@ export const runtime = "nodejs";
  * middleware gates `/api/admin/*`, so an anonymous caller never gets a
  * token in the first place.
  */
-export async function POST(request: Request) {
+export const POST = withAuth("content:write", async (request) => {
 	const body = (await request.json()) as HandleUploadBody;
 
 	try {
@@ -51,4 +52,4 @@ export async function POST(request: Request) {
 			{ status: 400 },
 		);
 	}
-}
+});

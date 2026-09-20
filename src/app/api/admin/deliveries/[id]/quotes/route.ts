@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
 import { CARRIERS } from "@/lib/logistics/carriers";
 import { refreshGeocoderHealth } from "@/lib/logistics/geocode";
@@ -25,91 +26,93 @@ type QuoteRow = CarrierQuote & { error?: string };
  * made "Lalamove is switched off" and "Lalamove refused this job" the same
  * blank screen.
  */
-export async function POST(
-	_request: Request,
-	{ params }: { params: Promise<{ id: string }> },
-) {
-	const { id } = await params;
-	const delivery = await prisma.delivery.findUnique({ where: { id } });
-	if (!delivery) {
-		return NextResponse.json({ error: "not_found" }, { status: 404 });
-	}
+export const POST = withAuth<{ params: Promise<{ id: string }> }>(
+	"logistics:read",
+	async (_request, { params }) => {
+		const { id } = await params;
+		const delivery = await prisma.delivery.findUnique({ where: { id } });
+		if (!delivery) {
+			return NextResponse.json({ error: "not_found" }, { status: 404 });
+		}
 
-	// Before anyone is asked, settle whether the geocoder works. Both parcel
-	// adapters refuse a job with no postcode, and the sentence they show turns
-	// on *why* there is none — an address the admin should fix, or a key Google
-	// is refusing, which no amount of editing that address will change. This is
-	// the screen where that sentence is read and acted on, so it is worth one
-	// probe every five minutes to have it be true.
-	await refreshGeocoderHealth();
+		// Before anyone is asked, settle whether the geocoder works. Both parcel
+		// adapters refuse a job with no postcode, and the sentence they show turns
+		// on *why* there is none — an address the admin should fix, or a key Google
+		// is refusing, which no amount of editing that address will change. This is
+		// the screen where that sentence is read and acted on, so it is worth one
+		// probe every five minutes to have it be true.
+		await refreshGeocoderHealth();
 
-	const job = toJob(delivery);
-	const adapters = CARRIERS.map((carrier) => ({
-		id: carrier.id,
-		adapter: findAdapter(carrier.id),
-	}));
-	const asked = adapters.filter((row) => row.adapter?.isConfigured() === true);
+		const job = toJob(delivery);
+		const adapters = CARRIERS.map((carrier) => ({
+			id: carrier.id,
+			adapter: findAdapter(carrier.id),
+		}));
+		const asked = adapters.filter(
+			(row) => row.adapter?.isConfigured() === true,
+		);
 
-	trace("compare", {
-		deliveryId: id,
-		all: adapters.map((row) => row.id),
-		asked: asked.map((row) => row.id),
-		site: { lat: delivery.siteLat, lng: delivery.siteLng },
-		pickup: { lat: delivery.pickupLat, lng: delivery.pickupLng },
-	});
-
-	const settled = await Promise.allSettled(
-		asked.map((row) =>
-			(row.adapter as NonNullable<typeof row.adapter>).quote(job),
-		),
-	);
-
-	const answered: QuoteRow[] = settled.map((result, i) => {
-		const row: QuoteRow =
-			result.status === "fulfilled"
-				? result.value
-				: {
-						carrierId: asked[i].id,
-						priceRm: null,
-						etaMinutes: null,
-						error: (result.reason as Error).message,
-					};
-		trace("compare.result", {
-			carrierId: row.carrierId,
-			priceRm: row.priceRm,
-			error: row.error ?? null,
+		trace("compare", {
+			deliveryId: id,
+			all: adapters.map((row) => row.id),
+			asked: asked.map((row) => row.id),
+			site: { lat: delivery.siteLat, lng: delivery.siteLng },
+			pickup: { lat: delivery.pickupLat, lng: delivery.pickupLng },
 		});
-		return row;
-	});
 
-	const quotes: QuoteRow[] = adapters.map(
-		(row) =>
-			answered.find((quote) => quote.carrierId === row.id) ?? {
-				carrierId: row.id,
-				priceRm: null,
-				etaMinutes: null,
-				error: "No credentials on this deployment — nothing was asked.",
-			},
-	);
+		const settled = await Promise.allSettled(
+			asked.map((row) =>
+				(row.adapter as NonNullable<typeof row.adapter>).quote(job),
+			),
+		);
 
-	// QUOTED only ever moves a DRAFT forward — re-comparing a booked job is a
-	// legitimate thing to do and must not rewrite its status.
-	if (delivery.status === "DRAFT") {
-		await prisma.delivery.update({
-			where: { id },
-			data: {
-				status: "QUOTED",
-				events: {
-					create: {
-						source: "ADMIN",
-						status: "QUOTED",
-						message: `Compared ${quotes.length} partner${quotes.length === 1 ? "" : "s"}`,
-						raw: quotes as never,
+		const answered: QuoteRow[] = settled.map((result, i) => {
+			const row: QuoteRow =
+				result.status === "fulfilled"
+					? result.value
+					: {
+							carrierId: asked[i].id,
+							priceRm: null,
+							etaMinutes: null,
+							error: (result.reason as Error).message,
+						};
+			trace("compare.result", {
+				carrierId: row.carrierId,
+				priceRm: row.priceRm,
+				error: row.error ?? null,
+			});
+			return row;
+		});
+
+		const quotes: QuoteRow[] = adapters.map(
+			(row) =>
+				answered.find((quote) => quote.carrierId === row.id) ?? {
+					carrierId: row.id,
+					priceRm: null,
+					etaMinutes: null,
+					error: "No credentials on this deployment — nothing was asked.",
+				},
+		);
+
+		// QUOTED only ever moves a DRAFT forward — re-comparing a booked job is a
+		// legitimate thing to do and must not rewrite its status.
+		if (delivery.status === "DRAFT") {
+			await prisma.delivery.update({
+				where: { id },
+				data: {
+					status: "QUOTED",
+					events: {
+						create: {
+							source: "ADMIN",
+							status: "QUOTED",
+							message: `Compared ${quotes.length} partner${quotes.length === 1 ? "" : "s"}`,
+							raw: quotes as never,
+						},
 					},
 				},
-			},
-		});
-	}
+			});
+		}
 
-	return NextResponse.json({ quotes });
-}
+		return NextResponse.json({ quotes });
+	},
+);

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/route";
 import {
 	easyparcelAppConfigured,
 	easyparcelLoginUrl,
@@ -17,7 +18,7 @@ export const runtime = "nodejs";
  * the CSRF guard EasyParcel's own docs ask for: without it, anyone can feed
  * this app an authorization code for an account we did not choose.
  */
-export async function GET() {
+export const GET = withAuth("logistics:book", async () => {
 	if (!easyparcelAppConfigured()) {
 		return NextResponse.json({ error: "not_configured" }, { status: 409 });
 	}
@@ -45,4 +46,4 @@ export async function GET() {
 		maxAge: 600,
 	});
 	return response;
-}
+});

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { withAuth } from "@/lib/auth/route";
 import { convertDesign } from "@/lib/catalogue/convertDesign";
 import { prisma } from "@/lib/catalogue/db";
 import {
@@ -45,7 +46,7 @@ const createSchema = z.object({
  * live yet, so it needs the published document to compare against — read
  * uncached, because it is usually asked right after a publish.
  */
-export async function GET() {
+export const GET = withAuth("catalogue:read", async () => {
 	const [designs, published] = await Promise.all([
 		prisma.cabinetDesign.findMany({ orderBy: { updatedAt: "desc" } }),
 		readPublishedPlannerCatalogue(),
@@ -54,7 +55,7 @@ export async function GET() {
 		designs,
 		published: { version: published.version, data: published.data },
 	});
-}
+});
 
 /**
  * Saves a design and converts its file in the same request.
@@ -63,7 +64,7 @@ export async function GET() {
  * is refused while the admin is still looking at it, instead of surfacing later
  * as a publish failure nobody connects to the upload.
  */
-export async function POST(request: Request) {
+export const POST = withAuth("catalogue:write", async (request) => {
 	const body = await request.json();
 	const parsed = createSchema.safeParse(body);
 	if (!parsed.success) {
@@ -122,4 +123,4 @@ export async function POST(request: Request) {
 		where: { id: created.id },
 	});
 	return NextResponse.json({ design, meshNote: converted.meshNote });
-}
+});

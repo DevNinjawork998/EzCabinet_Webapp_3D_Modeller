@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
 import {
 	catalogueSchemaByProduct,
@@ -8,7 +9,7 @@ import { createDraftVersion } from "@/lib/catalogue/versions";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+export const GET = withAuth("catalogue:read", async (request) => {
 	const product = productSchema.safeParse(
 		new URL(request.url).searchParams.get("product"),
 	);
@@ -36,10 +37,10 @@ export async function GET(request: Request) {
 		},
 	});
 	return NextResponse.json({ versions });
-}
+});
 
 /** Create a DRAFT row from reviewed data. Never live — publish is separate. */
-export async function POST(request: Request) {
+export const POST = withAuth("catalogue:write", async (request) => {
 	const body = (await request.json()) as {
 		product?: string;
 		data?: unknown;
@@ -68,4 +69,4 @@ export async function POST(request: Request) {
 	});
 
 	return NextResponse.json({ id: draft.id, status: draft.status });
-}
+});

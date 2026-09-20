@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { AuthError, requireAuth } from "@/lib/auth/requireAuth";
 import type { Permission } from "@/lib/auth/permissions";
+import { AuthError, requireAuth } from "@/lib/auth/requireAuth";
 import type { AuthUser } from "@/lib/auth/session";
 
 /**

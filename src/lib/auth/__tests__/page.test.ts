@@ -2,13 +2,21 @@ import { describe, expect, it, vi } from "vitest";
 import type { AuthUser } from "@/lib/auth/session";
 
 const requireAuth = vi.hoisted(() => vi.fn());
-const redirect = vi.hoisted(() => vi.fn(() => { throw new Error("redirect"); }));
-const notFound = vi.hoisted(() => vi.fn(() => { throw new Error("notFound"); }));
+const redirect = vi.hoisted(() =>
+	vi.fn(() => {
+		throw new Error("redirect");
+	}),
+);
+const notFound = vi.hoisted(() =>
+	vi.fn(() => {
+		throw new Error("notFound");
+	}),
+);
 
 vi.mock("@/lib/auth/requireAuth", async () => {
-	const actual = await vi.importActual<
-		typeof import("@/lib/auth/requireAuth")
-	>("@/lib/auth/requireAuth");
+	const actual = await vi.importActual<typeof import("@/lib/auth/requireAuth")>(
+		"@/lib/auth/requireAuth",
+	);
 	return { ...actual, requireAuth };
 });
 vi.mock("next/navigation", () => ({ redirect, notFound }));

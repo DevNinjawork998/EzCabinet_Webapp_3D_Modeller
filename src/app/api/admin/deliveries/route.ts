@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
 import { pickupPin, WORKSHOP_ADDRESS } from "@/lib/logistics/carriers";
 import { pinFor } from "@/lib/logistics/coords";
@@ -17,7 +18,7 @@ import { deliveryInputSchema } from "@/lib/logistics/types";
 export const runtime = "nodejs";
 
 /** Every delivery for the admin list, newest job number first. */
-export async function GET() {
+export const GET = withAuth("logistics:read", async () => {
 	const deliveries = await prisma.delivery.findMany({
 		orderBy: { number: "desc" },
 	});
@@ -26,9 +27,9 @@ export async function GET() {
 		workshopAddress: WORKSHOP_ADDRESS,
 		geocodingConfigured: (await refreshGeocoderHealth()).ok,
 	});
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withAuth("logistics:book", async (request) => {
 	const parsed = deliveryInputSchema.safeParse(await request.json());
 	if (!parsed.success) {
 		return NextResponse.json(
@@ -133,4 +134,4 @@ export async function POST(request: Request) {
 	});
 
 	return NextResponse.json({ delivery }, { status: 201 });
-}
+});

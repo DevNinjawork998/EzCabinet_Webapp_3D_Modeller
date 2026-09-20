@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/route";
 import { publishVersion } from "@/lib/catalogue/publishVersion";
 
 export const runtime = "nodejs";
@@ -11,26 +12,26 @@ export const runtime = "nodejs";
  * shares — one transaction rather than two, because two would drift and the
  * drift would show up as a catalogue with no live version.
  */
-export async function POST(
-	_request: Request,
-	{ params }: { params: Promise<{ id: string }> },
-) {
-	const { id } = await params;
-	const result = await publishVersion(id);
+export const POST = withAuth<{ params: Promise<{ id: string }> }>(
+	"catalogue:publish",
+	async (_request, { params }) => {
+		const { id } = await params;
+		const result = await publishVersion(id);
 
-	if (!result.ok) {
-		return NextResponse.json(
-			{
-				error: result.error,
-				...(result.issues ? { issues: result.issues } : {}),
-			},
-			{ status: result.status },
-		);
-	}
+		if (!result.ok) {
+			return NextResponse.json(
+				{
+					error: result.error,
+					...(result.issues ? { issues: result.issues } : {}),
+				},
+				{ status: result.status },
+			);
+		}
 
-	return NextResponse.json({
-		id: result.id,
-		product: result.product,
-		version: result.version,
-	});
-}
+		return NextResponse.json({
+			id: result.id,
+			product: result.product,
+			version: result.version,
+		});
+	},
+);

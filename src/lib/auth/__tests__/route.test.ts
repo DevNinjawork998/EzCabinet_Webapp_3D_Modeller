@@ -4,9 +4,9 @@ import type { AuthUser } from "@/lib/auth/session";
 
 const requireAuth = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/auth/requireAuth", async () => {
-	const actual = await vi.importActual<
-		typeof import("@/lib/auth/requireAuth")
-	>("@/lib/auth/requireAuth");
+	const actual = await vi.importActual<typeof import("@/lib/auth/requireAuth")>(
+		"@/lib/auth/requireAuth",
+	);
 	return { ...actual, requireAuth };
 });
 
@@ -80,9 +80,7 @@ describe("withAuth", () => {
 		requireAuth.mockRejectedValue(new Error("boom"));
 		const handler = vi.fn();
 		const wrapped = withAuth("catalogue:read", handler);
-		await expect(wrapped(new Request("http://x"), {})).rejects.toThrow(
-			"boom",
-		);
+		await expect(wrapped(new Request("http://x"), {})).rejects.toThrow("boom");
 		expect(handler).not.toHaveBeenCalled();
 	});
 });

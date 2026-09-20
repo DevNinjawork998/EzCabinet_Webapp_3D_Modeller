@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/route";
 import { mux, tutorialAssetSettings } from "@/lib/mux";
 
 export const runtime = "nodejs";
@@ -21,7 +22,7 @@ export const runtime = "nodejs";
  * somewhere else — the URL is single-use and short-lived anyway, but there is
  * no reason to widen it.
  */
-export async function POST(request: Request) {
+export const POST = withAuth("content:write", async (request) => {
 	try {
 		const origin = new URL(request.url).origin;
 		const upload = await mux.video.uploads.create({
@@ -36,4 +37,4 @@ export async function POST(request: Request) {
 			{ status: 502 },
 		);
 	}
-}
+});

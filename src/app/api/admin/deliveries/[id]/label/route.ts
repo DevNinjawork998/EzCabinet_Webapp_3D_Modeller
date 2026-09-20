@@ -1,5 +1,6 @@
 import { get } from "@vercel/blob";
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
 import { labelPathname } from "@/lib/logistics/adapters/gdex";
 
@@ -24,41 +25,41 @@ export const runtime = "nodejs";
  * taken at booking time. A 404 here means that capture failed — the note is
  * still printable from GDEX's own portal.
  */
-export async function GET(
-	_request: Request,
-	{ params }: { params: Promise<{ id: string }> },
-) {
-	const { id } = await params;
-	const delivery = await prisma.delivery.findUnique({
-		where: { id },
-		select: { carrierId: true, carrierOrderId: true },
-	});
+export const GET = withAuth<{ params: Promise<{ id: string }> }>(
+	"logistics:read",
+	async (_request, { params }) => {
+		const { id } = await params;
+		const delivery = await prisma.delivery.findUnique({
+			where: { id },
+			select: { carrierId: true, carrierOrderId: true },
+		});
 
-	if (
-		!delivery ||
-		delivery.carrierId !== "gdex" ||
-		delivery.carrierOrderId === null
-	) {
-		return NextResponse.json({ error: "not_found" }, { status: 404 });
-	}
+		if (
+			!delivery ||
+			delivery.carrierId !== "gdex" ||
+			delivery.carrierOrderId === null
+		) {
+			return NextResponse.json({ error: "not_found" }, { status: 404 });
+		}
 
-	const result = await get(labelPathname(delivery.carrierOrderId), {
-		access: "private",
-		useCache: false,
-	});
-	if (result?.statusCode !== 200) {
-		return NextResponse.json({ error: "not_found" }, { status: 404 });
-	}
+		const result = await get(labelPathname(delivery.carrierOrderId), {
+			access: "private",
+			useCache: false,
+		});
+		if (result?.statusCode !== 200) {
+			return NextResponse.json({ error: "not_found" }, { status: 404 });
+		}
 
-	return new Response(result.stream, {
-		headers: {
-			"Content-Type": "application/pdf",
-			// Opens in the browser's viewer, named so a printed stack of notes can
-			// be matched back to a consignment without opening each one.
-			"Content-Disposition": `inline; filename="${delivery.carrierOrderId}.pdf"`,
-			// A consignment note is customer data behind an admin cookie. Shared
-			// caches must never hold it, and the bytes never change anyway.
-			"Cache-Control": "private, max-age=3600",
-		},
-	});
-}
+		return new Response(result.stream, {
+			headers: {
+				"Content-Type": "application/pdf",
+				// Opens in the browser's viewer, named so a printed stack of notes can
+				// be matched back to a consignment without opening each one.
+				"Content-Disposition": `inline; filename="${delivery.carrierOrderId}.pdf"`,
+				// A consignment note is customer data behind an admin cookie. Shared
+				// caches must never hold it, and the bytes never change anyway.
+				"Cache-Control": "private, max-age=3600",
+			},
+		});
+	},
+);

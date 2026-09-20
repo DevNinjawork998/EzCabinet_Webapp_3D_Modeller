@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { withAuth } from "@/lib/auth/route";
 import { buildCatalogue } from "@/lib/catalogue/buildCatalogue";
 import {
 	convertDesign,
@@ -31,7 +32,7 @@ const bodySchema = z.object({ base: plannerCatalogueSchema });
  * change list on the page that sent this. The version row is still written,
  * because it is the price history and what a quote will be stamped against.
  */
-export async function POST(request: Request) {
+export const POST = withAuth("catalogue:publish", async (request) => {
 	const parsed = bodySchema.safeParse(await request.json());
 	if (!parsed.success) {
 		return NextResponse.json(
@@ -117,4 +118,4 @@ export async function POST(request: Request) {
 		changes,
 		failures,
 	});
-}
+});

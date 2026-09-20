@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
 import {
 	suggestVehicle,
@@ -36,82 +37,82 @@ const splitInputSchema = z.object({
  * halves go to the same site from the same workshop, and asking Google the
  * same question twice can only cost money and answer differently.
  */
-export async function POST(
-	request: Request,
-	{ params }: { params: Promise<{ id: string }> },
-) {
-	const { id } = await params;
-	const parsed = splitInputSchema.safeParse(await request.json());
-	if (!parsed.success) {
-		return NextResponse.json(
-			{ error: "invalid_body", issues: parsed.error.issues },
-			{ status: 400 },
+export const POST = withAuth<{ params: Promise<{ id: string }> }>(
+	"logistics:book",
+	async (request, { params }) => {
+		const { id } = await params;
+		const parsed = splitInputSchema.safeParse(await request.json());
+		if (!parsed.success) {
+			return NextResponse.json(
+				{ error: "invalid_body", issues: parsed.error.issues },
+				{ status: 400 },
+			);
+		}
+
+		const delivery = await prisma.delivery.findUnique({ where: { id } });
+		if (!delivery) {
+			return NextResponse.json({ error: "not_found" }, { status: 404 });
+		}
+		// Splitting deletes the original, so a job the carrier is already holding
+		// must never reach it — that would leave a booked lorry with no row.
+		if (delivery.carrierOrderId !== null) {
+			return NextResponse.json({ error: "already_booked" }, { status: 409 });
+		}
+
+		const { moved, kept } = splitItems(
+			readItems(delivery.items),
+			parsed.data.itemIndexes,
 		);
-	}
+		// A "split" with an empty half is the original under a new id. Refused here
+		// as well as disabled in the panel, because the panel may be looking at a
+		// job someone else has since edited.
+		if (moved.length === 0 || kept.length === 0) {
+			return NextResponse.json({ error: "invalid_split" }, { status: 400 });
+		}
 
-	const delivery = await prisma.delivery.findUnique({ where: { id } });
-	if (!delivery) {
-		return NextResponse.json({ error: "not_found" }, { status: 404 });
-	}
-	// Splitting deletes the original, so a job the carrier is already holding
-	// must never reach it — that would leave a booked lorry with no row.
-	if (delivery.carrierOrderId !== null) {
-		return NextResponse.json({ error: "already_booked" }, { status: 409 });
-	}
-
-	const { moved, kept } = splitItems(
-		readItems(delivery.items),
-		parsed.data.itemIndexes,
-	);
-	// A "split" with an empty half is the original under a new id. Refused here
-	// as well as disabled in the panel, because the panel may be looking at a
-	// job someone else has since edited.
-	if (moved.length === 0 || kept.length === 0) {
-		return NextResponse.json({ error: "invalid_split" }, { status: 400 });
-	}
-
-	const half = (items: DeliveryItem[]) => ({
-		customerName: delivery.customerName,
-		customerPhone: delivery.customerPhone,
-		siteAddress: delivery.siteAddress,
-		addressNotes: delivery.addressNotes,
-		pickupAddress: delivery.pickupAddress,
-		siteLat: delivery.siteLat,
-		siteLng: delivery.siteLng,
-		siteGeocodedFor: delivery.siteGeocodedFor,
-		sitePostcode: delivery.sitePostcode,
-		siteCity: delivery.siteCity,
-		siteState: delivery.siteState,
-		pickupLat: delivery.pickupLat,
-		pickupLng: delivery.pickupLng,
-		pickupGeocodedFor: delivery.pickupGeocodedFor,
-		pickupPostcode: delivery.pickupPostcode,
-		pickupCity: delivery.pickupCity,
-		pickupState: delivery.pickupState,
-		scheduledAt: delivery.scheduledAt,
-		splitFromNumber: delivery.number,
-		// Both halves still deliver the same order.
-		orderId: delivery.orderId,
-		items: items as never,
-		totalVolumeM3: totalVolumeM3(items),
-		totalWeightKg: totalWeightKg(items),
-		events: {
-			create: {
-				source: "ADMIN" as const,
-				actor: parsed.data.actor,
-				message: `Split from #${delivery.number} — ${suggestVehicle(items).label}`,
+		const half = (items: DeliveryItem[]) => ({
+			customerName: delivery.customerName,
+			customerPhone: delivery.customerPhone,
+			siteAddress: delivery.siteAddress,
+			addressNotes: delivery.addressNotes,
+			pickupAddress: delivery.pickupAddress,
+			siteLat: delivery.siteLat,
+			siteLng: delivery.siteLng,
+			siteGeocodedFor: delivery.siteGeocodedFor,
+			sitePostcode: delivery.sitePostcode,
+			siteCity: delivery.siteCity,
+			siteState: delivery.siteState,
+			pickupLat: delivery.pickupLat,
+			pickupLng: delivery.pickupLng,
+			pickupGeocodedFor: delivery.pickupGeocodedFor,
+			pickupPostcode: delivery.pickupPostcode,
+			pickupCity: delivery.pickupCity,
+			pickupState: delivery.pickupState,
+			scheduledAt: delivery.scheduledAt,
+			splitFromNumber: delivery.number,
+			// Both halves still deliver the same order.
+			orderId: delivery.orderId,
+			items: items as never,
+			totalVolumeM3: totalVolumeM3(items),
+			totalWeightKg: totalWeightKg(items),
+			events: {
+				create: {
+					source: "ADMIN" as const,
+					actor: parsed.data.actor,
+					message: `Split from #${delivery.number} — ${suggestVehicle(items).label}`,
+				},
 			},
-		},
-	});
+		});
 
-	// One transaction: two rows and a deletion that are only ever correct
-	// together. A half created without the original going away is a load
-	// quoted twice.
-	const [a, b] = await prisma.$transaction([
-		prisma.delivery.create({ data: half(moved) }),
-		prisma.delivery.create({ data: half(kept) }),
-		prisma.delivery.delete({ where: { id } }),
-	]);
+		// One transaction: two rows and a deletion that are only ever correct
+		// together. A half created without the original going away is a load
+		// quoted twice.
+		const [a, b] = await prisma.$transaction([
+			prisma.delivery.create({ data: half(moved) }),
+			prisma.delivery.create({ data: half(kept) }),
+			prisma.delivery.delete({ where: { id } }),
+		]);
 
-	return NextResponse.json({ deliveries: [a, b] }, { status: 201 });
-}
+		return NextResponse.json({ deliveries: [a, b] }, { status: 201 });
+	},
+);

@@ -1,7 +1,7 @@
 import "server-only";
 import { notFound, redirect } from "next/navigation";
-import { AuthError, requireAuth } from "@/lib/auth/requireAuth";
 import type { Permission } from "@/lib/auth/permissions";
+import { AuthError, requireAuth } from "@/lib/auth/requireAuth";
 
 /**
  * The page-boundary twin of `withAuth`: a server component calls this at the
