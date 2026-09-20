@@ -96,6 +96,12 @@ export type RoomLayout = Settings & {
 	corners: CornerUnits[];
 	/** Base and tall units standing free on the floor. */
 	free: FreeModule[];
+	/** Paint per wall, parallel to `runs`: a `wallColours` id, or a customer's
+	 * own `#rrggbb`. Shorter than `runs` is the normal state — a trailing
+	 * unpainted wall is not written down — and absent is a room saved before
+	 * paint existed. Optional so `asRoom` and the v2 migration keep building a
+	 * `RoomLayout` without one. */
+	wallColours?: (string | null)[];
 };
 
 /** A free cabinet as the engine reads it: on the floor, whatever a client
