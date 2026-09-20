@@ -13,7 +13,6 @@ export const runtime = "nodejs";
 
 const advanceSchema = z.object({
 	status: z.enum(DELIVERY_STATUSES),
-	actor: z.string().trim().min(1).max(120),
 	note: z.string().trim().max(500).optional(),
 });
 
@@ -28,7 +27,7 @@ const advanceSchema = z.object({
  */
 export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 	"logistics:book",
-	async (request, { params }) => {
+	async (request, { params }, user) => {
 		const { id } = await params;
 		const delivery = await prisma.delivery.findUnique({ where: { id } });
 		if (!delivery) {
@@ -42,7 +41,8 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 				{ status: 400 },
 			);
 		}
-		const { status, actor, note } = parsed.data;
+		const { status, note } = parsed.data;
+		const actor = user.name;
 
 		const current = delivery.status as DeliveryStatusName;
 		const isAbort = status === "CANCELLED" || status === "FAILED";

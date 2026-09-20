@@ -255,6 +255,7 @@ published. "Which catalogue is live" is now a value with an owner.
 - **Zod is the single source of truth for types.** Define the schema once, infer TS types from it, validate every API payload. Malformed input on a public endpoint is guaranteed.
 - **Sizes are validated against the family's ladder.** Reject off-ladder widths server-side.
 - **The catalogue lives in the database.** Cabinets and their prices are `CabinetDesign` rows, rebuilt into a `CatalogueVersion` on every publish — the version table is the price history. The disaster-recovery copy for cabinets is Postgres plus the design files in Blob; `lib/planner/catalogue.ts` seeds only settings. Ship seed changes as their own commit.
+- **Every admin route calls `requireAuth`.** `lib/auth/route.ts`'s `withAuth` wraps every handler under `src/app/api/admin`, and a coverage test fails the build on any exported method it does not see gated — see [Auth](#auth).
 
 ## 3D
 
@@ -447,7 +448,7 @@ Three screens. Rooms open on an **empty wall**: there is no invented starter run
 
 **An order is priced on the server, never by the client.** `POST /api/orders` (public, guarded by BotID) runs `validateOrder` — the engine forgives an unknown family or an off-ladder width silently, which is fine on a canvas and wrong for a payment — then `priceOrder` against the published catalogue, and stores the design as `{ schemaVersion, layout }` with the catalogue version it was priced against. A paid order's **Create delivery** (`/admin/logistics?fromOrder=`) fills the delivery form with one row per cabinet at its designed size and the design row's weight; the delivery create route refuses an order that is not paid.
 
-**No login to configure.** The email/WhatsApp gate sits at **"save & share"**, not at entry — by then the customer has sunk time into a design and will trade a phone number to keep it.
+**No login to configure — but checkout now requires an account.** Browsing, planning and pricing stay anonymous; `POST /api/orders` is the one hard stop — signed out, placing an order bounces to `/[lang]/sign-in?next=…` and back to the same quote, the design intact via the autosaved draft (`lib/plannerDraft.ts`). The email/WhatsApp gate for **"save & share"** sits earlier and separately, at the point the customer has sunk time into a design and will trade a phone number to keep it. `AUTH_ENABLED=false` skips the checkout gate too, for local work.
 
 Save writes the layout to Postgres under a `nanoid` slug, returns a short URL, creates the lead record, and attaches the screenshot. Then a `wa.me` deep link with the design URL prefilled.
 
@@ -482,7 +483,34 @@ PostHog **Cloud EU**, installed from the Vercel Marketplace, so we can see where
 
 ## Auth
 
-None for the public planner. The admin surface is a **shared-secret cookie** (`lib/adminAuth.ts`, HMAC over `ADMIN_PASSWORD`, gated in `proxy.ts`) — three internal users, one locked door, no user table. Upgrade to per-user accounts (Auth.js or Better Auth) when the Phase 3 lead inbox needs to know *which* admin did something.
+Accounts, with three roles: `SUPERADMIN`, `ADMIN`, `CUSTOMER`. Customers sign
+in with Google. Staff are invited by a superadmin and can use either Google or
+the password that superadmin set, so there is always a way in when the OAuth
+app is misconfigured. Public sign-up can only ever produce a `CUSTOMER`; a role
+is granted only by a superadmin acting on `/admin/users`.
+
+`lib/auth/permissions.ts` is the whole access model: nine permissions and a
+`Role → Permission[]` constant, with a table-driven test that is its
+specification. The permission names outlive the roles that motivated them —
+`SALES` and `CATALOGUE` were specified and dropped, and reinstating either is
+one row in that table rather than an audit of 29 route handlers.
+
+`proxy.ts` only redirects; the boundary is `requireAuth()`, called by every
+admin page and API route, and a test fails the build if one forgets. Roles are
+never written into the session, so a role change or an offboarding bites on the
+next request.
+
+An invited staff row is created with `emailVerified: true`. That is not
+cosmetic: Better Auth refuses to link a Google account to a row whose email is
+unverified, and this app deliberately runs no email vendor, so without it no
+staff member could ever use the Google button. The superadmin typing a
+colleague's work address is the assertion that it is theirs.
+
+`AUTH_ENABLED=false` opens the admin surface and lets checkout take an
+anonymous order, for local work. It is ignored when `VERCEL_ENV` is
+`production`.
+
+Design: `docs/superpowers/specs/2026-09-20-rbac-design.md`.
 
 ## Relationship to Factory Tracker
 
@@ -515,6 +543,7 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
 5. **City-Link is still a stub, and its API cannot price.** Its guide (Testing V1.21) documents a login, a shipment request and tracking — no rate operation, no cancel, no webhook — so a City-Link row would carry no price, an admin would undo a booking by phoning them, and tracking would be the cron poll only. The booking body's nesting is unverified: the guide groups the fields but prints no sample request. Plan and payloads in `docs/superpowers/plans/2026-09-16-citylink-carrier-adapter.md`; nothing is built.
 6. **Corner doors stay shut on the doors-open toggle.** A drafted leaf deeper than half its width — an L corner unit's two touching leaves merge into one L-shaped leaf in `splitDoorLeaves` — is kept shut in `DesignedCabinet.tsx`, because `swingOf` assumes every leaf faces +z and would pivot it through the carcass. The procedural fallback of a corner unit is a plain box whose front the side run half covers, so it is never turned — every corner is the left-hand corner of the wall after it — and its doors stay shut too. Revisit both once EzCabinet's real corner export is seen.
 7. **Free cabinets have no resize, replace or duplicate yet** — those controls are hidden on a free selection. **No floor-follow drag in elevation view**, since elevation is a flat wall-facing projection with nowhere for "off the wall" to go. **Switching to an L is refused silently** while a free cabinet stands in the notch's would-be area — the room panel just doesn't move. **A free cabinet can stand under an empty corner square's billed worktop**: `runFootprints` ignores an empty reserved corner square, so nothing stops a free cabinet occupying the same floor space that corner's worktop is priced over.
+8. **A journey event fired next to a redirect can be lost.** `track()` in `lib/analytics.ts` loads `posthog-js` on idle and captures asynchronously, with no `sendBeacon` or `keepalive`. `sign_in_nudge` with `action: "accepted"` fires and is immediately followed by the Google OAuth redirect, so that leg of the sign-in funnel will under-count — the browser can navigate away before the beacon goes out. Not new, and not unique to that event: any event fired next to a redirect has the same problem. The fix, when someone wants one, is a `keepalive` fetch or firing the event server-side after the callback, and both are decisions about the funnel rather than cleanup.
 
 ## Open questions — resolve before trusting pricing.ts
 

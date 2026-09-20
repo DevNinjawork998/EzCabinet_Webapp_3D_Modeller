@@ -85,6 +85,24 @@ describe("every admin surface is gated", () => {
 		expect(ungated).toEqual([]);
 	});
 
+	it("never gates a handler through a re-export", async () => {
+		// This test only understands `export const METHOD = withAuth(...)`.
+		// `const GET = withAuth(...); export { GET };` would gate the handler
+		// but pass HANDLER_RE/GATED_RE undetected — so ban the re-export shape
+		// outright rather than teach the regex a third syntax nobody uses.
+		const files = (await walk("src/app/api/admin")).filter((f) =>
+			f.endsWith("route.ts"),
+		);
+
+		const reExporting = files.filter((f) =>
+			readFileSync(f, "utf8").includes("export {"),
+		);
+		expect(
+			reExporting,
+			"a re-export (`export { GET }`) would not be checked by the coverage test above — use `export const METHOD = withAuth(...)` instead",
+		).toEqual([]);
+	});
+
 	it("calls requireAuth in each admin page", async () => {
 		const files = (await walk("src/app/admin")).filter((f) =>
 			f.endsWith("page.tsx"),
