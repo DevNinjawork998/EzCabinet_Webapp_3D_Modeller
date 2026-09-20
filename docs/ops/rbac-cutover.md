@@ -77,6 +77,14 @@ and none of them fail loudly at deploy time.
    references), so the new build runs correctly whether or not the column
    still exists. This is what makes step 3 safe to do after, not before.
 
+   Before step 3, confirm it's actually the new build serving the domain —
+   not just the newest one Vercel finished building. Load `/admin/login` on
+   the production domain and look for a **Continue with Google** button
+   above the email and password fields. The old build's login page had a
+   password field only, so seeing that button is proof the new code is
+   live on the domain itself, which a build ID or a dashboard checkmark
+   cannot tell you.
+
 3. **Run the migration**, against the production database:
 
    ```bash
