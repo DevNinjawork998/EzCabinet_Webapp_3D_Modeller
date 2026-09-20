@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
 import { tutorialCreateSchema } from "@/lib/tutorials";
 
 export const runtime = "nodejs";
 
 /** Every tutorial, newest ordering first, for the admin list. */
-export async function GET() {
+export const GET = withAuth("content:write", async () => {
 	const tutorials = await prisma.tutorial.findMany({
 		orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
 	});
 	return NextResponse.json({ tutorials });
-}
+});
 
 /**
  * Records a tutorial once the browser's upload to Mux has resolved.
@@ -24,7 +25,7 @@ export async function GET() {
  * a malformed category here would file a tutorial the public page can't filter
  * to, and the vocabulary lives in one place precisely so both ends agree.
  */
-export async function POST(request: Request) {
+export const POST = withAuth("content:write", async (request) => {
 	const parsed = tutorialCreateSchema.safeParse(await request.json());
 	if (!parsed.success) {
 		return NextResponse.json(
@@ -45,4 +46,4 @@ export async function POST(request: Request) {
 	});
 
 	return NextResponse.json({ tutorial }, { status: 201 });
-}
+});

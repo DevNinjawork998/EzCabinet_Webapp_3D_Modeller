@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { requirePage } from "@/lib/auth/page";
 import { prisma } from "@/lib/catalogue/db";
 import { orderRef } from "@/lib/orders/ref";
 import { shortTime } from "../logistics/time";
@@ -11,6 +12,7 @@ import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, rm } from "./status";
  * here, and a paid order is where a delivery is created from.
  */
 export default async function OrdersAdminPage() {
+	await requirePage("orders:read");
 	const orders = await prisma.order.findMany({
 		orderBy: { number: "desc" },
 		select: {

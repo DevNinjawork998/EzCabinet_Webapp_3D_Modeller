@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
 import { mux } from "@/lib/mux";
 
@@ -20,65 +21,65 @@ export const runtime = "nodejs";
  * `asset_id` only once the bytes land, and the asset knows its playback id and
  * duration only once encoding finishes.
  */
-export async function POST(
-	_request: Request,
-	{ params }: { params: Promise<{ id: string }> },
-) {
-	const { id } = await params;
+export const POST = withAuth<{ params: Promise<{ id: string }> }>(
+	"content:write",
+	async (_request, { params }) => {
+		const { id } = await params;
 
-	const tutorial = await prisma.tutorial.findUnique({ where: { id } });
-	if (!tutorial) {
-		return NextResponse.json({ error: "not found" }, { status: 404 });
-	}
-	if (tutorial.status === "READY") {
-		return NextResponse.json({ tutorial });
-	}
+		const tutorial = await prisma.tutorial.findUnique({ where: { id } });
+		if (!tutorial) {
+			return NextResponse.json({ error: "not found" }, { status: 404 });
+		}
+		if (tutorial.status === "READY") {
+			return NextResponse.json({ tutorial });
+		}
 
-	try {
-		let assetId = tutorial.muxAssetId;
+		try {
+			let assetId = tutorial.muxAssetId;
 
-		if (!assetId) {
-			const upload = await mux.video.uploads.retrieve(tutorial.muxUploadId);
-			if (upload.status === "cancelled" || upload.status === "errored") {
+			if (!assetId) {
+				const upload = await mux.video.uploads.retrieve(tutorial.muxUploadId);
+				if (upload.status === "cancelled" || upload.status === "errored") {
+					const errored = await prisma.tutorial.update({
+						where: { id },
+						data: { status: "ERRORED" },
+					});
+					return NextResponse.json({ tutorial: errored });
+				}
+				assetId = upload.asset_id ?? null;
+				// Bytes still arriving — nothing to record yet.
+				if (!assetId) return NextResponse.json({ tutorial });
+			}
+
+			const asset = await mux.video.assets.retrieve(assetId);
+
+			if (asset.status === "errored") {
 				const errored = await prisma.tutorial.update({
 					where: { id },
-					data: { status: "ERRORED" },
+					data: { status: "ERRORED", muxAssetId: assetId },
 				});
 				return NextResponse.json({ tutorial: errored });
 			}
-			assetId = upload.asset_id ?? null;
-			// Bytes still arriving — nothing to record yet.
-			if (!assetId) return NextResponse.json({ tutorial });
-		}
 
-		const asset = await mux.video.assets.retrieve(assetId);
+			const playbackId = asset.playback_ids?.[0]?.id ?? null;
+			const ready = asset.status === "ready" && playbackId !== null;
 
-		if (asset.status === "errored") {
-			const errored = await prisma.tutorial.update({
+			const updated = await prisma.tutorial.update({
 				where: { id },
-				data: { status: "ERRORED", muxAssetId: assetId },
+				data: {
+					muxAssetId: assetId,
+					playbackId,
+					durationSec: asset.duration ? Math.round(asset.duration) : null,
+					status: ready ? "READY" : tutorial.status,
+				},
 			});
-			return NextResponse.json({ tutorial: errored });
+
+			return NextResponse.json({ tutorial: updated });
+		} catch (error) {
+			return NextResponse.json(
+				{ error: (error as Error).message },
+				{ status: 502 },
+			);
 		}
-
-		const playbackId = asset.playback_ids?.[0]?.id ?? null;
-		const ready = asset.status === "ready" && playbackId !== null;
-
-		const updated = await prisma.tutorial.update({
-			where: { id },
-			data: {
-				muxAssetId: assetId,
-				playbackId,
-				durationSec: asset.duration ? Math.round(asset.duration) : null,
-				status: ready ? "READY" : tutorial.status,
-			},
-		});
-
-		return NextResponse.json({ tutorial: updated });
-	} catch (error) {
-		return NextResponse.json(
-			{ error: (error as Error).message },
-			{ status: 502 },
-		);
-	}
-}
+	},
+);

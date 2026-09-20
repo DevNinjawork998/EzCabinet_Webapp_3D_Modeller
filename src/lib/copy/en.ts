@@ -552,6 +552,14 @@ export const en = {
 		contact: "Questions, or requests to access or correct your data: {email}",
 		back: "Back to home",
 	},
+	/** The one hard stop before checkout — see CLAUDE.md's conversion decision. */
+	signIn: {
+		heading: "Sign in",
+		body: "Save your design and follow your order.",
+		continueWithGoogle: "Continue with Google",
+		error: "Could not open Google sign-in. Try again",
+		back: "Back to home",
+	},
 } as const;
 
 /**

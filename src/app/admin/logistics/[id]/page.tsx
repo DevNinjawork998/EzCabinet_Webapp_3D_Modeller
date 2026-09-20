@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { requirePage } from "@/lib/auth/page";
 import { prisma } from "@/lib/catalogue/db";
 import { geocoderFault, refreshGeocoderHealth } from "@/lib/logistics/geocode";
 import { easyparcelAppConfigured } from "@/lib/logistics/oauth";
@@ -19,6 +20,7 @@ export default async function DeliveryPage({
 }: {
 	params: Promise<{ id: string }>;
 }) {
+	await requirePage("logistics:read");
 	const { id } = await params;
 	const delivery = await prisma.delivery.findUnique({
 		where: { id },

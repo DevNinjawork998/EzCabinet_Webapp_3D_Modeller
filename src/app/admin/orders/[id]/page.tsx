@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { requirePage } from "@/lib/auth/page";
 import { prisma } from "@/lib/catalogue/db";
 import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
 import { orderRef } from "@/lib/orders/ref";
@@ -11,6 +12,7 @@ export default async function OrderAdminPage({
 }: {
 	params: Promise<{ id: string }>;
 }) {
+	await requirePage("orders:read");
 	const { id } = await params;
 	const [order, published] = await Promise.all([
 		prisma.order.findUnique({
@@ -20,6 +22,7 @@ export default async function OrderAdminPage({
 					select: { id: true, number: true, status: true },
 					orderBy: { createdAt: "desc" },
 				},
+				paidByUser: { select: { name: true } },
 			},
 		}),
 		readPublishedPlannerCatalogue(),
@@ -62,7 +65,7 @@ export default async function OrderAdminPage({
 					paymentProvider: order.paymentProvider,
 					paymentRef: order.paymentRef,
 					paidAt: order.paidAt?.toISOString() ?? null,
-					paidBy: order.paidBy,
+					paidByName: order.paidByUser?.name ?? null,
 					deliveries: order.deliveries,
 				}}
 			/>

@@ -509,4 +509,11 @@ export const zh: Dictionary = {
 		contact: "如有疑问，或要求查阅或更正您的数据，请联系：{email}",
 		back: "返回主页",
 	},
+	signIn: {
+		heading: "登录",
+		body: "保存您的设计并跟踪您的订单。",
+		continueWithGoogle: "使用 Google 继续",
+		error: "无法打开 Google 登录，请重试",
+		back: "返回主页",
+	},
 };

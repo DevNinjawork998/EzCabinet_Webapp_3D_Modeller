@@ -2,8 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { track } from "@/lib/analytics";
+import { authClient } from "@/lib/auth/client";
 import { fill } from "@/lib/copy/fill";
 import { htmlLang } from "@/lib/copy/locales";
 import type { FinishId, RoomTypeId } from "@/lib/planner/catalogue";
@@ -98,9 +99,20 @@ export function QuoteScreen({
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
+	// The person paying is not always the person whose Google account it is,
+	// so this only pre-fills the fields — both stay editable.
+	const { data: session } = authClient.useSession();
+	const [name, setName] = useState("");
+	const [email, setEmail] = useState("");
+	useEffect(() => {
+		if (!session?.user) return;
+		setName((current) => current || session.user.name || "");
+		setEmail((current) => current || session.user.email || "");
+	}, [session]);
+
 	async function placeOrder(form: HTMLFormElement) {
-		const field = (name: string) =>
-			String(new FormData(form).get(name) ?? "").trim();
+		const field = (key: string) =>
+			String(new FormData(form).get(key) ?? "").trim();
 		setBusy(true);
 		setError(null);
 		const res = await fetch("/api/orders", {
@@ -121,6 +133,17 @@ export function QuoteScreen({
 			}),
 		}).catch(() => null);
 		const body = await res?.json().catch(() => null);
+		if (res?.status === 401 && body?.error === "sign_in_required") {
+			// The design is already on disk (plannerDraft autosave), so there is
+			// nothing to lose here — just send the customer to sign in and let
+			// the existing rehydrate bring it back on the way in.
+			router.push(
+				`/${locale}/sign-in?next=${encodeURIComponent(
+					window.location.pathname + window.location.search,
+				)}`,
+			);
+			return;
+		}
 		if (!res?.ok || typeof body?.token !== "string") {
 			setBusy(false);
 			setError(
@@ -192,6 +215,8 @@ export function QuoteScreen({
 								disabled={busy}
 								className={FIELD}
 								placeholder="Nur Aisyah binti Kamal"
+								value={name}
+								onChange={(e) => setName(e.target.value)}
 							/>
 						</label>
 						<label className="flex flex-col gap-1.5">
@@ -219,6 +244,8 @@ export function QuoteScreen({
 								disabled={busy}
 								className={FIELD}
 								placeholder="you@example.com"
+								value={email}
+								onChange={(e) => setEmail(e.target.value)}
 							/>
 						</label>
 						<label className="flex flex-col gap-1.5">

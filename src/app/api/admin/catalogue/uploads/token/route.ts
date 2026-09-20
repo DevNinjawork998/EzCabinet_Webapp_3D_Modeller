@@ -1,5 +1,6 @@
 import { type HandleUploadBody, handleUpload } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/route";
 import { MESH_PATHNAME } from "@/lib/catalogue/meshBlob";
 
 export const runtime = "nodejs";
@@ -23,7 +24,7 @@ export const runtime = "nodejs";
  * three-person internal tool with no reason to require one. The client
  * calls `/api/admin/catalogue/imports` itself once `upload()` resolves.
  */
-export async function POST(request: Request) {
+export const POST = withAuth("catalogue:write", async (request) => {
 	const body = (await request.json()) as HandleUploadBody;
 
 	try {
@@ -50,4 +51,4 @@ export async function POST(request: Request) {
 			{ status: 400 },
 		);
 	}
-}
+});

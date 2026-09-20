@@ -1,8 +1,3 @@
-import { config } from "dotenv";
-
-config();
-config({ path: ".env.local", override: true });
-
 import { prisma } from "@/lib/catalogue/db";
 import { PLANNER_CATALOGUE } from "@/lib/planner/catalogue";
 import { plannerCatalogueSchema } from "@/lib/planner/catalogueSchema";

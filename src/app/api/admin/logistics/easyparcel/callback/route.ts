@@ -1,7 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth/requireAuth";
 import { exchangeCode } from "@/lib/logistics/tokens";
 
 export const runtime = "nodejs";
+
+// Deliberately not behind withAuth: this is EasyParcel redirecting the
+// admin's own browser back to us, and the `state` cookie match below is the
+// check that matters. requireAuth here would turn a timing problem into a
+// failed carrier connection. The handler reads no data and writes only the
+// token exchange this app itself initiated.
+void requireAuth;
 
 /**
  * Where EasyParcel sends the admin back with an authorization code.
@@ -31,8 +39,9 @@ export async function GET(request: NextRequest) {
 	}
 
 	try {
-		// Admin auth is one shared password, so there is no name to record beyond
-		// the fact that someone holding it did this.
+		// Real accounts exist now, but this callback isn't behind `withAuth` and
+		// carries no session — so "admin" is still the only actor recorded here,
+		// not a specific signed-in name.
 		await exchangeCode(code, "admin");
 	} catch {
 		return done("failed");

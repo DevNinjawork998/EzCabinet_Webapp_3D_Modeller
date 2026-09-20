@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { safeNext } from "@/app/admin/login/safeNext";
+import { authClient } from "@/lib/auth/client";
 import { HERO_EXPLODED_FRAME, heroFrameSrc } from "@/lib/scroll/sequence";
 
 export default function AdminLoginPage() {
 	const router = useRouter();
+	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -14,18 +17,46 @@ export default function AdminLoginPage() {
 	async function login() {
 		setBusy(true);
 		setError(null);
-		const res = await fetch("/api/admin/login", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ password }),
+		const { error: failure } = await authClient.signIn.email({
+			email,
+			password,
 		});
 		setBusy(false);
-		if (!res.ok) {
-			setError("Wrong password");
+		if (failure) {
+			// Deliberately one message for a wrong email and a wrong password:
+			// telling them apart tells an attacker which staff emails are real.
+			setError("Wrong email or password");
 			return;
 		}
+		// `next` comes from the query string, so it is attacker-controllable — see
+		// safeNext's own comment for why a prefix check isn't enough.
 		const next = new URLSearchParams(window.location.search).get("next");
-		router.push(next || "/admin/cabinet-designs");
+		router.push(safeNext(next, window.location.origin));
+	}
+
+	async function continueWithGoogle() {
+		setBusy(true);
+		setError(null);
+		try {
+			const { error: failure } = await authClient.signIn.social({
+				provider: "google",
+				// Better Auth validates callbackURL against trustedOrigins
+				// (origin-check middleware), so an attacker-controlled `next`
+				// cannot redirect off-origin here the way a raw router.push would.
+				callbackURL:
+					new URLSearchParams(window.location.search).get("next") ??
+					"/admin/cabinet-designs",
+			});
+			if (failure) {
+				setError("Could not open Google sign-in. Try again");
+				setBusy(false);
+			}
+			// On success the browser is mid-redirect; leave `busy` set so the
+			// button stays disabled rather than flashing back to normal.
+		} catch {
+			setError("Could not open Google sign-in. Try again");
+			setBusy(false);
+		}
 	}
 
 	return (
@@ -60,9 +91,36 @@ export default function AdminLoginPage() {
 							EzCabinet · Admin
 						</h1>
 						<p className="text-neutral-500 text-sm">
-							Sign in to manage cabinet designs and the catalogue.
+							Staff sign-in. Accounts are created by a superadmin.
 						</p>
 					</div>
+
+					<button
+						type="button"
+						onClick={continueWithGoogle}
+						disabled={busy}
+						className="flex items-center justify-center gap-2 rounded-[9px] border border-neutral-300 bg-white py-2.5 font-medium text-sm disabled:opacity-60"
+					>
+						Continue with Google
+					</button>
+
+					<div className="flex items-center gap-3 text-neutral-400 text-xs">
+						<span className="h-px flex-1 bg-neutral-200" />
+						or
+						<span className="h-px flex-1 bg-neutral-200" />
+					</div>
+
+					<label className="flex flex-col gap-1.5">
+						<span className="font-medium text-neutral-700 text-xs">Email</span>
+						<input
+							type="email"
+							value={email}
+							onChange={(e) => setEmail(e.target.value)}
+							placeholder="you@ezcabinet.com"
+							autoComplete="username"
+							className="rounded-[9px] border border-neutral-300 px-3.5 py-2.5 text-sm"
+						/>
+					</label>
 
 					<label className="flex flex-col gap-1.5">
 						<span className="font-medium text-neutral-700 text-xs">
@@ -72,7 +130,8 @@ export default function AdminLoginPage() {
 							type="password"
 							value={password}
 							onChange={(e) => setPassword(e.target.value)}
-							placeholder="Enter admin password"
+							placeholder="Your password"
+							autoComplete="current-password"
 							className="rounded-[9px] border border-neutral-300 px-3.5 py-2.5 text-sm"
 						/>
 					</label>
@@ -85,7 +144,7 @@ export default function AdminLoginPage() {
 
 					<button
 						type="submit"
-						disabled={busy || !password}
+						disabled={busy || !email || !password}
 						className="rounded-[9px] bg-neutral-900 py-2.5 font-medium text-sm text-white disabled:opacity-60"
 					>
 						{busy ? "Checking…" : "Sign in"}
