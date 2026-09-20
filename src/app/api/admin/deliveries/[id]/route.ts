@@ -33,7 +33,7 @@ export const GET = withAuth<{ params: Promise<{ id: string }> }>(
  * fresh booking.
  */
 export const PATCH = withAuth<{ params: Promise<{ id: string }> }>(
-	"logistics:read",
+	"logistics:book",
 	async (request, { params }) => {
 		const { id } = await params;
 		const existing = await prisma.delivery.findUnique({ where: { id } });
@@ -142,7 +142,7 @@ export const PATCH = withAuth<{ params: Promise<{ id: string }> }>(
 );
 
 export const DELETE = withAuth<{ params: Promise<{ id: string }> }>(
-	"logistics:read",
+	"logistics:book",
 	async (_request, { params }) => {
 		const { id } = await params;
 		const existing = await prisma.delivery.findUnique({ where: { id } });

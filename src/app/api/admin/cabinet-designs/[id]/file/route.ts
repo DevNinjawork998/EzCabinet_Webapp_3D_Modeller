@@ -10,9 +10,10 @@ export const runtime = "nodejs";
  *
  * The Blob store is private on purpose — a design carries the client's module
  * standard and part naming, so it never gets a public URL. This route is the
- * narrow exception: it sits under `/api/admin`, which `proxy.ts` gates behind
- * the admin session, and it hands back one file the admin picked by id. A
- * customer cannot reach it, and there is no listing to enumerate.
+ * narrow exception: its own `withAuth("catalogue:read", ...)` below is the
+ * gate (`proxy.ts` only checks that a session cookie exists, not a role or
+ * permission), and it hands back one file the admin picked by id. There is
+ * no listing to enumerate.
  */
 export const GET = withAuth<{ params: Promise<{ id: string }> }>(
 	"catalogue:read",

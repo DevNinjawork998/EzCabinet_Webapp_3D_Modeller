@@ -15,9 +15,10 @@ export const runtime = "nodejs";
  * bodies at 4.5MB, so the file never passes through a route handler.
  *
  * Public access, unlike a design file: these render on the public homepage, so a
- * private blob would be useless. Auth on *writing* is still enforced —
- * middleware gates `/api/admin/*`, so an anonymous caller never gets a
- * token in the first place.
+ * private blob would be useless. Auth on *writing* is still enforced — this
+ * route's own `withAuth("content:write", ...)` below is the gate, so an
+ * anonymous or under-permissioned caller never gets a token in the first
+ * place.
  */
 export const POST = withAuth("content:write", async (request) => {
 	const body = (await request.json()) as HandleUploadBody;

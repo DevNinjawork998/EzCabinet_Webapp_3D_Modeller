@@ -7,7 +7,17 @@ import { CarrierNotConfigured } from "@/lib/logistics/types";
 
 export const runtime = "nodejs";
 
-/** The Refresh button: pull this one job's status now rather than waiting. */
+/**
+ * The Refresh button: pull this one job's status now rather than waiting.
+ *
+ * `logistics:read`, not `logistics:book`, unlike its neighbours in this
+ * folder. `applyTrackingUpdate` has three callers — this route, the
+ * unattended cron, and the carrier webhook, which carries no permission at
+ * all — and what it writes is the carrier's own truth, stamped `POLL` and
+ * forward-only. This button is a manual trigger of that same machine
+ * process, not an operator decision: nothing here is admin-authored the way
+ * a quote comparison or a booking is.
+ */
 export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 	"logistics:read",
 	async (_request, { params }) => {

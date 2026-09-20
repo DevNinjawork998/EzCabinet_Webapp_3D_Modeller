@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { BYPASS_USER } from "@/lib/auth/requireAuth";
 import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
 
@@ -38,7 +39,7 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 				status: "PAID",
 				paidAt: new Date(),
 				paidBy: user.name,
-				paidByUserId: user.id === "auth-disabled" ? null : user.id,
+				paidByUserId: user.id === BYPASS_USER.id ? null : user.id,
 				paymentRef: parsed.data.paymentRef,
 			},
 		});

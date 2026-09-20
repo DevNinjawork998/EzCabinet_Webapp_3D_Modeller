@@ -27,7 +27,7 @@ type QuoteRow = CarrierQuote & { error?: string };
  * blank screen.
  */
 export const POST = withAuth<{ params: Promise<{ id: string }> }>(
-	"logistics:read",
+	"logistics:book",
 	async (_request, { params }) => {
 		const { id } = await params;
 		const delivery = await prisma.delivery.findUnique({ where: { id } });

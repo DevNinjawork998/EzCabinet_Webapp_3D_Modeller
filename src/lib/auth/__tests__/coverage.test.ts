@@ -14,22 +14,74 @@ async function walk(dir: string): Promise<string[]> {
 	return out;
 }
 
+const HTTP_METHODS = [
+	"GET",
+	"POST",
+	"PUT",
+	"PATCH",
+	"DELETE",
+	"HEAD",
+	"OPTIONS",
+];
+const METHOD_GROUP = HTTP_METHODS.join("|");
+
+/** Every exported handler in a route file, however it is declared. */
+const HANDLER_RE = new RegExp(
+	`export (?:const (${METHOD_GROUP})\\s*=|async function (${METHOD_GROUP})\\s*\\()`,
+	"g",
+);
+
+/** The one shape that counts as gated: `export const METHOD = withAuth(...)`. */
+const GATED_RE = new RegExp(
+	`export const (${METHOD_GROUP})\\s*=\\s*withAuth\\s*[<(]`,
+	"g",
+);
+
+/**
+ * Route files that are exempt, named by path — not by any string the file
+ * happens to contain. A file earns a place here only with a reason, in a
+ * comment on the file itself.
+ */
+const ALLOWED_UNGATED = [
+	// EasyParcel redirects the admin's own browser back here with an OAuth
+	// code; the `state` cookie match is the check that matters, and a
+	// permission failure would cost them the connection attempt.
+	"logistics/easyparcel/callback/route.ts",
+];
+
 /**
  * The realistic breach here is not broken crypto, it is a route somebody adds
  * next month and forgets to gate. `proxy.ts` will not save it: the proxy only
  * checks that *a* session cookie exists, so an unguarded handler is reachable
  * by any signed-in customer.
+ *
+ * This checks every exported HTTP method individually, not just whether the
+ * file contains the string "withAuth" anywhere — a file with three methods
+ * where only one calls `withAuth` must still fail, and a new file that only
+ * copies the callback route's comment and `void requireAuth;` line must not
+ * pass by accident.
  */
 describe("every admin surface is gated", () => {
-	it("calls requireAuth or withAuth in each route handler", async () => {
+	it("gates every exported HTTP method handler with withAuth", async () => {
 		const files = (await walk("src/app/api/admin")).filter((f) =>
 			f.endsWith("route.ts"),
 		);
 		expect(files.length).toBeGreaterThan(20);
-		const ungated = files.filter((f) => {
-			const source = readFileSync(f, "utf8");
-			return !source.includes("requireAuth") && !source.includes("withAuth");
-		});
+
+		const ungated: string[] = [];
+		for (const file of files) {
+			const relative = file.replace(/^src\/app\/api\/admin\//, "");
+			if (ALLOWED_UNGATED.includes(relative)) continue;
+
+			const source = readFileSync(file, "utf8");
+			const declared = new Set(
+				[...source.matchAll(HANDLER_RE)].map((m) => m[1] ?? m[2]),
+			);
+			const gated = new Set([...source.matchAll(GATED_RE)].map((m) => m[1]));
+			for (const method of declared) {
+				if (!gated.has(method)) ungated.push(`${file} (${method})`);
+			}
+		}
 		expect(ungated).toEqual([]);
 	});
 
@@ -37,8 +89,10 @@ describe("every admin surface is gated", () => {
 		const files = (await walk("src/app/admin")).filter((f) =>
 			f.endsWith("page.tsx"),
 		);
+		expect(files.length).toBeGreaterThan(0);
+
 		const ungated = files.filter((f) => {
-			if (f.includes("login")) return false; // the sign-in page itself
+			if (f === "src/app/admin/login/page.tsx") return false; // the sign-in page itself
 			const source = readFileSync(f, "utf8");
 			return !source.includes("requireAuth") && !source.includes("requirePage");
 		});
