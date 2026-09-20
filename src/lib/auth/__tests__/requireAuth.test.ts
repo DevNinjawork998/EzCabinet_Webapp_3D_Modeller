@@ -42,6 +42,7 @@ describe("requireAuth", () => {
 		await expect(requireAuth("orders:read")).rejects.toMatchObject({
 			status: 401,
 		});
+		await expect(requireAuth("orders:read")).rejects.toBeInstanceOf(AuthError);
 	});
 
 	it("404s a customer, so the surface stays invisible", async () => {
@@ -49,6 +50,7 @@ describe("requireAuth", () => {
 		await expect(requireAuth("orders:read")).rejects.toMatchObject({
 			status: 404,
 		});
+		await expect(requireAuth("orders:read")).rejects.toBeInstanceOf(AuthError);
 	});
 
 	it("403s an admin reaching for users:manage, the one thing they lack", async () => {
@@ -56,6 +58,7 @@ describe("requireAuth", () => {
 		await expect(requireAuth("users:manage")).rejects.toMatchObject({
 			status: 403,
 		});
+		await expect(requireAuth("users:manage")).rejects.toBeInstanceOf(AuthError);
 	});
 
 	it("refuses a disabled user even with a valid session", async () => {
@@ -65,6 +68,9 @@ describe("requireAuth", () => {
 		await expect(requireAuth("catalogue:read")).rejects.toMatchObject({
 			status: 401,
 		});
+		await expect(requireAuth("catalogue:read")).rejects.toBeInstanceOf(
+			AuthError,
+		);
 	});
 
 	it("bypasses entirely when AUTH_ENABLED is false outside production", async () => {
@@ -81,5 +87,6 @@ describe("requireAuth", () => {
 		await expect(requireAuth("users:manage")).rejects.toMatchObject({
 			status: 401,
 		});
+		await expect(requireAuth("users:manage")).rejects.toBeInstanceOf(AuthError);
 	});
 });
