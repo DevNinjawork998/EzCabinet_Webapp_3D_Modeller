@@ -4,8 +4,11 @@ import { useEffect, useId, useState } from "react";
 import { ImageSlot } from "@/components/admin/ImageSlot";
 import { fieldClass } from "@/components/admin/styles";
 import { finishSlot } from "@/lib/catalogue/siteImages";
-import { constructionOf, ratesOf } from "@/lib/planner/catalogue";
-import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
+import { constructionOf, ratesOf, WALL_COLOURS } from "@/lib/planner/catalogue";
+import type {
+	PlannerCatalogue,
+	WallColour,
+} from "@/lib/planner/catalogueSchema";
 import { DEFAULT_FINISH_TEXTURES } from "@/lib/planner/finishTextures";
 
 /**
@@ -346,46 +349,139 @@ export function CatalogueSettings({
 	}
 
 	if (tab === "finishes") {
+		// The palette is optional on the catalogue, so reads fall back to the seed
+		// and writes materialise it. Both happen in event handlers only: seeding
+		// the draft during render would show unpublished changes to an admin who
+		// never touched paint.
+		const wallColours = draft.wallColours ?? WALL_COLOURS;
+		const editWallColours = (fn: (list: WallColour[]) => void) =>
+			edit((n) => {
+				n.wallColours = n.wallColours ?? [...WALL_COLOURS];
+				fn(n.wallColours);
+			});
 		return (
-			<SectionCard
-				title="Finishes"
-				subtitle="One colour applies to a whole room, which is how they're sold."
-			>
-				{/* The photo and the colour are two answers to the same question, but
+			<>
+				<SectionCard
+					title="Finishes"
+					subtitle="One colour applies to a whole room, which is how they're sold."
+				>
+					{/* The photo and the colour are two answers to the same question, but
 				    they do not travel together: finish edits wait for Publish, a
 				    dropped photo is live at once. */}
-				<p className="mb-3 text-[12px] text-neutral-500">
-					Drop the supplier&rsquo;s board scan on a swatch to use the real
-					material: it becomes the door and end-panel surface in 3D, the chip in
-					the planner&rsquo;s finish picker, and the swatch on the homepage.
-					Without one the finish is drawn as its flat colour everywhere. Photos
-					go live immediately — they are not held for publish.
-				</p>
-				<div className="flex flex-col gap-2">
-					{draft.finishes.map((finish, i) => {
-						const board =
-							finishPhotos[finishSlot(finish.id)] ??
-							DEFAULT_FINISH_TEXTURES[finish.id] ??
-							null;
-						return (
-							<div key={finish.id} className="flex items-center gap-2">
-								<div className="w-[54px] shrink-0">
-									<ImageSlot
-										slotKey={finishSlot(finish.id)}
-										placeholder="Board"
-										url={board}
-										height={40}
-										radius={6}
-										onChangeAction={onPhotosChangeAction}
+					<p className="mb-3 text-[12px] text-neutral-500">
+						Drop the supplier&rsquo;s board scan on a swatch to use the real
+						material: it becomes the door and end-panel surface in 3D, the chip
+						in the planner&rsquo;s finish picker, and the swatch on the
+						homepage. Without one the finish is drawn as its flat colour
+						everywhere. Photos go live immediately — they are not held for
+						publish.
+					</p>
+					<div className="flex flex-col gap-2">
+						{draft.finishes.map((finish, i) => {
+							const board =
+								finishPhotos[finishSlot(finish.id)] ??
+								DEFAULT_FINISH_TEXTURES[finish.id] ??
+								null;
+							return (
+								<div key={finish.id} className="flex items-center gap-2">
+									<div className="w-[54px] shrink-0">
+										<ImageSlot
+											slotKey={finishSlot(finish.id)}
+											placeholder="Board"
+											url={board}
+											height={40}
+											radius={6}
+											onChangeAction={onPhotosChangeAction}
+										/>
+									</div>
+									<input
+										type="color"
+										aria-label={`${finish.label} colour`}
+										value={finish.hex}
+										onChange={(e) =>
+											edit((n) => {
+												n.finishes[i].hex = e.target.value;
+											})
+										}
+										className="h-9 w-12 cursor-pointer rounded border border-neutral-300"
 									/>
+									<Text
+										width="w-52"
+										placeholder="Name"
+										value={finish.label}
+										onChange={(v) =>
+											edit((n) => {
+												n.finishes[i].label = v;
+											})
+										}
+									/>
+									<HexField
+										value={finish.hex}
+										label={finish.label}
+										onChange={(hex) =>
+											edit((n) => {
+												n.finishes[i].hex = hex;
+											})
+										}
+									/>
+									{!board && (
+										<span className="text-[11px] text-neutral-400">
+											no board · flat colour
+										</span>
+									)}
+									{draft.finishes.length > 1 && (
+										<button
+											type="button"
+											onClick={() =>
+												edit((n) => {
+													n.finishes.splice(i, 1);
+												})
+											}
+											className="text-[12px] text-neutral-400 hover:text-red-600"
+										>
+											Remove
+										</button>
+									)}
 								</div>
+							);
+						})}
+						<button
+							type="button"
+							onClick={() =>
+								edit((n) => {
+									n.finishes.push({
+										id: `finish-${Date.now()}`,
+										label: "New finish",
+										hex: "#cccccc",
+									});
+								})
+							}
+							className="self-start text-[12px] text-[#2b6cb0] hover:underline"
+						>
+							+ Add finish
+						</button>
+					</div>
+				</SectionCard>
+				<SectionCard
+					title="Wall colours"
+					subtitle="Paint a customer can try the cabinets against. Purely visual — nothing here is priced or manufactured."
+				>
+					<p className="mb-3 text-[12px] text-neutral-500">
+						The customer picks one of these per wall, or their own colour with
+						the custom swatch. Names are free text, so a shade can carry its
+						real fan-deck code where you have the paint maker&rsquo;s permission
+						to use it.
+					</p>
+					<div className="flex flex-col gap-2">
+						{wallColours.map((colour, i) => (
+							<div key={colour.id} className="flex items-center gap-3">
 								<input
 									type="color"
-									aria-label={`${finish.label} colour`}
-									value={finish.hex}
+									aria-label={`${colour.label} colour`}
+									value={colour.hex}
 									onChange={(e) =>
-										edit((n) => {
-											n.finishes[i].hex = e.target.value;
+										editWallColours((list) => {
+											list[i].hex = e.target.value;
 										})
 									}
 									className="h-9 w-12 cursor-pointer rounded border border-neutral-300"
@@ -393,60 +489,59 @@ export function CatalogueSettings({
 								<Text
 									width="w-52"
 									placeholder="Name"
-									value={finish.label}
+									value={colour.label}
 									onChange={(v) =>
-										edit((n) => {
-											n.finishes[i].label = v;
+										editWallColours((list) => {
+											list[i].label = v;
 										})
 									}
 								/>
 								<HexField
-									value={finish.hex}
-									label={finish.label}
+									value={colour.hex}
+									label={colour.label}
 									onChange={(hex) =>
-										edit((n) => {
-											n.finishes[i].hex = hex;
+										editWallColours((list) => {
+											list[i].hex = hex;
 										})
 									}
 								/>
-								{!board && (
-									<span className="text-[11px] text-neutral-400">
-										no board · flat colour
-									</span>
-								)}
-								{draft.finishes.length > 1 && (
-									<button
-										type="button"
-										onClick={() =>
-											edit((n) => {
-												n.finishes.splice(i, 1);
-											})
-										}
-										className="text-[12px] text-neutral-400 hover:text-red-600"
-									>
-										Remove
-									</button>
-								)}
+								<button
+									type="button"
+									onClick={() =>
+										editWallColours((list) => {
+											list.splice(i, 1);
+										})
+									}
+									className="text-[12px] text-neutral-400 hover:text-red-600"
+								>
+									Remove
+								</button>
 							</div>
-						);
-					})}
-					<button
-						type="button"
-						onClick={() =>
-							edit((n) => {
-								n.finishes.push({
-									id: `finish-${Date.now()}`,
-									label: "New finish",
-									hex: "#cccccc",
-								});
-							})
-						}
-						className="self-start text-[12px] text-[#2b6cb0] hover:underline"
-					>
-						+ Add finish
-					</button>
-				</div>
-			</SectionCard>
+						))}
+						{wallColours.length === 0 && (
+							<p className="text-[12px] text-neutral-400">
+								No wall colours. Customers can still pick their own with the
+								custom swatch.
+							</p>
+						)}
+						<button
+							type="button"
+							onClick={() =>
+								editWallColours((list) => {
+									list.push({
+										id: `wall-${Date.now()}`,
+										label: "New colour",
+										hex: "#cccccc",
+									});
+								})
+							}
+							className="self-start text-[12px] text-[#2b6cb0] hover:underline"
+						>
+							+ Add wall colour
+						</button>
+					</div>
+				</SectionCard>
+			</>
 		);
 	}
 
