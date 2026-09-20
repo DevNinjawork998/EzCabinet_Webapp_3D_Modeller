@@ -122,6 +122,10 @@ const finishSchema = z.object({
 });
 export type Finish = z.infer<typeof finishSchema>;
 
+/** Wall paint is the same three fields as a finish — id, label, hex — so it
+ * reuses that schema rather than a twin that would drift from it. */
+export type WallColour = Finish;
+
 /** Workshop build standards — board thickness, toe-kick and slab depth are
  * per-maker choices, not universals, so they belong in the catalogue rather
  * than in code. Optional so catalogues published before this existed keep
@@ -164,6 +168,12 @@ export const plannerCatalogueSchema = z.object({
 	doorWidthLadderMm: z.array(z.number().int().positive()).min(1),
 	roomTypes: z.array(roomTypeSchema).min(1),
 	finishes: z.array(finishSchema).min(1),
+	/** Wall paint the customer can try the cabinets against. Optional like
+	 * `construction` and `rates`: a catalogue published before paint existed
+	 * keeps validating, and `wallColoursOf` fills the gap. Unlike `finishes`
+	 * an empty list is legal — an admin who deletes every colour has turned
+	 * the feature off, which is a choice the schema must let them make. */
+	wallColours: z.array(finishSchema).max(24).optional(),
 	construction: constructionSchema.optional(),
 	rates: ratesSchema.optional(),
 });

@@ -7,6 +7,7 @@ import type {
 	Rates,
 	RoomType,
 	SizeOption,
+	WallColour,
 } from "./catalogueSchema";
 
 /**
@@ -50,6 +51,7 @@ export type {
 	Rates,
 	RoomType,
 	SizeOption,
+	WallColour,
 };
 
 /**
@@ -510,6 +512,57 @@ export const FINISHES: Finish[] = [
 /** A published catalogue can define finishes this file has never seen, so this
  * is the id as data rather than a union of today's constants. */
 export type FinishId = string;
+
+/**
+ * Wall paint, so a customer can see the doors against the colour their room is
+ * already painted — the question that otherwise sends them to a showroom.
+ *
+ * These are what a wall should *render* at under the scene's lights (ambient
+ * 0.85 plus one directional at 1.35), not what the chip reads in the shop. The
+ * flat `#e8e6e1` every wall used to wear is the reference.
+ *
+ * Six deliberately: the off-whites that cover most jobs, two accents and one
+ * cool. A customer whose wall is none of these picks their own with the custom
+ * swatch, and `label` is free text, so an admin with the paint maker's
+ * blessing can name a row after its real fan-deck code.
+ */
+export const WALL_COLOURS: WallColour[] = [
+	{ id: "wall-white-dove", label: "White Dove", hex: "#f2efe9" },
+	{ id: "wall-almond-cream", label: "Almond Cream", hex: "#ece1cf" },
+	{ id: "wall-cloud-grey", label: "Cloud Grey", hex: "#d6d4ce" },
+	{ id: "wall-sage-mist", label: "Sage Mist", hex: "#c8d0c2" },
+	{ id: "wall-sky-wash", label: "Sky Wash", hex: "#c8d6e0" },
+	{ id: "wall-clay-rose", label: "Clay Rose", hex: "#d9b6a3" },
+];
+
+/** A `#rrggbb` — the one form a stored colour is handed to three.js in. */
+const HEX = /^#[0-9a-f]{6}$/i;
+
+/** This catalogue's wall paint, the seed filling an absent list — the same
+ * bargain `constructionOf` makes. A fresh array every call, so a caller cannot
+ * mutate the seed. An empty list stays empty: an admin who deleted every
+ * colour meant it. */
+export function wallColoursOf(catalogue: PlannerCatalogue): WallColour[] {
+	return catalogue.wallColours ? [...catalogue.wallColours] : [...WALL_COLOURS];
+}
+
+/**
+ * A stored wall colour as a hex, or `null` for a wall left unpainted.
+ *
+ * The stored value is either a palette id or a customer's own `#rrggbb`, and
+ * this is the one place that distinction is resolved. Anything else — a
+ * retired palette id, a tampered document — reads as unpainted rather than as
+ * a guess: a wrong colour on the one screen a customer is judging colour by is
+ * worse than no colour at all.
+ */
+export function wallHexOf(
+	value: string | null,
+	catalogue: PlannerCatalogue,
+): string | null {
+	if (!value) return null;
+	if (HEX.test(value)) return value;
+	return wallColoursOf(catalogue).find((c) => c.id === value)?.hex ?? null;
+}
 
 /** Deliberately a few shades off the room's wall (#edebe7): the 16mm carcass
  * reveal around a light door is the only thing separating it from the wall
