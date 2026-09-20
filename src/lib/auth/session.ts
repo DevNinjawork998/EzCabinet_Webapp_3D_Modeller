@@ -1,5 +1,6 @@
 import "server-only";
 import { headers } from "next/headers";
+import type { $Enums } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
 import type { Role } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/catalogue/db";
@@ -13,6 +14,18 @@ export type AuthUser = {
 	disabled: boolean;
 	mustChangePassword: boolean;
 };
+
+/** Compile-time proof that our Role union and Prisma's generated enum agree.
+ *  If either gains a role the other lacks, this stops compiling — which is
+ *  the point: the alternative is ROLE_PERMISSIONS[role] being undefined
+ *  inside a permission check at runtime. */
+type RoleParity = Role extends $Enums.Role
+	? $Enums.Role extends Role
+		? true
+		: never
+	: never;
+const _roleParity: RoleParity = true;
+void _roleParity;
 
 /**
  * The signed-in user, read fresh from the database on every call.
@@ -38,5 +51,5 @@ export async function currentUser(): Promise<AuthUser | null> {
 		},
 	});
 	if (!user || user.disabled) return null;
-	return user as AuthUser;
+	return user;
 }

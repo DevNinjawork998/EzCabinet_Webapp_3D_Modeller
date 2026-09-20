@@ -14,8 +14,6 @@ enum Product {
 enum Role {
   SUPERADMIN
   ADMIN
-  SALES
-  CATALOGUE
   CUSTOMER
 }
 
