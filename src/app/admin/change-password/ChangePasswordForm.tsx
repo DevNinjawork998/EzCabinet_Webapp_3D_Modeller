@@ -2,13 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { authClient } from "@/lib/auth/client";
-import { clearMustChangePassword } from "./actions";
+import { changeOwnPassword } from "./actions";
 
 const MIN_LENGTH = 12;
 
 /** A message safe to show a customer — never the provider's own wording. */
-function messageFor(code: string | undefined): string {
+function messageFor(code: string): string {
 	if (code === "INVALID_PASSWORD") return "Current password is incorrect.";
 	if (code === "PASSWORD_TOO_SHORT")
 		return `New password must be at least ${MIN_LENGTH} characters.`;
@@ -37,17 +36,12 @@ export function ChangePasswordForm() {
 
 		setBusy(true);
 		try {
-			const { error: failure } = await authClient.changePassword({
-				newPassword,
-				currentPassword,
-				revokeOtherSessions: true,
-			});
-			if (failure) {
-				setError(messageFor(failure.code));
+			const result = await changeOwnPassword(currentPassword, newPassword);
+			if (!result.ok) {
+				setError(messageFor(result.error));
 				setBusy(false);
 				return;
 			}
-			await clearMustChangePassword();
 			router.push("/admin/cabinet-designs");
 		} catch {
 			setError("Could not change password. Try again.");
