@@ -16,6 +16,7 @@ export async function requirePage(permission: Permission) {
 		if (error instanceof AuthError && error.status === 401) {
 			redirect("/admin/login");
 		}
+		if (!(error instanceof AuthError)) throw error;
 		notFound();
 	}
 }

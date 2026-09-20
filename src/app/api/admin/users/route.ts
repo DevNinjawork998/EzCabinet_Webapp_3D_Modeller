@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { inviteSchema } from "@/lib/auth/invite";
+import { BYPASS_USER } from "@/lib/auth/requireAuth";
 import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
 
@@ -52,7 +53,7 @@ export const POST = withAuth("users:manage", async (request, _ctx, actor) => {
 		);
 	}
 	const { email, name, role, password } = parsed.data;
-	const invitedById = actor.id === "auth-disabled" ? null : actor.id;
+	const invitedById = actor.id === BYPASS_USER.id ? null : actor.id;
 
 	const existing = await prisma.user.findUnique({ where: { email } });
 	if (existing) {
