@@ -184,6 +184,11 @@ export const ms: Dictionary = {
 			shapeLocked:
 				"Kosongkan semua dinding kecuali dinding belakang untuk menukar bentuk bilik.",
 			wallName: "Dinding {n}",
+			paint: "Cat dinding",
+			paintNone: "Tiada cat",
+			paintAria: "Cat dinding {n}",
+			paintCustom: "Warna sendiri",
+			paintingWall: "Mengecat dinding {n}",
 			wallsHint:
 				"Ketik dinding dalam bilik, atau ukuran dalam pandangan pelan, untuk mengubahnya.",
 			wallUnitsHangAt: "Unit dinding tergantung pada",
