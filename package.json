@@ -17,8 +17,8 @@
 		"db:up": "docker compose up -d",
 		"db:down": "docker compose down",
 		"db:migrate": "prisma migrate dev",
-		"db:seed": "tsx prisma/seed.ts",
-		"seed:superadmin": "tsx --conditions=react-server prisma/seedSuperadmin.ts",
+		"db:seed": "tsx --env-file-if-exists=.env.local prisma/seed.ts",
+		"seed:superadmin": "tsx --conditions=react-server --env-file-if-exists=.env.local prisma/seedSuperadmin.ts",
 		"db:studio": "prisma studio"
 	},
 	"dependencies": {

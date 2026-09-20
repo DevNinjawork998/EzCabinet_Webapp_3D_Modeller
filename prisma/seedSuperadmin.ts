@@ -1,8 +1,3 @@
-import { config } from "dotenv";
-
-config();
-config({ path: ".env.local", override: true });
-
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/catalogue/db";
 
