@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
 import { getAdapter } from "@/lib/logistics/registry";
 import { isForwardTransition } from "@/lib/logistics/status";
@@ -12,7 +13,6 @@ export const runtime = "nodejs";
 
 const advanceSchema = z.object({
 	status: z.enum(DELIVERY_STATUSES),
-	actor: z.string().trim().min(1).max(120),
 	note: z.string().trim().max(500).optional(),
 });
 
@@ -25,103 +25,109 @@ const advanceSchema = z.object({
  * with two deliberate exceptions: an admin may cancel or fail a job outright,
  * because those are decisions rather than observations.
  */
-export async function POST(
-	request: Request,
-	{ params }: { params: Promise<{ id: string }> },
-) {
-	const { id } = await params;
-	const delivery = await prisma.delivery.findUnique({ where: { id } });
-	if (!delivery) {
-		return NextResponse.json({ error: "not_found" }, { status: 404 });
-	}
+export const POST = withAuth<{ params: Promise<{ id: string }> }>(
+	"logistics:book",
+	async (request, { params }, user) => {
+		const { id } = await params;
+		const delivery = await prisma.delivery.findUnique({ where: { id } });
+		if (!delivery) {
+			return NextResponse.json({ error: "not_found" }, { status: 404 });
+		}
 
-	const parsed = advanceSchema.safeParse(await request.json());
-	if (!parsed.success) {
-		return NextResponse.json(
-			{ error: "invalid_body", issues: parsed.error.issues },
-			{ status: 400 },
-		);
-	}
-	const { status, actor, note } = parsed.data;
+		const parsed = advanceSchema.safeParse(await request.json());
+		if (!parsed.success) {
+			return NextResponse.json(
+				{ error: "invalid_body", issues: parsed.error.issues },
+				{ status: 400 },
+			);
+		}
+		const { status, note } = parsed.data;
+		const actor = user.name;
 
-	const current = delivery.status as DeliveryStatusName;
-	const isAbort = status === "CANCELLED" || status === "FAILED";
-	if (!isAbort && !isForwardTransition(current, status)) {
-		return NextResponse.json(
-			{ error: "invalid_transition", from: current, to: status },
-			{ status: 409 },
-		);
-	}
+		const current = delivery.status as DeliveryStatusName;
+		const isAbort = status === "CANCELLED" || status === "FAILED";
+		if (!isAbort && !isForwardTransition(current, status)) {
+			return NextResponse.json(
+				{ error: "invalid_transition", from: current, to: status },
+				{ status: 409 },
+			);
+		}
 
-	// Cancelling our row is not cancelling the delivery. A booked carrier has
-	// a driver on the way, and marking the job cancelled here while a lorry is
-	// still coming is worse than not offering the button at all.
-	if (status === "CANCELLED" && delivery.carrierId && delivery.carrierOrderId) {
-		const adapter = getAdapter(delivery.carrierId);
-		if (adapter.cancel) {
-			try {
-				await adapter.cancel(delivery.carrierOrderId);
-			} catch (error) {
-				// A refusal is not always a live job. Lalamove answers the same
-				// `422 ERR_CANCELLATION` whether the cancel window has closed or
-				// the order is already cancelled — and an order cancelled in the
-				// carrier's own dashboard would otherwise leave this row stuck
-				// booked for ever, since every retry refuses the same way. So ask
-				// what state the order is actually in before refusing.
-				let carrierStatus: DeliveryStatusName | null = null;
+		// Cancelling our row is not cancelling the delivery. A booked carrier has
+		// a driver on the way, and marking the job cancelled here while a lorry is
+		// still coming is worse than not offering the button at all.
+		if (
+			status === "CANCELLED" &&
+			delivery.carrierId &&
+			delivery.carrierOrderId
+		) {
+			const adapter = getAdapter(delivery.carrierId);
+			if (adapter.cancel) {
 				try {
-					carrierStatus = (await adapter.track(delivery.carrierOrderId)).status;
-				} catch {
-					// The refusal is what matters; a failed second call must not
-					// replace its message.
-				}
+					await adapter.cancel(delivery.carrierOrderId);
+				} catch (error) {
+					// A refusal is not always a live job. Lalamove answers the same
+					// `422 ERR_CANCELLATION` whether the cancel window has closed or
+					// the order is already cancelled — and an order cancelled in the
+					// carrier's own dashboard would otherwise leave this row stuck
+					// booked for ever, since every retry refuses the same way. So ask
+					// what state the order is actually in before refusing.
+					let carrierStatus: DeliveryStatusName | null = null;
+					try {
+						carrierStatus = (await adapter.track(delivery.carrierOrderId))
+							.status;
+					} catch {
+						// The refusal is what matters; a failed second call must not
+						// replace its message.
+					}
 
-				if (carrierStatus !== "CANCELLED") {
-					// Record the attempt, then refuse. The admin has to ring the
-					// carrier, and the row must not read "cancelled" until they have.
+					if (carrierStatus !== "CANCELLED") {
+						// Record the attempt, then refuse. The admin has to ring the
+						// carrier, and the row must not read "cancelled" until they have.
+						await prisma.deliveryEvent.create({
+							data: {
+								deliveryId: id,
+								source: "ADMIN",
+								actor,
+								message: `Cancelling with ${delivery.carrierId} failed: ${(error as Error).message}`,
+							},
+						});
+						return NextResponse.json(
+							{
+								error: "carrier_refused_cancel",
+								message: (error as Error).message,
+							},
+							{ status: 409 },
+						);
+					}
+
 					await prisma.deliveryEvent.create({
 						data: {
 							deliveryId: id,
 							source: "ADMIN",
 							actor,
-							message: `Cancelling with ${delivery.carrierId} failed: ${(error as Error).message}`,
+							message: `${delivery.carrierId} reports this order was already cancelled`,
 						},
 					});
-					return NextResponse.json(
-						{
-							error: "carrier_refused_cancel",
-							message: (error as Error).message,
-						},
-						{ status: 409 },
-					);
 				}
-
-				await prisma.deliveryEvent.create({
-					data: {
-						deliveryId: id,
-						source: "ADMIN",
-						actor,
-						message: `${delivery.carrierId} reports this order was already cancelled`,
-					},
-				});
 			}
 		}
-	}
 
-	const updated = await prisma.delivery.update({
-		where: { id },
-		data: {
-			status,
-			events: {
-				create: {
-					source: "ADMIN",
-					status,
-					actor,
-					message: note ?? `Marked ${status} by hand`,
+		const updated = await prisma.delivery.update({
+			where: { id },
+			data: {
+				status,
+				events: {
+					create: {
+						source: "ADMIN",
+						status,
+						actor,
+						message: note ?? `Marked ${status} by hand`,
+					},
 				},
 			},
-		},
-	});
+		});
 
-	return NextResponse.json({ delivery: updated });
-}
+		return NextResponse.json({ delivery: updated });
+	},
+);

@@ -17,6 +17,7 @@ import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
 import { wallsOf } from "@/lib/planner/floorplan";
 import { computePlannerPrice } from "@/lib/planner/pricing";
 import { emptyRoom, type RoomLayout } from "@/lib/planner/room";
+import { loadDraft, saveDraft } from "@/lib/plannerDraft";
 
 type Screen = "start" | "studio" | "quote";
 
@@ -85,16 +86,36 @@ function PlannerScreens({
 	useEffect(() => {
 		track("screen_viewed", { screen });
 	}, [screen]);
-	const [roomId, setRoomId] = useState<RoomTypeId>(initialRoomId);
+	// Restored once, from whatever autosave `plannerDraft.ts` left in
+	// localStorage — a sign-in redirect, a refresh or a crash all take the
+	// page's React state with them, and this is what survives that.
+	const [restored] = useState(() => loadDraft());
+	const [roomId, setRoomId] = useState<RoomTypeId>(
+		(restored?.roomId as RoomTypeId) ?? initialRoomId,
+	);
 	// One layout per room, so switching to the foyer and back does not throw
 	// away the kitchen the customer just arranged.
 	const [rooms, setRooms] = useState<Record<RoomTypeId, RoomLayout>>(() =>
-		initialRooms(catalogue),
+		restored
+			? ({ ...initialRooms(catalogue), ...restored.rooms } as Record<
+					RoomTypeId,
+					RoomLayout
+				>)
+			: initialRooms(catalogue),
 	);
 	// Defaults to whatever the catalogue lists first — hardcoding an id here
 	// would render an unstyled room for any catalogue that drops it.
-	const [finish, setFinish] = useState<FinishId>(catalogue.finishes[0].id);
+	const [finish, setFinish] = useState<FinishId>(
+		(restored?.finishId as FinishId) ?? catalogue.finishes[0].id,
+	);
 	const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
+
+	// One effect, not a call at each of the dozens of `setLayoutAction` sites:
+	// the draft only has to be correct by the time the page can be navigated
+	// away from, and React has already batched by then.
+	useEffect(() => {
+		saveDraft({ version: 1, roomId, finishId: finish, rooms });
+	}, [roomId, finish, rooms]);
 
 	const layout = rooms[roomId];
 	const setLayout = useCallback(

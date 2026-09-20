@@ -1,4 +1,5 @@
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { requirePage } from "@/lib/auth/page";
 import { prisma } from "@/lib/catalogue/db";
 import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
 import { WORKSHOP_ADDRESS } from "@/lib/logistics/carriers";
@@ -21,6 +22,7 @@ export default async function LogisticsAdminPage({
 }: {
 	searchParams: Promise<{ fromOrder?: string }>;
 }) {
+	await requirePage("logistics:read");
 	const { fromOrder } = await searchParams;
 	const deliveries = await prisma.delivery.findMany({
 		orderBy: { number: "desc" },

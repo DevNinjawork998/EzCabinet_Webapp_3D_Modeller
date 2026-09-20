@@ -1,6 +1,8 @@
 import { checkBotId } from "botid/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { authEnabled } from "@/lib/auth/enabled";
+import { currentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/catalogue/db";
 import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
 import { toE164 } from "@/lib/logistics/phone";
@@ -17,11 +19,12 @@ export const runtime = "nodejs";
 /**
  * Checkout: a customer's design becomes an order.
  *
- * Public — no login to buy, same as no login to plan — which makes this the one
- * public endpoint that writes. So it is guarded three ways: BotID turns away
- * scripts, zod turns away malformed bodies, and `validateOrder` turns away a
- * design the catalogue cannot actually sell. The price is never read from the
- * body; it is computed here against the published catalogue.
+ * No login to browse, plan or price — the conversion decision in CLAUDE.md —
+ * but this is the one write, and the one hard stop: placing an order needs a
+ * session. So it is guarded four ways: a session check, BotID, zod, and
+ * `validateOrder` turning away a design the catalogue cannot actually sell.
+ * The price is never read from the body; it is computed here against the
+ * published catalogue.
  */
 const orderInputSchema = z.object({
 	roomId: z.string().min(1).max(40),
@@ -42,6 +45,13 @@ export async function POST(request: Request) {
 	const verification = await checkBotId();
 	if (verification.isBot) {
 		return NextResponse.json({ error: "bot" }, { status: 403 });
+	}
+
+	// Checkout is the one hard stop. Everything before it — browsing, planning,
+	// pricing — stays anonymous, which is the conversion decision in CLAUDE.md.
+	const user = authEnabled() ? await currentUser() : null;
+	if (authEnabled() && !user) {
+		return NextResponse.json({ error: "sign_in_required" }, { status: 401 });
 	}
 
 	const parsed = orderInputSchema.safeParse(
@@ -95,6 +105,7 @@ export async function POST(request: Request) {
 			deliveryRm: price.deliveryRm,
 			totalRm: price.totalRm,
 			paymentProvider: PAYMENT_PROVIDER,
+			userId: user?.id ?? null,
 		},
 		select: { publicToken: true },
 	});

@@ -1,5 +1,11 @@
 allowBuilds:
   '@prisma/engines': true
+  # An optional peer of better-auth's kysely adapter. We never use it — the
+  # Prisma adapter is what's configured — but a frozen-lockfile install still
+  # sees its build script and fails with ERR_PNPM_IGNORED_BUILDS unless this
+  # says what to do with it. It is absent from node_modules locally, which is
+  # why this entry looks dead and is not.
+  better-sqlite3: false
   core-js: false
   esbuild: true
   msgpackr-extract: set this to true or false

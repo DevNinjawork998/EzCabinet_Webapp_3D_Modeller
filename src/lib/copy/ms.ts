@@ -544,4 +544,11 @@ export const ms: Dictionary = {
 			"Pertanyaan, atau permintaan untuk mengakses atau membetulkan data anda: {email}",
 		back: "Kembali ke laman utama",
 	},
+	signIn: {
+		heading: "Log masuk",
+		body: "Simpan reka bentuk anda dan jejaki pesanan anda.",
+		continueWithGoogle: "Teruskan dengan Google",
+		error: "Tidak dapat membuka log masuk Google. Cuba lagi",
+		back: "Kembali ke laman utama",
+	},
 };

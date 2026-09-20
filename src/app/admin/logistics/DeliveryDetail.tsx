@@ -436,16 +436,12 @@ export function DeliveryDetail({
 	}
 
 	async function advance(status: DeliveryStatusName) {
-		if (actor.trim() === "") {
-			setError("Put your name in the field above — it goes on the record.");
-			return;
-		}
 		setBusy(status);
 		setError(null);
 		const res = await fetch(`/api/admin/deliveries/${id}/advance`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ status, actor }),
+			body: JSON.stringify({ status }),
 		});
 		setBusy(null);
 		if (!res.ok) {
@@ -1298,12 +1294,6 @@ export function DeliveryDetail({
 											</p>
 										)}
 
-									<ActorField
-										label="Your name — recorded against every update"
-										value={actor}
-										onChange={rememberActor}
-									/>
-
 									<div className="flex flex-wrap gap-2">
 										<button
 											type="button"
@@ -1320,7 +1310,7 @@ export function DeliveryDetail({
 												type="button"
 												className={CHIP}
 												onClick={() => advance(nextStep)}
-												disabled={actorMissing || busy === nextStep}
+												disabled={busy === nextStep}
 											>
 												Mark {STATUS_LABEL[nextStep].toLowerCase()}
 											</button>
@@ -1330,17 +1320,11 @@ export function DeliveryDetail({
 												type="button"
 												className={CHIP}
 												onClick={() => advance("CANCELLED")}
-												disabled={actorMissing}
 											>
 												Cancel job
 											</button>
 										)}
 									</div>
-									{actorMissing && (nextStep || !stopped) && (
-										<p className="text-[#7a5a12] text-[12px]">
-											Put your name in the field above — it goes on the record.
-										</p>
-									)}
 								</div>
 							)}
 						</section>

@@ -1,7 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth/requireAuth";
 import { exchangeCode } from "@/lib/logistics/tokens";
 
 export const runtime = "nodejs";
+
+// Deliberately not behind withAuth: this is EasyParcel redirecting the
+// admin's own browser back to us, and the `state` cookie match below is the
+// check that matters. requireAuth here would turn a timing problem into a
+// failed carrier connection. The handler reads no data and writes only the
+// token exchange this app itself initiated.
+void requireAuth;
 
 /**
  * Where EasyParcel sends the admin back with an authorization code.
