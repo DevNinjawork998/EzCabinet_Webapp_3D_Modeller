@@ -71,4 +71,18 @@ describe("requirePage", () => {
 		);
 		expect(notFound).not.toHaveBeenCalled();
 	});
+
+	it("redirects to /admin/change-password when the user must change their password", async () => {
+		requireAuth.mockResolvedValue({ ...user, mustChangePassword: true });
+		await expect(requirePage("catalogue:read")).rejects.toThrow("redirect");
+		expect(redirect).toHaveBeenCalledWith("/admin/change-password");
+	});
+
+	it("does not redirect when mustChangePassword is false", async () => {
+		requireAuth.mockResolvedValue({ ...user, mustChangePassword: false });
+		await expect(requirePage("catalogue:read")).resolves.toEqual(
+			expect.objectContaining({ mustChangePassword: false }),
+		);
+		expect(redirect).not.toHaveBeenCalled();
+	});
 });

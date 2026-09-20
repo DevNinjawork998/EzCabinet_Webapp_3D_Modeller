@@ -83,4 +83,25 @@ describe("withAuth", () => {
 		await expect(wrapped(new Request("http://x"), {})).rejects.toThrow("boom");
 		expect(handler).not.toHaveBeenCalled();
 	});
+
+	it("403s with password_change_required and never calls the handler when mustChangePassword is true", async () => {
+		requireAuth.mockResolvedValue({ ...user, mustChangePassword: true });
+		const handler = vi.fn();
+		const wrapped = withAuth("catalogue:read", handler);
+		const response = await wrapped(new Request("http://x"), {});
+		expect(response.status).toBe(403);
+		await expect(response.json()).resolves.toEqual({
+			error: "password_change_required",
+		});
+		expect(handler).not.toHaveBeenCalled();
+	});
+
+	it("runs the handler when mustChangePassword is false", async () => {
+		requireAuth.mockResolvedValue({ ...user, mustChangePassword: false });
+		const handler = vi.fn(async () => NextResponse.json({ ok: true }));
+		const wrapped = withAuth("catalogue:read", handler);
+		const response = await wrapped(new Request("http://x"), {});
+		expect(handler).toHaveBeenCalled();
+		expect(response.status).toBe(200);
+	});
 });
