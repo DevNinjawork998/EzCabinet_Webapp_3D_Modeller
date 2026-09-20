@@ -279,7 +279,14 @@ function anchoredAtEnd(room: RoomLayout, run: number): boolean {
 }
 
 export function runView(room: RoomLayout, run: number): PlannerLayout {
-	const { plan, runs, corners: _corners, free: _free, ...settings } = room;
+	const {
+		plan,
+		runs,
+		corners: _corners,
+		free: _free,
+		wallColours: _paint,
+		...settings
+	} = room;
 	const wall = wallsOf(plan)[run];
 	const floor = cornerSpans(room, run, "floor").map((c) => c.span);
 	const hung = cornerSpans(room, run, "wall").map((c) => c.span);
@@ -375,6 +382,29 @@ export const setDoor = (
 
 export const setHinge = (room: RoomLayout, id: string, hinge: HingeSide) =>
 	mapModule(room, id, (module) => ({ ...module, hinge }));
+
+/**
+ * Paint one wall, or strip it back to bare with `null`.
+ *
+ * No `accepts` check and no catalogue: a colour cannot make a cabinet stop
+ * fitting, and a value the renderer does not recognise simply draws the wall
+ * unpainted. Trailing nulls are trimmed so an unpainted room is one shape
+ * whether it was never painted or painted and undone.
+ */
+export function paintWall(
+	room: RoomLayout,
+	wall: number,
+	colour: string | null,
+): RoomLayout {
+	if (wall < 0 || wall >= room.runs.length) return room;
+	const current = room.wallColours ?? [];
+	if ((current[wall] ?? null) === colour) return room;
+	const next = room.runs.map((_, i) =>
+		i === wall ? colour : (current[i] ?? null),
+	);
+	while (next.length > 0 && next[next.length - 1] === null) next.pop();
+	return { ...room, wallColours: next };
+}
 
 export function setDoors(
 	room: RoomLayout,
