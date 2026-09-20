@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { requirePage } from "@/lib/auth/page";
 import { prisma } from "@/lib/catalogue/db";
 import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
 import { orderRef } from "@/lib/orders/ref";
@@ -11,6 +12,7 @@ export default async function OrderAdminPage({
 }: {
 	params: Promise<{ id: string }>;
 }) {
+	await requirePage("orders:read");
 	const { id } = await params;
 	const [order, published] = await Promise.all([
 		prisma.order.findUnique({

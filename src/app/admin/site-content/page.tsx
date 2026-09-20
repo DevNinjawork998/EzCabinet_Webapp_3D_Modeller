@@ -1,6 +1,7 @@
 import { AddFinish } from "@/components/admin/AddFinish";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { ImageSlot } from "@/components/admin/ImageSlot";
+import { requirePage } from "@/lib/auth/page";
 import { prisma } from "@/lib/catalogue/db";
 import { finishSlot, roomSlot, siteImageSrc } from "@/lib/catalogue/siteImages";
 import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
@@ -20,6 +21,7 @@ import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
  * moment someone adds one in `/admin/catalogue`.
  */
 export default async function SiteContentPage() {
+	await requirePage("content:write");
 	const [{ data: catalogue }, images] = await Promise.all([
 		readPublishedPlannerCatalogue(),
 		prisma.siteImage.findMany(),

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { fieldClass } from "@/components/admin/styles";
 import type { DeliveryStatusName } from "@/lib/logistics/types";
 import type { SummaryLine } from "@/lib/orders/summary";
@@ -54,32 +54,18 @@ const PRIMARY = `inline-flex min-h-9 items-center self-start rounded-full bg-[#1
  */
 export function OrderDetail({ order }: { order: OrderView }) {
 	const router = useRouter();
-	const [actor, setActor] = useState("");
 	const [paymentRef, setPaymentRef] = useState("");
 	const [busy, setBusy] = useState<"paid" | "cancel" | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
-	// The same remembered name the delivery pages record against their updates.
-	useEffect(() => {
-		setActor(localStorage.getItem("ic.logistics.actor") ?? "");
-	}, []);
-	const rememberActor = (name: string) => {
-		setActor(name);
-		localStorage.setItem("ic.logistics.actor", name);
-	};
-
 	async function act(kind: "paid" | "cancel") {
-		if (actor.trim() === "") {
-			setError("Put your name in first — it goes on the record.");
-			return;
-		}
 		if (kind === "cancel" && !confirm(`Cancel order ${order.ref}?`)) return;
 		setBusy(kind);
 		setError(null);
 		const res = await fetch(`/api/admin/orders/${order.id}/${kind}`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ actor, paymentRef: paymentRef.trim() || null }),
+			body: JSON.stringify({ paymentRef: paymentRef.trim() || null }),
 		});
 		setBusy(null);
 		if (!res.ok) {
@@ -172,15 +158,6 @@ export function OrderDetail({ order }: { order: OrderView }) {
 								</p>
 								<div className="flex flex-wrap gap-3">
 									<label className="flex max-w-[260px] flex-1 flex-col gap-1 text-[12px] text-neutral-500">
-										Your name — recorded against the payment
-										<input
-											className={fieldClass(false, FOCUS)}
-											value={actor}
-											onChange={(e) => rememberActor(e.target.value)}
-											placeholder="e.g. Farah"
-										/>
-									</label>
-									<label className="flex max-w-[260px] flex-1 flex-col gap-1 text-[12px] text-neutral-500">
 										Bank reference (optional)
 										<input
 											className={fieldClass(false, FOCUS)}
@@ -193,7 +170,7 @@ export function OrderDetail({ order }: { order: OrderView }) {
 									<button
 										type="button"
 										className={PRIMARY}
-										disabled={busy !== null || actor.trim() === ""}
+										disabled={busy !== null}
 										onClick={() => act("paid")}
 									>
 										{busy === "paid" ? "Marking paid…" : "Mark paid"}

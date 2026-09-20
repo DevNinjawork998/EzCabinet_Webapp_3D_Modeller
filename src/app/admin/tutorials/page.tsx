@@ -1,4 +1,5 @@
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { requirePage } from "@/lib/auth/page";
 import { prisma } from "@/lib/catalogue/db";
 import { TutorialManager } from "./TutorialManager";
 
@@ -10,6 +11,7 @@ import { TutorialManager } from "./TutorialManager";
  * is a hard requirement rather than an optimisation.
  */
 export default async function TutorialsAdminPage() {
+	await requirePage("content:write");
 	const tutorials = await prisma.tutorial.findMany({
 		orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
 	});
