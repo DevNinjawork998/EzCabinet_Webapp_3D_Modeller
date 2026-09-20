@@ -23,7 +23,7 @@ them.
 
 In:
 
-- Better Auth wired to Google (customers) and email+password (staff)
+- Better Auth wired to Google (everyone) and email+password (staff fallback)
 - A `User` table with a `role` column, and the permission vocabulary the roles
   map onto
 - `/admin/users` — invite staff, change role, disable
@@ -44,10 +44,10 @@ Out — sub-project C, its own spec:
 | Decision | Chosen | Why |
 | --- | --- | --- |
 | Library | **Better Auth** | Social-only for customers means no password-reset mail and no transactional email vendor, which is most of what a hosted provider is paid for. Users stay in our own Postgres: no per-MAU bill as checkout-requires-login grows MAU with sales, and no PDPA question about where Malaysian customer data sits. |
-| Staff sign-in | email + password | Two doors that never cross. A customer account has no path to a staff role. |
+| Staff sign-in | **Google, or email + password** | Google is what staff already have. The password stays as the way in when Google is down, or for an employee who has no Google account. |
 | Customer sign-in | **Google only** | Facebook is deferred, not rejected — see below. |
-| Staff onboarding | invite-only | Public sign-up can only ever produce a `CUSTOMER`. Escalation is not a code path that exists. |
-| Permission model | fixed roles | Five roles, each a constant permission set in code. No permission-matrix UI, no DB read per gate, and the mapping is one table-driven test. |
+| Staff onboarding | invite-only | Public sign-up can only ever produce a `CUSTOMER`. A role is only ever granted by a superadmin's deliberate act on `/admin/users` — never by anything a visitor can do. |
+| Permission model | fixed roles | Three roles, each a constant permission set in code. No permission-matrix UI, no DB read per gate, and the mapping is one table-driven test. |
 | Staff passwords | set by the superadmin, handed over in person | Three internal users, one office. Avoids an email sender entirely. |
 | Cutover | hard | `ADMIN_PASSWORD` and `lib/adminAuth.ts` are deleted in the same release that seeds the first superadmin. Two live auth paths means the weakest one has full access. |
 | Entry friction | none | The planner opens without an account, as today. |
@@ -67,6 +67,12 @@ we need, and its session ergonomics in the App Router are clunkier.
 **A `VISITOR` role.** Proposed as the default on sign-up. Dropped: anonymous
 browsing needs no account, and public sign-up produces a real `CUSTOMER` with
 somewhere to put a design. Nobody would ever occupy the state.
+
+**`SALES` and `CATALOGUE` roles.** Specified, then dropped by the client:
+EzCabinet has three internal staff who all do all of it, so a role that can
+mark an order paid but not publish a price described a division of labour that
+does not exist there. The permission names those roles were built from survive
+as route annotations, so reinstating either is one table row.
 
 **Per-surface permission toggles.** Superadmin ticking individual surfaces per
 user. Real flexibility, but it buys a permissions matrix screen and moves
@@ -107,9 +113,14 @@ users:manage        invite, change role, disable
 | --- | --- |
 | `SUPERADMIN` | all |
 | `ADMIN` | all except `users:manage` |
-| `SALES` | `orders:read`, `orders:markPaid`, `logistics:read`, `logistics:book`, `catalogue:read` |
-| `CATALOGUE` | `catalogue:read`, `catalogue:write`, `catalogue:publish`, `content:write` |
 | `CUSTOMER` | none — owns their own designs and orders, which is not an admin permission |
+
+Three roles, and the only real distinction between the two staff roles is
+`users:manage`. The nine permission names are kept anyway, because they are
+what each of the 29 admin routes is annotated with: `catalogue:publish` and
+`logistics:book` say what a route does in a way `requireStaff()` does not, and
+adding a fourth role later is one row in this table rather than an audit of
+every route handler.
 
 `catalogue:publish` is deliberately separate from `catalogue:write`.
 Publishing rewrites the live price list for every customer
