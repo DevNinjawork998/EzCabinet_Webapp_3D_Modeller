@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { safeNext } from "@/app/admin/login/safeNext";
 import { authClient } from "@/lib/auth/client";
 import { HERO_EXPLODED_FRAME, heroFrameSrc } from "@/lib/scroll/sequence";
 
@@ -27,16 +28,10 @@ export default function AdminLoginPage() {
 			setError("Wrong email or password");
 			return;
 		}
-		// `next` comes from the query string, so it is attacker-controllable: a
-		// bare router.push would follow `//evil.com` or an absolute URL to another
-		// origin, and it would do it right after a successful sign-in. Only a
-		// same-origin absolute path is allowed through.
+		// `next` comes from the query string, so it is attacker-controllable — see
+		// safeNext's own comment for why a prefix check isn't enough.
 		const next = new URLSearchParams(window.location.search).get("next");
-		const dest =
-			next?.startsWith("/") && !next.startsWith("//")
-				? next
-				: "/admin/cabinet-designs";
-		router.push(dest);
+		router.push(safeNext(next, window.location.origin));
 	}
 
 	async function continueWithGoogle() {
