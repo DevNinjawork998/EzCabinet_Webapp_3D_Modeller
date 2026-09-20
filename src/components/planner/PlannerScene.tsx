@@ -39,6 +39,7 @@ import {
 	type FinishId,
 	WALL_GAP_MM,
 	WORKTOP_COLOR,
+	wallHexOf,
 } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
 import {
@@ -2396,6 +2397,13 @@ export default function PlannerScene({
 	const engine = useEngine();
 	const rooms = useRoomEngine();
 	const construction = constructionOf(catalogue);
+	// Resolved here, outside the canvas: a component rendering under <Canvas>
+	// must not read the catalogue itself, and `Room` stays catalogue-free by
+	// being handed hex rather than ids.
+	const wallHex = useMemo(
+		() => layout.wallColours?.map((v) => wallHexOf(v, catalogue)),
+		[layout.wallColours, catalogue],
+	);
 	// Edits land on the latest room, never one closed over at render.
 	const roomRef = useRef(layout);
 	roomRef.current = layout;
@@ -2552,6 +2560,7 @@ export default function PlannerScene({
 				height={m(layout.ceilingHeightMm)}
 				targetWall={targetRun}
 				dragPreviewWall={previewWall}
+				wallHex={wallHex}
 				onWallPick={measureMode ? undefined : onWallPickAction}
 			/>
 
