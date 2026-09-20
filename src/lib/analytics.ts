@@ -30,8 +30,12 @@ export type JourneyEvent =
 	| "view_changed"
 	| "tool_used"
 	| "quote_viewed"
+<<<<<<< HEAD
 	| "quote_submitted"
 	| "sign_in_nudge";
+=======
+	| "quote_submitted";
+>>>>>>> origin/main
 
 type Props = Record<string, string | number | boolean | null>;
 
