@@ -25,16 +25,14 @@ export default async function UsersPage() {
 		<div className="flex min-h-screen flex-col bg-[#f4f3f1] text-neutral-900">
 			<AdminHeader trail={[{ label: "Admin" }, { label: "People" }]} />
 			<main className="mx-auto flex w-full max-w-[960px] flex-col gap-5 px-7 pt-8 pb-16">
-				<div className="flex items-start justify-between gap-4">
-					<div>
-						<h1 className="mb-1 font-semibold text-[22px]">People</h1>
-						<p className="text-[13px] text-neutral-500">
-							Staff accounts are created here. Anyone who signs in with Google
-							is a customer and stays one.
-						</p>
-					</div>
-					<InviteStaff />
+				<div>
+					<h1 className="mb-1 font-semibold text-[22px]">Team access</h1>
+					<p className="text-[13px] text-neutral-500">
+						Staff accounts are created here. Anyone who signs in with Google is
+						a customer and stays one.
+					</p>
 				</div>
+				<InviteStaff />
 				<UsersTable initial={users} selfId={actor.id} />
 			</main>
 		</div>
