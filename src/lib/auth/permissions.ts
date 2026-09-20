@@ -5,6 +5,11 @@
  * compile-time fact, not a row somebody can edit, which is what keeps every
  * gate a cheap array lookup and this file's test the specification.
  *
+ * Three roles: SUPERADMIN, ADMIN, CUSTOMER. All staff do all operations,
+ * so the nine permission names are kept as route annotations in Phase 6,
+ * not as a UI role picker. Reinstating a divided labour is one row, not
+ * an audit of every route handler.
+ *
  * `catalogue:publish` is deliberately separate from `catalogue:write`:
  * publishing rewrites the live price list for every customer, so onboarding a
  * design and repointing the money are different acts.
@@ -24,13 +29,7 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-export const ROLES = [
-	"SUPERADMIN",
-	"ADMIN",
-	"SALES",
-	"CATALOGUE",
-	"CUSTOMER",
-] as const;
+export const ROLES = ["SUPERADMIN", "ADMIN", "CUSTOMER"] as const;
 
 export type Role = (typeof ROLES)[number];
 
@@ -41,19 +40,6 @@ const ADMIN_PERMISSIONS = PERMISSIONS.filter(
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
 	SUPERADMIN: PERMISSIONS,
 	ADMIN: ADMIN_PERMISSIONS,
-	SALES: [
-		"orders:read",
-		"orders:markPaid",
-		"logistics:read",
-		"logistics:book",
-		"catalogue:read",
-	],
-	CATALOGUE: [
-		"catalogue:read",
-		"catalogue:write",
-		"catalogue:publish",
-		"content:write",
-	],
 	// A customer owns their own designs and orders. That is ownership, not an
 	// admin permission, and it is checked where those rows are read.
 	CUSTOMER: [],
@@ -72,7 +58,5 @@ export function can(role: Role, permission: Permission): boolean {
 export const ROLE_LABELS: Record<Role, string> = {
 	SUPERADMIN: "Superadmin",
 	ADMIN: "Admin",
-	SALES: "Sales",
-	CATALOGUE: "Catalogue",
 	CUSTOMER: "Customer",
 };
