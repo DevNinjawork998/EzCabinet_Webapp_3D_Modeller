@@ -83,4 +83,27 @@ describe("plannerDraft", () => {
 		clearDraft();
 		expect(loadDraft()).toBeNull();
 	});
+
+	it("returns null when rooms is not an object", () => {
+		for (const rooms of ["kitchen", 42, null, true]) {
+			localStorage.setItem(
+				"ezcabinet.planner.draft",
+				JSON.stringify({ ...draft, rooms }),
+			);
+			expect(loadDraft()).toBeNull();
+		}
+	});
+
+	it("returns null when roomId or finishId is not a string", () => {
+		localStorage.setItem(
+			"ezcabinet.planner.draft",
+			JSON.stringify({ ...draft, roomId: 7 }),
+		);
+		expect(loadDraft()).toBeNull();
+		localStorage.setItem(
+			"ezcabinet.planner.draft",
+			JSON.stringify({ ...draft, finishId: null }),
+		);
+		expect(loadDraft()).toBeNull();
+	});
 });
