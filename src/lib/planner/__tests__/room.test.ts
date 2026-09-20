@@ -236,6 +236,29 @@ describe("setShape", () => {
 		const room = engine.addModule(kitchen(), "base-cabinet", 0, "s", 600, 3);
 		expect(engine.setShape(room, "l")).toBe(room);
 	});
+
+	it("keeps paint on every wall the new shape still has", () => {
+		// Paint diverges from runs on purpose: the runs rule exists because a
+		// cabinet on a resized wall may stop fitting, and a colour never does.
+		// Losing a colour the customer picked is not recoverable; keeping one
+		// is a click to change.
+		const room = paintWall(paintWall(kitchen(), 0, "sage"), 2, "clay");
+		const next = engine.setShape(room, "l");
+		expect(next.runs).toHaveLength(6);
+		expect(next.wallColours?.[0]).toBe("sage");
+		expect(next.wallColours?.[2]).toBe("clay");
+		expect(next.wallColours?.[4] ?? null).toBeNull();
+	});
+
+	it("drops paint for walls the new shape no longer has", () => {
+		// Colours past the wall count would be a document that lies, and they
+		// would reappear on a later reshape.
+		const l = engine.setShape(kitchen(), "l");
+		const painted = paintWall(paintWall(l, 0, "sage"), 5, "clay");
+		const back = engine.setShape(painted, "rect");
+		expect(back.runs).toHaveLength(4);
+		expect(back.wallColours).toEqual(["sage"]);
+	});
 });
 
 describe("setWallLength", () => {

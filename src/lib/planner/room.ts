@@ -383,6 +383,15 @@ export const setDoor = (
 export const setHinge = (room: RoomLayout, id: string, hinge: HingeSide) =>
 	mapModule(room, id, (module) => ({ ...module, hinge }));
 
+/** Wall paint with its trailing bare walls dropped. A trailing null says
+ * nothing, so trimming keeps one shape for an unpainted room whether it was
+ * never painted, stripped, or left behind by a reshape. */
+function trimPaint(colours: (string | null)[]): (string | null)[] {
+	const next = [...colours];
+	while (next.length > 0 && next[next.length - 1] === null) next.pop();
+	return next;
+}
+
 /**
  * Paint one wall, or strip it back to bare with `null`.
  *
@@ -402,8 +411,7 @@ export function paintWall(
 	const next = room.runs.map((_, i) =>
 		i === wall ? colour : (current[i] ?? null),
 	);
-	while (next.length > 0 && next[next.length - 1] === null) next.pop();
-	return { ...room, wallColours: next };
+	return { ...room, wallColours: trimPaint(next) };
 }
 
 export function setDoors(
@@ -920,6 +928,15 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 			plan,
 			runs: wallsOf(plan).map((_, i) => (i === 0 ? room.runs[0] : emptyRun())),
 			corners: [],
+			// Paint is not a cabinet. The runs rule above discards because a
+			// cabinet on a changed wall may stop fitting; a colour never does, and
+			// a colour the customer picked is not recoverable once dropped. So
+			// keep every wall the new shape still has — but only those, or the
+			// document claims paint for walls that do not exist and resurrects
+			// them on the next reshape.
+			...(room.wallColours && {
+				wallColours: trimPaint(room.wallColours.slice(0, wallsOf(plan).length)),
+			}),
 		};
 		return accepts(room, next) ? next : room;
 	}
