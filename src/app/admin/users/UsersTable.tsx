@@ -15,11 +15,17 @@ type UserRow = {
 };
 
 type StatusFilter = "all" | "active" | "suspended";
+type ScopeFilter = "staff" | "customers";
 
 const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
 	all: "All",
 	active: "Active",
 	suspended: "Suspended",
+};
+
+const SCOPE_FILTER_LABEL: Record<ScopeFilter, string> = {
+	staff: "Staff",
+	customers: "Customers",
 };
 
 function initialsOf(name: string): string {
@@ -34,9 +40,10 @@ function initialsOf(name: string): string {
 }
 
 /**
- * Staff only, always: this screen exists to hand out and revoke admin
- * power, so the list never widens to real customers — the one colleague on
- * screen would otherwise be a needle in that haystack.
+ * Staff by default, so the one colleague on screen isn't a needle in a
+ * haystack of real customers — but the Staff/Customers pill switches the
+ * `staff` query param the GET route already honours, because this screen
+ * doubles as the superadmin's look at who has signed up at all.
  */
 export function UsersTable({
 	initial,
@@ -48,12 +55,13 @@ export function UsersTable({
 	const router = useRouter();
 	const [users, setUsers] = useState(initial);
 	const [status, setStatus] = useState<StatusFilter>("all");
+	const [scope, setScope] = useState<ScopeFilter>("staff");
 	const [query, setQuery] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [busyId, setBusyId] = useState<string | null>(null);
 
-	const reload = useCallback(async (q: string) => {
-		const params = new URLSearchParams({ staff: "1" });
+	const reload = useCallback(async (q: string, s: ScopeFilter) => {
+		const params = new URLSearchParams({ staff: s === "staff" ? "1" : "0" });
 		if (q) params.set("q", q);
 		const res = await fetch(`/api/admin/users?${params.toString()}`);
 		if (!res.ok) return;
@@ -62,8 +70,8 @@ export function UsersTable({
 	}, []);
 
 	useEffect(() => {
-		reload(query);
-	}, [query, reload]);
+		reload(query, scope);
+	}, [query, scope, reload]);
 
 	async function changeRole(id: string, role: Role) {
 		setError(null);
@@ -82,7 +90,7 @@ export function UsersTable({
 			);
 			return;
 		}
-		await reload(query);
+		await reload(query, scope);
 		router.refresh();
 	}
 
@@ -103,33 +111,64 @@ export function UsersTable({
 			);
 			return;
 		}
-		await reload(query);
+		await reload(query, scope);
 		router.refresh();
 	}
 
+	// `staff=0` on the GET route means "no role filter", not "customers
+	// only" — there is no server-side customer-only param. So the
+	// Staff/Customers pill is a client-side split on top of that superset:
+	// staff mode drops CUSTOMER rows, customers mode keeps only them.
+	const inScope = useMemo(
+		() =>
+			users.filter((u) =>
+				scope === "customers" ? u.role === "CUSTOMER" : u.role !== "CUSTOMER",
+			),
+		[users, scope],
+	);
+
 	const counts = useMemo(
 		() => ({
-			all: users.length,
-			active: users.filter((u) => !u.disabled).length,
-			suspended: users.filter((u) => u.disabled).length,
+			all: inScope.length,
+			active: inScope.filter((u) => !u.disabled).length,
+			suspended: inScope.filter((u) => u.disabled).length,
 		}),
-		[users],
+		[inScope],
 	);
 
 	const shown = useMemo(
 		() =>
-			users.filter((u) => {
+			inScope.filter((u) => {
 				if (status === "active") return !u.disabled;
 				if (status === "suspended") return u.disabled;
 				return true;
 			}),
-		[users, status],
+		[inScope, status],
 	);
 
 	return (
 		<div className="flex flex-col gap-3">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div className="flex flex-wrap gap-2">
+					{(["staff", "customers"] as const).map((s) => (
+						<button
+							key={s}
+							type="button"
+							aria-pressed={scope === s}
+							onClick={() => setScope(s)}
+							className={`min-h-9 rounded-full border px-3.5 py-2 text-[12px] ${
+								scope === s
+									? "border-[#171717] bg-[#171717] font-semibold text-white"
+									: "border-[#d4d4d4] bg-white text-[#404040] hover:bg-neutral-50"
+							}`}
+						>
+							{SCOPE_FILTER_LABEL[s]}
+						</button>
+					))}
+					<span
+						aria-hidden="true"
+						className="mx-1 w-px self-stretch bg-[#e5e5e5]"
+					/>
 					{(["all", "active", "suspended"] as const).map((f) => (
 						<button
 							key={f}
@@ -161,7 +200,14 @@ export function UsersTable({
 				</div>
 			</div>
 
-			{error && <p className="text-[13px] text-[#7f1d1d]">{error}</p>}
+			{error && (
+				<p
+					role="alert"
+					className="rounded-lg border border-[#fca5a5] bg-[#fef2f2] px-3 py-[9px] text-[#7f1d1d] text-[12px]"
+				>
+					{error}
+				</p>
+			)}
 
 			<div className="overflow-hidden rounded-[14px] border border-[#e5e5e5] bg-white">
 				<div className="grid grid-cols-[minmax(0,2.1fr)_minmax(0,1.1fr)_minmax(0,1fr)_172px] items-center gap-3.5 border-[#ecebe7] border-b bg-[#faf9f7] px-[18px] py-[11px] font-semibold text-[#6b6b6b] text-[11px] uppercase tracking-[.05em]">
@@ -210,45 +256,57 @@ export function UsersTable({
 										</span>
 									</span>
 								</div>
-								<label className="sr-only" htmlFor={`role-${user.id}`}>
-									Role for {user.name}
-								</label>
-								<select
-									id={`role-${user.id}`}
-									value={user.role}
-									disabled={isSelf || busyId === user.id}
-									title={isSelf ? "You can't change your own role" : undefined}
-									onChange={(e) => changeRole(user.id, e.target.value as Role)}
-									className="min-h-9 w-fit rounded-lg border border-[#d4d4d4] px-[9px] py-[7px] text-[#404040] text-[12px] disabled:cursor-not-allowed disabled:opacity-50"
-								>
-									{STAFF_ROLES.map((role) => (
-										<option key={role} value={role}>
-											{ROLE_LABELS[role]}
-										</option>
-									))}
-								</select>
+								{user.role === "CUSTOMER" ? (
+									<span className="text-[#737373] text-[12px]">Customer</span>
+								) : (
+									<>
+										<label className="sr-only" htmlFor={`role-${user.id}`}>
+											Role for {user.name}
+										</label>
+										<select
+											id={`role-${user.id}`}
+											value={user.role}
+											disabled={isSelf || busyId === user.id}
+											title={
+												isSelf ? "You can't change your own role" : undefined
+											}
+											onChange={(e) =>
+												changeRole(user.id, e.target.value as Role)
+											}
+											className="min-h-9 w-fit rounded-lg border border-[#d4d4d4] px-[9px] py-[7px] text-[#404040] text-[12px] disabled:cursor-not-allowed disabled:opacity-50"
+										>
+											{STAFF_ROLES.map((role) => (
+												<option key={role} value={role}>
+													{ROLE_LABELS[role]}
+												</option>
+											))}
+										</select>
+									</>
+								)}
 								<span className="text-[#5c574e] text-[12px]">
 									{user.lastLoginAt
 										? `Last in ${shortTime(new Date(user.lastLoginAt).toISOString())}`
 										: "Never signed in"}
 								</span>
 								<div className="flex w-[172px] justify-end gap-[7px]">
-									<button
-										type="button"
-										aria-label={
-											isSelf
-												? "You can't suspend yourself"
-												: user.disabled
-													? `Restore ${user.name}`
-													: `Suspend ${user.name}`
-										}
-										disabled={isSelf || busyId === user.id}
-										title={isSelf ? "You can't disable yourself" : undefined}
-										onClick={() => toggleDisabled(user.id, !user.disabled)}
-										className="min-h-9 rounded-lg border border-[#d4d4d4] px-[11px] text-[#404040] text-[12px] hover:bg-[#f4f3f1] disabled:cursor-not-allowed disabled:opacity-50"
-									>
-										{user.disabled ? "Restore" : "Suspend"}
-									</button>
+									{user.role !== "CUSTOMER" && (
+										<button
+											type="button"
+											aria-label={
+												isSelf
+													? "You can't suspend yourself"
+													: user.disabled
+														? `Restore ${user.name}`
+														: `Suspend ${user.name}`
+											}
+											disabled={isSelf || busyId === user.id}
+											title={isSelf ? "You can't disable yourself" : undefined}
+											onClick={() => toggleDisabled(user.id, !user.disabled)}
+											className="min-h-9 rounded-lg border border-[#d4d4d4] px-[11px] text-[#404040] text-[12px] hover:bg-[#f4f3f1] disabled:cursor-not-allowed disabled:opacity-50"
+										>
+											{user.disabled ? "Restore" : "Suspend"}
+										</button>
+									)}
 								</div>
 							</li>
 						);
@@ -261,7 +319,7 @@ export function UsersTable({
 				</ul>
 				<div className="flex items-center justify-between gap-3 px-[18px] py-[11px] text-[#5c574e] text-[12px]">
 					<span>
-						Showing {shown.length} of {users.length} members
+						Showing {shown.length} of {inScope.length} members
 					</span>
 				</div>
 			</div>

@@ -79,13 +79,19 @@ export function InviteStaff() {
 			{result ? (
 				<div className="flex flex-col gap-3">
 					{result.promoted ? (
-						<p className="text-[13px] text-[#1f5138]">
+						<p
+							role="status"
+							className="rounded-lg border border-[#c8d8ce] bg-[#f2f7f4] px-3 py-[9px] text-[#1f5138] text-[12px]"
+						>
 							Role granted. Existing account given the {ROLE_LABELS[role]} role.
 							They keep signing in the way they already do.
 						</p>
 					) : (
 						<div className="flex flex-col gap-2">
-							<p className="text-[13px] text-[#1f5138]">
+							<p
+								role="status"
+								className="rounded-lg border border-[#c8d8ce] bg-[#f2f7f4] px-3 py-[9px] text-[#1f5138] text-[12px]"
+							>
 								Staff account created. Give this password to them in person — it
 								is not shown again.
 							</p>
@@ -112,7 +118,7 @@ export function InviteStaff() {
 								required
 								value={email}
 								onChange={(e) => setEmail(e.target.value)}
-								className="rounded-lg border border-[#e5e5e5] px-3 py-2"
+								className="min-h-10 rounded-[9px] border border-[#d4d4d4] px-3 py-[10px]"
 							/>
 						</label>
 						<label className="flex min-w-[160px] flex-col gap-1 text-[13px]">
@@ -122,7 +128,7 @@ export function InviteStaff() {
 								required
 								value={name}
 								onChange={(e) => setName(e.target.value)}
-								className="rounded-lg border border-[#e5e5e5] px-3 py-2"
+								className="min-h-10 rounded-[9px] border border-[#d4d4d4] px-3 py-[10px]"
 							/>
 						</label>
 						<label className="flex flex-col gap-1 text-[13px]">
@@ -130,7 +136,7 @@ export function InviteStaff() {
 							<select
 								value={role}
 								onChange={(e) => setRole(e.target.value as Role)}
-								className="rounded-lg border border-[#e5e5e5] px-3 py-2"
+								className="min-h-10 rounded-[9px] border border-[#d4d4d4] px-3 py-[10px]"
 							>
 								{STAFF_ROLES.map((r) => (
 									<option key={r} value={r}>
@@ -148,12 +154,12 @@ export function InviteStaff() {
 									minLength={12}
 									value={password}
 									onChange={(e) => setPassword(e.target.value)}
-									className="w-[160px] rounded-lg border border-[#e5e5e5] px-3 py-2"
+									className="min-h-10 w-[160px] rounded-[9px] border border-[#d4d4d4] px-3 py-[10px]"
 								/>
 								<button
 									type="button"
 									onClick={() => setPassword(generatePassword())}
-									className="rounded-lg border border-[#e5e5e5] px-3 py-2 text-[13px] hover:bg-neutral-50"
+									className="min-h-10 rounded-[9px] border border-[#d4d4d4] px-3 py-[10px] text-[13px] hover:bg-neutral-50"
 								>
 									Generate
 								</button>
@@ -167,8 +173,15 @@ export function InviteStaff() {
 							{submitting ? "Inviting…" : "Invite"}
 						</button>
 					</div>
-					<p className="text-[12px] text-neutral-500">{ROLE_HINTS[role]}</p>
-					{error && <p className="text-[13px] text-[#7f1d1d]">{error}</p>}
+					<p className="text-[#5c574e] text-[12px]">{ROLE_HINTS[role]}</p>
+					{error && (
+						<p
+							role="alert"
+							className="rounded-lg border border-[#fca5a5] bg-[#fef2f2] px-3 py-[9px] text-[#7f1d1d] text-[12px]"
+						>
+							{error}
+						</p>
+					)}
 				</form>
 			)}
 		</div>
