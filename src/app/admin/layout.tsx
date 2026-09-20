@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AdminUserProvider } from "@/app/admin/AdminUserContext";
+import { currentUser } from "@/lib/auth/session";
 import "../globals.css";
 
 const geistSans = Geist({
@@ -21,17 +23,23 @@ export const metadata: Metadata = {
 	description: "Internal catalogue, design and site-content admin.",
 };
 
-export default function AdminRootLayout({
+export default async function AdminRootLayout({
 	children,
 }: {
 	children: React.ReactNode;
 }) {
+	const user = await currentUser();
+
 	return (
 		<html
 			lang="en"
 			className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
 		>
-			<body className="flex min-h-full flex-col font-sans">{children}</body>
+			<body className="flex min-h-full flex-col font-sans">
+				<AdminUserProvider name={user?.name ?? null}>
+					{children}
+				</AdminUserProvider>
+			</body>
 		</html>
 	);
 }

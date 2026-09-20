@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { AdminSignOut } from "@/app/admin/AdminSignOut";
+import { useAdminUserName } from "@/app/admin/AdminUserContext";
 
 /**
  * The admin chrome: a breadcrumb row over a tab bar.
@@ -33,16 +35,8 @@ export function AdminHeader({
 }: {
 	trail?: { label: string; href?: string }[];
 }) {
-	const router = useRouter();
 	const pathname = usePathname();
-
-	// Lives here rather than being passed in: it was copy-pasted identically
-	// into all three admin pages, and a function prop isn't serializable
-	// across the client-entry boundary anyway.
-	async function signOut() {
-		await fetch("/api/admin/logout", { method: "POST" });
-		router.push("/admin/login");
-	}
+	const name = useAdminUserName();
 
 	return (
 		<header className="flex shrink-0 flex-col border-neutral-200 border-b bg-white">
@@ -96,13 +90,7 @@ export function AdminHeader({
 						</svg>
 						View as customer
 					</Link>
-					<button
-						type="button"
-						onClick={signOut}
-						className="px-2.5 py-2.5 text-neutral-400 text-xs hover:text-neutral-600"
-					>
-						Sign out
-					</button>
+					<AdminSignOut name={name ?? "Admin"} />
 				</div>
 			</div>
 
