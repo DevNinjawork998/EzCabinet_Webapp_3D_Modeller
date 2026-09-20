@@ -42,6 +42,16 @@ export const auth = betterAuth({
 		// No reset mail: three internal users in one office, and the superadmin
 		// sets the initial password by hand. Adding self-serve reset means
 		// adding an email vendor.
+		//
+		// Better Auth's own default is 8
+		// (node_modules/better-auth/dist/context/create-context.mjs:
+		// `minPasswordLength: options.emailAndPassword?.minPasswordLength || 8`),
+		// read by every password-accepting endpoint — sign-up, `set-password`,
+		// and `change-password` alike — off `ctx.context.password.config`. Set
+		// here so all of them share the one floor, matching the invite's own
+		// 12-character minimum (`src/lib/auth/invite.ts`) rather than leaving a
+		// server-side gap under a client-side check.
+		minPasswordLength: 12,
 	},
 	socialProviders: {
 		google: {

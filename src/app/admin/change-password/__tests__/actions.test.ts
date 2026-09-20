@@ -85,4 +85,34 @@ describe("changeOwnPassword", () => {
 		).resolves.toEqual({ ok: false, error: "unknown" });
 		expect(update).not.toHaveBeenCalled();
 	});
+
+	/**
+	 * The Server Action is a public POST: the client-side length check in
+	 * ChangePasswordForm is a hint, not a boundary. This guard is the
+	 * boundary, and it must reject before ever calling Better Auth or
+	 * touching the flag.
+	 */
+	it("rejects a new password under 12 characters without calling Better Auth or clearing the flag", async () => {
+		currentUser.mockResolvedValue(user);
+		await expect(changeOwnPassword("current-pw", "short11ch")).resolves.toEqual(
+			{ ok: false, error: "PASSWORD_TOO_SHORT" },
+		);
+		expect(changePassword).not.toHaveBeenCalled();
+		expect(update).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * The password did change and other sessions were revoked by this point —
+	 * the failure is only in bookkeeping. The caller must be able to tell that
+	 * apart from "your current password was wrong", which is what the earlier
+	 * try/catch around `auth.api.changePassword` alone would have reported.
+	 */
+	it("reports a distinct error when the change succeeds but clearing the flag fails", async () => {
+		currentUser.mockResolvedValue(user);
+		changePassword.mockResolvedValue({ token: "t", user });
+		update.mockRejectedValue(new Error("db unreachable"));
+		await expect(
+			changeOwnPassword("current-pw", "new-password-123"),
+		).resolves.toEqual({ ok: false, error: "flag_not_cleared" });
+	});
 });

@@ -11,6 +11,11 @@ function messageFor(code: string): string {
 	if (code === "INVALID_PASSWORD") return "Current password is incorrect.";
 	if (code === "PASSWORD_TOO_SHORT")
 		return `New password must be at least ${MIN_LENGTH} characters.`;
+	// The password did change (and other sessions were revoked); only the
+	// follow-up bookkeeping failed. Distinct from every error above this one,
+	// which all mean the password was never touched.
+	if (code === "flag_not_cleared")
+		return "Your password was changed, but something went wrong finishing up. Sign in again — if you're still asked to change your password, tell an admin.";
 	return "Could not change password. Try again.";
 }
 

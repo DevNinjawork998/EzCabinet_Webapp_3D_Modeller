@@ -7,6 +7,16 @@ import { currentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/catalogue/db";
 
 /**
+ * Matches `emailAndPassword.minPasswordLength` in `src/lib/auth.ts` (which
+ * covers every Better Auth password path, this one included) and the
+ * invite's own floor (`src/lib/auth/invite.ts`). Checked again here rather
+ * than trusted to the library default: this Server Action is a public POST,
+ * so `ChangePasswordForm`'s own client-side length check is a hint, not a
+ * boundary — this is.
+ */
+const MIN_PASSWORD_LENGTH = 12;
+
+/**
  * Changes the caller's own password and, only on success, clears
  * `mustChangePassword`.
  *
@@ -32,6 +42,10 @@ export async function changeOwnPassword(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
 	const user = await currentUser();
 	if (!user) return { ok: false, error: "not_signed_in" };
+
+	if (newPassword.length < MIN_PASSWORD_LENGTH) {
+		return { ok: false, error: "PASSWORD_TOO_SHORT" };
+	}
 
 	try {
 		// `revokeOtherSessions: true` rotates the session: Better Auth's
@@ -60,10 +74,22 @@ export async function changeOwnPassword(
 	}
 
 	// Only reachable once Better Auth has accepted the change above — see the
-	// function comment for why that is the point.
-	await prisma.user.update({
-		where: { id: user.id },
-		data: { mustChangePassword: false },
-	});
+	// function comment for why that is the point. Its own try/catch: by this
+	// line the password has already changed and other sessions have already
+	// been revoked, so a failure here is bookkeeping only — reporting it as
+	// "could not change password" (the message the block above uses) would be
+	// actively wrong, since retrying with the old password will now fail too.
+	try {
+		await prisma.user.update({
+			where: { id: user.id },
+			data: { mustChangePassword: false },
+		});
+	} catch (error) {
+		console.error(
+			"Password changed but failed to clear mustChangePassword",
+			error,
+		);
+		return { ok: false, error: "flag_not_cleared" };
+	}
 	return { ok: true };
 }
