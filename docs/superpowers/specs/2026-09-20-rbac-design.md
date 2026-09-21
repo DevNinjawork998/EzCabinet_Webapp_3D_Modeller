@@ -167,7 +167,8 @@ no sign-in UI renders. Today's behaviour minus the password prompt.
 
 The production guard is not a convenience. A misdeployed environment variable
 must not be able to unlock the admin surface or the orders API, so the flag is
-ignored where it would do harm. Local and preview only.
+ignored where it would do harm. Local development only — preview was dropped
+on 2026-09-22, since a preview is a public URL with real carrier credentials.
 
 ## Schema
 

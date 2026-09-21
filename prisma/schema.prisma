@@ -310,7 +310,7 @@ model Delivery {
   /// address, and `/track/42` would hand the next customer's to anyone who can
   /// count. Separate from `id` as well, so a link forwarded to the wrong
   /// WhatsApp group can be rotated without moving the job.
-  publicToken       String         @unique @default(cuid())
+  publicToken       String         @unique @default(cuid(2))
   /// The paid order this job delivers, when it came from one. SetNull rather
   /// than cascade: a job already booked with a carrier outlives a removed order.
   orderId           String?
@@ -333,7 +333,7 @@ model Order {
   number             Int         @unique @default(autoincrement())
   /// The key to the customer's confirmation page, never `number` — same
   /// reasoning as `Delivery.publicToken`.
-  publicToken        String      @unique @default(cuid())
+  publicToken        String      @unique @default(cuid(2))
   status             OrderStatus @default(AWAITING_PAYMENT)
   customerName       String
   /// E.164, via `lib/logistics/phone.ts`.

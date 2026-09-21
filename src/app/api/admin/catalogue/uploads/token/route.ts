@@ -41,6 +41,8 @@ export const POST = withAuth("catalogue:write", async (request) => {
 					// and the finalize route reads the actual bytes anyway. The
 					// pathname check above is what actually scopes the token.
 					addRandomSuffix: false,
+					// A design export is ~2 MB; this is headroom, not a target.
+					maximumSizeInBytes: 50 * 1024 * 1024,
 				};
 			},
 		});

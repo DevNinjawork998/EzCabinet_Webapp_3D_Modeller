@@ -18,10 +18,11 @@ describe("authEnabled", () => {
 		expect(authEnabled()).toBe(false);
 	});
 
-	it("is off on a preview deployment", () => {
+	it("STAYS ON on a preview deployment however the flag is set", () => {
+		// A preview is a public URL with real carrier credentials behind it.
 		vi.stubEnv("AUTH_ENABLED", "false");
 		vi.stubEnv("VERCEL_ENV", "preview");
-		expect(authEnabled()).toBe(false);
+		expect(authEnabled()).toBe(true);
 	});
 
 	it("STAYS ON in production however the flag is set", () => {

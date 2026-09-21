@@ -7,12 +7,14 @@
  *
  * The production guard is not a convenience. A misdeployed environment
  * variable must not be able to unlock the admin surface or the orders API, so
- * in production the flag is not consulted at all. Local and preview only.
+ * on any Vercel deployment the flag is not consulted at all — preview
+ * included, since a preview is a public URL holding real carrier credentials.
+ * Local development only.
  *
  * Only the exact string "false" disables it: a flag that also answered to "0",
  * "no" or "off" has more ways to be switched off by accident than on purpose.
  */
 export function authEnabled(): boolean {
-	if (process.env.VERCEL_ENV === "production") return true;
+	if (process.env.VERCEL_ENV) return true;
 	return process.env.AUTH_ENABLED !== "false";
 }

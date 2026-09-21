@@ -44,8 +44,11 @@ export async function GET(
 			"Content-Type": result.blob.contentType ?? "image/jpeg",
 			// The URL carries `?v=<updatedAt>`, so a given URL's bytes never
 			// change — safe to cache hard and let the query string do the
-			// busting when a photo is replaced.
-			"Cache-Control": "public, max-age=31536000, immutable",
+			// busting when a photo is replaced. `s-maxage` lets Vercel's CDN
+			// hold it too (it keys on the query string), so a flood of requests
+			// for the hero photo is served from the edge, not a function and a
+			// Blob read apiece.
+			"Cache-Control": "public, max-age=31536000, s-maxage=31536000, immutable",
 		},
 	});
 }
