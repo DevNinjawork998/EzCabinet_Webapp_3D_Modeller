@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { fill } from "@/lib/copy/fill";
 import { useCopy } from "../CopyContext";
 
@@ -19,6 +19,7 @@ export function PriceFooter({
 	coverNote,
 	totalLabel,
 	ctaDisabled,
+	notice,
 	onQuoteAction,
 }: {
 	lines: { id: string; label: string; detail: string; amount: string }[];
@@ -27,6 +28,10 @@ export function PriceFooter({
 	coverNote: string | null;
 	totalLabel: string;
 	ctaDisabled: boolean;
+	/** Something the customer should see before pressing the quote button —
+	 * the sign-in nudge today. In the footer's own flow, so it can never cover
+	 * the total the way a floating layer did. */
+	notice?: ReactNode;
 	onQuoteAction: () => void;
 }) {
 	const t = useCopy();
@@ -58,6 +63,8 @@ export function PriceFooter({
 				</span>{" "}
 				{t.planner.price.placeholderNote}
 			</p>
+
+			{notice}
 
 			<button
 				type="button"

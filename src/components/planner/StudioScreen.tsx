@@ -1298,12 +1298,11 @@ export function StudioScreen({
 						}
 						totalLabel={formatRm(price.totalRm, { maximumFractionDigits: 0 })}
 						ctaDisabled={placed.length === 0}
+						notice={<SignInNudge cabinetCount={placed.length} />}
 						onQuoteAction={onGoToQuoteAction}
 					/>
 				</aside>
 			</div>
-
-			<SignInNudge cabinetCount={placed.length} />
 		</main>
 	);
 }
