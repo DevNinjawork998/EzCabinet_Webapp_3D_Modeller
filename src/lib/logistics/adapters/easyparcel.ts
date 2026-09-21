@@ -1,6 +1,6 @@
 import "server-only";
-import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { secretsMatch } from "@/lib/secretsMatch";
 import { pickupPlace, WORKSHOP_ADDRESS, WORKSHOP_PHONE } from "../carriers";
 import { geocoderFault } from "../geocode";
 import { carrierFetch } from "../http";
@@ -20,13 +20,6 @@ import type {
 } from "../types";
 
 const WEBHOOK_TOKEN = () => process.env.EASYPARCEL_WEBHOOK_TOKEN ?? "";
-
-/** Constant-time, and length-safe — `timingSafeEqual` throws on a length mismatch. */
-function secretsMatch(a: string, b: string): boolean {
-	const left = Buffer.from(a);
-	const right = Buffer.from(b);
-	return left.length === right.length && timingSafeEqual(left, right);
-}
 
 /**
  * EasyParcel's webhook payloads, loose on purpose.
@@ -719,9 +712,7 @@ export const easyparcelAdapter: CarrierAdapter = {
 	 * a call per callback.
 	 */
 	verifyWebhook(rawBody, _headers, url): CarrierWebhookEvent | null {
-		const expected = WEBHOOK_TOKEN();
-		if (expected === "") return null;
-		if (!secretsMatch(url.searchParams.get("token") ?? "", expected)) {
+		if (!secretsMatch(url.searchParams.get("token") ?? "", WEBHOOK_TOKEN())) {
 			return null;
 		}
 

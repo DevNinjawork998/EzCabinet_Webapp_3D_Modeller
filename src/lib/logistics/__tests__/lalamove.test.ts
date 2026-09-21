@@ -467,6 +467,18 @@ describe("lalamoveAdapter.verifyWebhook", () => {
 		expect(lalamoveAdapter.verifyWebhook?.(body, headers, url)).toBeNull();
 	});
 
+	it("refuses everything while no api key is configured", () => {
+		// An unset key reads as "", and a forged payload sending "" used to
+		// match it.
+		vi.stubEnv("LALAMOVE_API_KEY", "");
+		const body = JSON.stringify({
+			apiKey: "",
+			data: { order: { orderId: "9", status: "COMPLETED" } },
+		});
+		expect(lalamoveAdapter.verifyWebhook?.(body, headers, url)).toBeNull();
+		vi.unstubAllEnvs();
+	});
+
 	it("rejects junk", () => {
 		expect(
 			lalamoveAdapter.verifyWebhook?.("not json", headers, url),

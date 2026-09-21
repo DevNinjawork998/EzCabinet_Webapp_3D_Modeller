@@ -73,7 +73,7 @@ describe("requireAuth", () => {
 		);
 	});
 
-	it("bypasses entirely when AUTH_ENABLED is false outside production", async () => {
+	it("bypasses entirely when AUTH_ENABLED is false in local development", async () => {
 		vi.stubEnv("AUTH_ENABLED", "false");
 		currentUser.mockResolvedValue(null);
 		await expect(requireAuth("users:manage")).resolves.toBe(BYPASS_USER);
@@ -88,5 +88,14 @@ describe("requireAuth", () => {
 			status: 401,
 		});
 		await expect(requireAuth("users:manage")).rejects.toBeInstanceOf(AuthError);
+	});
+
+	it("still enforces on a preview deployment however AUTH_ENABLED is set", async () => {
+		vi.stubEnv("AUTH_ENABLED", "false");
+		vi.stubEnv("VERCEL_ENV", "preview");
+		currentUser.mockResolvedValue(null);
+		await expect(requireAuth("users:manage")).rejects.toMatchObject({
+			status: 401,
+		});
 	});
 });

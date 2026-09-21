@@ -34,6 +34,14 @@ import { prisma } from "@/lib/catalogue/db";
  */
 export const auth = betterAuth({
 	database: prismaAdapter(prisma, { provider: "postgresql" }),
+	// Nobody signs themselves up with a password: customers use Google, and
+	// staff passwords are set by a superadmin's invite. Left open, a stranger
+	// could register a password on a future colleague's address and ride the
+	// invite's promotion into the admin surface. `disabledPaths` closes the
+	// HTTP route only — the invite and the seed call `auth.api.signUpEmail`
+	// server-side, which never passes through the router.
+	// (`emailAndPassword.disableSignUp` would close the server call too.)
+	disabledPaths: ["/sign-up/email"],
 	emailAndPassword: {
 		enabled: true,
 		// See the module comment above: this is the line that stops a staff
