@@ -22,6 +22,7 @@ import { drawerTravelMm } from "@/lib/planner/parts";
 import { type BoxMm, swingOf } from "@/lib/planner/swing";
 import { useFrontSurface, useGrain } from "./grain";
 import { Hinge, hingeOf } from "./Hinge";
+import { markShadowsDirty } from "./lightingRig";
 import { Slide } from "./Slide";
 
 /**
@@ -161,6 +162,12 @@ export function useDesignMesh(
 			cancelled = true;
 		};
 	}, [designId]);
+
+	// The drafted mesh lands a frame or more after the layout that asked for
+	// it, with no layout change to redraw the shadows.
+	useEffect(() => {
+		if (groups) markShadowsDirty();
+	}, [groups]);
 
 	return groups;
 }

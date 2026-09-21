@@ -38,6 +38,11 @@ const FLOOR_TILE_M = { x: 2.44, z: 1.08 };
  * coat is. */
 const FLOOR_COLOR = "#e3cba8";
 
+/** Walls and floor take shadows but never cast them — one wall casting would
+ * black out half the room. Read by `syncShadowFlags`. Module-level so the
+ * object keeps its identity between renders. */
+const RECEIVE_ONLY = { shadow: "receive" };
+
 /** Lazy for the same reason as `grainSource` in `grain.ts`: no `Image` on the
  * server. */
 let floorSource: Texture | null = null;
@@ -115,7 +120,7 @@ export function Room({
 
 	return (
 		<group>
-			<mesh rotation={[-Math.PI / 2, 0, 0]}>
+			<mesh rotation={[-Math.PI / 2, 0, 0]} userData={RECEIVE_ONLY}>
 				<shapeGeometry args={[floorShape]} />
 				<meshStandardMaterial
 					map={floorMap}
@@ -140,6 +145,7 @@ export function Room({
 							m((start.zMm + end.zMm) / 2),
 						]}
 						rotation={[0, Math.atan2(dz === 0 ? 0 : -dz, dx), 0]}
+						userData={RECEIVE_ONLY}
 						onClick={
 							onWallPick &&
 							((e) => {

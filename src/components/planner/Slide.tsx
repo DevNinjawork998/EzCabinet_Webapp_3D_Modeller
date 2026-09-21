@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useRef } from "react";
 import type { Group } from "three";
 import { MathUtils } from "three";
+import { markShadowsDirty } from "./lightingRig";
 
 /**
  * A drawer that runs out of its carcass.
@@ -42,10 +43,14 @@ export function Slide({
 		const current = group.position.z;
 		if (Math.abs(current - target) < SETTLED_M) {
 			// Land exactly on the target once rather than easing at it forever.
-			if (current !== target) group.position.z = target;
+			if (current !== target) {
+				group.position.z = target;
+				markShadowsDirty();
+			}
 			return;
 		}
 		group.position.z = MathUtils.damp(current, target, 8, delta);
+		markShadowsDirty();
 	});
 
 	return <group ref={runner}>{children}</group>;

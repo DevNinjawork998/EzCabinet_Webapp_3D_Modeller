@@ -1,6 +1,6 @@
 "use client";
 
-import { OrbitControls, Shadow } from "@react-three/drei";
+import { OrbitControls, PerformanceMonitor, Shadow } from "@react-three/drei";
 import {
 	Canvas,
 	type ThreeEvent,
@@ -14,17 +14,7 @@ import type {
 	PerspectiveCamera,
 	Vector3 as Vector3Type,
 } from "three";
-import {
-	Matrix4,
-	type Mesh,
-	type MeshBasicMaterial,
-	Plane,
-	type PlaneGeometry,
-	Ray,
-	Raycaster,
-	Vector2,
-	Vector3,
-} from "three";
+import { Matrix4, Plane, Ray, Raycaster, Vector2, Vector3 } from "three";
 import { captureError } from "@/lib/analytics";
 import {
 	panSpaceFor,
@@ -96,6 +86,13 @@ import {
 	handleCentreM,
 	PUCK_LIFT,
 } from "./handle";
+import { StudioLighting } from "./Lighting";
+import {
+	markShadowsDirty,
+	type Quality,
+	qualityFromSearch,
+	SHADOW_MAP,
+} from "./lightingRig";
 import { MeasureOverlay } from "./MeasureOverlay";
 import { PositionDimensions } from "./PositionDimensions";
 import { Room } from "./Room";
@@ -666,21 +663,37 @@ function PanGizmo({
 					transparent
 					opacity={0.95}
 					depthTest={false}
+					toneMapped={false}
 				/>
 			</mesh>
 			<mesh position={[0, 0, 0.001]} renderOrder={21}>
 				<ringGeometry args={[0.105, 0.115, 32]} />
-				<meshBasicMaterial color={colour} transparent depthTest={false} />
+				<meshBasicMaterial
+					color={colour}
+					transparent
+					depthTest={false}
+					toneMapped={false}
+				/>
 			</mesh>
 			{/* Both bars and all four heads: unlike the cabinet handle, this one
 			    always moves in two axes. */}
 			<mesh position={[0, 0, 0.002]} renderOrder={22}>
 				<planeGeometry args={[0.13, 0.014]} />
-				<meshBasicMaterial color={colour} transparent depthTest={false} />
+				<meshBasicMaterial
+					color={colour}
+					transparent
+					depthTest={false}
+					toneMapped={false}
+				/>
 			</mesh>
 			<mesh position={[0, 0, 0.002]} renderOrder={22}>
 				<planeGeometry args={[0.014, 0.13]} />
-				<meshBasicMaterial color={colour} transparent depthTest={false} />
+				<meshBasicMaterial
+					color={colour}
+					transparent
+					depthTest={false}
+					toneMapped={false}
+				/>
 			</mesh>
 			{[0, Math.PI / 2, Math.PI, -Math.PI / 2].map((angle) => (
 				<mesh
@@ -690,7 +703,12 @@ function PanGizmo({
 					renderOrder={22}
 				>
 					<circleGeometry args={[0.022, 3]} />
-					<meshBasicMaterial color={colour} transparent depthTest={false} />
+					<meshBasicMaterial
+						color={colour}
+						transparent
+						depthTest={false}
+						toneMapped={false}
+					/>
 				</mesh>
 			))}
 		</group>
@@ -880,6 +898,7 @@ function Run({
 	onFreeDrop,
 	onFreeRotate,
 	freeStanding = false,
+	blobShadows,
 	construction,
 }: {
 	layout: PlannerLayout;
@@ -949,6 +968,8 @@ function Run({
 	/** One free-standing cabinet drawn as a run of one in its own frame: no
 	 * bare wall to press, and every slide follows the floor. */
 	freeStanding?: boolean;
+	/** Whether to render contact shadows. */
+	blobShadows: boolean;
 	/** Resolved outside the canvas and passed in: `Run` renders inside
 	 * `<Canvas>`, which is its own reconciler root. */
 	construction: Construction;
@@ -1400,6 +1421,8 @@ function Run({
 	onDragMove.current = (event) => {
 		const drag = dragRef.current;
 		if (!drag) return;
+		// The cabinet is moved imperatively below, not through a re-render.
+		markShadowsDirty();
 		const rect = gl.domElement.getBoundingClientRect();
 		DRAG_NDC.set(
 			((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -1605,11 +1628,13 @@ function Run({
 				</mesh>
 			)}
 
-			<ContactShadows
-				layout={stayLayout}
-				runWidthMm={runWidthMm}
-				engine={engine}
-			/>
+			{blobShadows && (
+				<ContactShadows
+					layout={stayLayout}
+					runWidthMm={runWidthMm}
+					engine={engine}
+				/>
+			)}
 			<Worktop
 				layout={stayLayout}
 				runWidthMm={runWidthMm}
@@ -1655,11 +1680,13 @@ function Run({
 			<group ref={extrasRef}>
 				{floatLayout && (
 					<>
-						<ContactShadows
-							layout={floatLayout}
-							runWidthMm={runWidthMm}
-							engine={engine}
-						/>
+						{blobShadows && (
+							<ContactShadows
+								layout={floatLayout}
+								runWidthMm={runWidthMm}
+								engine={engine}
+							/>
+						)}
 						<Worktop
 							layout={floatLayout}
 							runWidthMm={runWidthMm}
@@ -1861,7 +1888,12 @@ function MoveHandle({
 				onPointerDown={(e) => onRotate(e, planeY)}
 			>
 				<ringGeometry args={[0.145, 0.185, 40]} />
-				<meshBasicMaterial color="#1f5138" transparent opacity={0.5} />
+				<meshBasicMaterial
+					color="#1f5138"
+					transparent
+					opacity={0.5}
+					toneMapped={false}
+				/>
 			</mesh>
 			{/* Two heads chasing each other round it: the ↻ that says "turn me". */}
 			{[Math.PI / 2, -Math.PI / 2].map((angle) => (
@@ -1879,27 +1911,32 @@ function MoveHandle({
 					    `HANDLE_HEAD_TIP` past the orbit — that sum is `HANDLE_REACH`,
 					    and it is what has to clear the floor. */}
 					<circleGeometry args={[HANDLE_HEAD_TIP, 3]} />
-					<meshBasicMaterial color="#1f5138" />
+					<meshBasicMaterial color="#1f5138" toneMapped={false} />
 				</mesh>
 			))}
 
 			<mesh>
 				<circleGeometry args={[0.115, 32]} />
-				<meshBasicMaterial color="#ffffff" transparent opacity={0.95} />
+				<meshBasicMaterial
+					color="#ffffff"
+					transparent
+					opacity={0.95}
+					toneMapped={false}
+				/>
 			</mesh>
 			<mesh position={[0, 0, 0.001]}>
 				<ringGeometry args={[0.105, 0.115, 32]} />
-				<meshBasicMaterial color="#1f5138" />
+				<meshBasicMaterial color="#1f5138" toneMapped={false} />
 			</mesh>
 			{/* Two bars and four heads: the ✥ that says "drag me along". */}
 			<mesh position={[0, 0, 0.002]}>
 				<planeGeometry args={[0.13, 0.014]} />
-				<meshBasicMaterial color="#1f5138" />
+				<meshBasicMaterial color="#1f5138" toneMapped={false} />
 			</mesh>
 			{vertical && (
 				<mesh position={[0, 0, 0.002]}>
 					<planeGeometry args={[0.014, 0.13]} />
-					<meshBasicMaterial color="#1f5138" />
+					<meshBasicMaterial color="#1f5138" toneMapped={false} />
 				</mesh>
 			)}
 			{(vertical ? [0, Math.PI / 2, Math.PI, -Math.PI / 2] : [0, Math.PI]).map(
@@ -1910,7 +1947,7 @@ function MoveHandle({
 						rotation={[0, 0, angle - Math.PI / 2]}
 					>
 						<circleGeometry args={[0.022, 3]} />
-						<meshBasicMaterial color="#1f5138" />
+						<meshBasicMaterial color="#1f5138" toneMapped={false} />
 					</mesh>
 				),
 			)}
@@ -1919,58 +1956,9 @@ function MoveHandle({
 }
 
 /**
- * A wall unit's contact patch, faded out as the camera swings off-axis.
- *
- * The patch is painted on the wall and is deliberately larger than the cabinet
- * hanging in front of it, so head-on only its soft fringe shows and it reads as
- * shadow. Those two facts are what break it from the side: the cabinet sits
- * forward of the wall by the wall gap plus its own depth, so parallax slides it
- * off the patch, and what is left is a grey smudge on bare wall with nothing
- * casting it. The planner's camera orbits, so that view is one drag away.
- *
- * Fading on the viewing angle keeps the cue where it works and removes it where
- * it lies. `useFrame` writes the material directly rather than going through
- * React state — this runs every frame, and re-rendering the scene graph sixty
- * times a second to animate one float is exactly the mobile budget's problem.
- */
-function WallShadow({
-	position,
-	scale,
-	opacity,
-}: {
-	position: [number, number, number];
-	scale: [number, number, number];
-	opacity: number;
-}) {
-	const ref = useRef<Mesh<PlaneGeometry, MeshBasicMaterial>>(null);
-
-	useFrame(({ camera }) => {
-		const mesh = ref.current;
-		if (!mesh) return;
-		// The wall faces +z, so the z component of the direction from patch to
-		// camera is how square-on the view is: 1 looking straight at the wall,
-		// 0 grazing it, negative from behind.
-		const facing = SHADOW_VIEW.subVectors(
-			camera.position,
-			mesh.position,
-		).normalize().z;
-		// Full strength until the view is already fairly oblique, then off by the
-		// time the wall is edge-on. Squared so it leaves rather than lingers.
-		const fade = Math.max(0, Math.min(1, (facing - 0.15) / 0.35));
-		mesh.material.opacity = opacity * fade * fade;
-	});
-
-	return <Shadow ref={ref} position={position} scale={scale} color="#151311" />;
-}
-
-/** Scratch vector for the fade above — allocating one per frame per wall unit
- * is how a scene starts stuttering on the phones this app is built for. */
-const SHADOW_VIEW = new Vector3();
-
-/**
- * Fake contact shadows. No shadow maps — the mobile budget in CLAUDE.md rules
- * those out, and a cabinet only really needs to look *attached* to what it
- * meets.
+ * Fake contact shadows under floor units — a cheap contact darkening on top
+ * of the real shadow map, off on the `high` tier where ambient occlusion does
+ * the same job properly.
  *
  * The pool is deliberately wider and deeper than the cabinet standing on it: a
  * blob the same size as the footprint is hidden underneath the very thing it is
@@ -1985,7 +1973,7 @@ function ContactShadows({
 	runWidthMm: number;
 	engine: PlannerEngine;
 }) {
-	const { positionsOf, floorHeightMmOf } = engine;
+	const { positionsOf } = engine;
 	return (
 		<>
 			{/* Only for a cabinet that is actually standing on the floor. A pool
@@ -2007,32 +1995,10 @@ function ContactShadows({
 							m(position.family.depthMm) * 1.7,
 							1,
 						]}
-						opacity={0.5}
+						opacity={0.35}
 						color="#151311"
 					/>
 				))}
-
-			{/* Wall units get a soft patch on the wall itself, offset down so it
-			    peeks out below the carcass — the cue that says "hung on that wall"
-			    rather than "floating in front of it". */}
-			{positionsOf(layout, "wall").map((position) => (
-				<WallShadow
-					key={position.placed.id}
-					position={[
-						m(position.xMm + position.widthMm / 2 - runWidthMm / 2),
-						m(
-							floorHeightMmOf(position, layout) + position.family.heightMm / 2,
-						) - 0.06,
-						0.002,
-					]}
-					scale={[
-						m(position.widthMm) * 1.2,
-						m(position.family.heightMm) * 1.15,
-						1,
-					]}
-					opacity={0.28}
-				/>
-			))}
 		</>
 	);
 }
@@ -2418,6 +2384,12 @@ export default function PlannerScene({
 			}),
 		[rooms, layout],
 	);
+	// Anything that moves, adds or removes a cabinet changes what casts. The
+	// door animation and a drag mark their own frames as they run.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the deps are the triggers, not inputs
+	useEffect(() => {
+		markShadowsDirty();
+	}, [layout, openIds, doorsHidden, finish]);
 	const count = layout.runs.length;
 	const cornersByRun = useMemo(
 		() => layout.runs.map((_, i) => rooms.cornerPositionsOf(layout, i)),
@@ -2522,6 +2494,20 @@ export default function PlannerScene({
 	const offsets =
 		lonelyId && lonelyView ? engine.offsetsOf(lonelyView, lonelyId) : null;
 
+	// Every device starts on `low` and earns `high` by measured frame rate —
+	// no user-agent guessing, so a strong phone gets it and a weak laptop does
+	// not. View state: never on the layout, never stored.
+	const [forced] = useState(() =>
+		typeof window === "undefined"
+			? null
+			: qualityFromSearch(
+					window.location.search,
+					process.env.NODE_ENV !== "production",
+				),
+	);
+	const [measured, setMeasured] = useState<Quality>("low");
+	const quality = forced ?? measured;
+
 	return (
 		<Canvas
 			dpr={[1, 2]}
@@ -2538,14 +2524,24 @@ export default function PlannerScene({
 					captureError(new Error("webgl context lost")),
 				)
 			}
+			// Redrawn on demand, never per frame — see `SHADOW_MAP`.
+			shadows={SHADOW_MAP}
 		>
 			<color attach="background" args={["#f4f2ee"]} />
-			{/* Was 1.5 + 2.0, which clipped every mid-tone: Rhone Oak rendered
-			    near-white and the grain with it. Dropped until the catalogue's
-			    own finish colours survive to the screen, since that screenshot is
-			    what goes out over WhatsApp. */}
-			<ambientLight intensity={0.85} />
-			<directionalLight position={[4, 7, 6]} intensity={1.35} />
+			<StudioLighting
+				plan={layout.plan}
+				ceilingHeightMm={layout.ceilingHeightMm}
+				quality={quality}
+			/>
+
+			{/* Flip-flopping means the device sits on the line: settle on `low`
+			    for the session rather than swapping AO in and out. */}
+			<PerformanceMonitor
+				flipflops={3}
+				onIncline={() => setMeasured("high")}
+				onDecline={() => setMeasured("low")}
+				onFallback={() => setMeasured("low")}
+			/>
 
 			<Room
 				plan={layout.plan}
@@ -2596,6 +2592,7 @@ export default function PlannerScene({
 						onTransfer={onTransfer}
 						onFreeDrop={onFreeDrop}
 						onFreeRotate={onFreeRotate}
+						blobShadows={quality === "low"}
 						construction={construction}
 					/>
 					{i === lonelyRun && positioned && offsets && (
@@ -2649,6 +2646,7 @@ export default function PlannerScene({
 						onTransfer={onTransfer}
 						onFreeDrop={onFreeDrop}
 						onFreeRotate={onFreeRotate}
+						blobShadows={quality === "low"}
 						construction={construction}
 					/>
 				</group>

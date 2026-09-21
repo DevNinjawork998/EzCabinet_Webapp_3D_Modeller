@@ -5,6 +5,7 @@ import type { Group } from "three";
 import { MathUtils } from "three";
 import type { HingeSide } from "@/lib/planner/layout";
 import type { SwingSpec } from "@/lib/planner/swing";
+import { markShadowsDirty } from "./lightingRig";
 
 /**
  * A door leaf that swings on its stile.
@@ -99,11 +100,13 @@ export function Hinge({
 			if (current !== target) {
 				group.rotation.y = target;
 				group.position.x = x + clear * Math.abs(Math.sin(target));
+				markShadowsDirty();
 			}
 			return;
 		}
 		group.rotation.y = MathUtils.damp(current, target, 8, delta);
 		group.position.x = x + clear * Math.abs(Math.sin(group.rotation.y));
+		markShadowsDirty();
 	});
 
 	return (
