@@ -22,6 +22,12 @@ const DISMISSED = "ezcabinet.planner.nudgeDismissed";
  * number the customer is deciding on — and, at z-30, over the breakdown
  * modal too. Being about checkout, beside the checkout button is where it
  * belongs anyway.
+ *
+ * The button says "Continue with Google", not "Sign in" or "Sign up".
+ * Customers only have Google, and Better Auth makes the account on first use,
+ * so signing up and signing in are the same click — and until they click, a
+ * visitor is anonymous and nothing can tell a new one from a returning one.
+ * One label that is right for both beats a guess that is sometimes wrong.
  */
 export function SignInNudge({ cabinetCount }: { cabinetCount: number }) {
 	const t = useCopy();
@@ -76,14 +82,14 @@ export function SignInNudge({ cabinetCount }: { cabinetCount: number }) {
 	return (
 		<div className="flex flex-col gap-2 rounded-[10px] border border-neutral-200 bg-[#faf9f7] px-3 py-2.5">
 			<p className="text-[12px] text-neutral-700 leading-4">{t.signIn.nudge}</p>
-			<div className="flex items-center gap-3">
+			<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
 				<button
 					type="button"
 					onClick={signIn}
 					disabled={busy}
-					className="rounded-[8px] bg-neutral-900 px-3 py-1.5 font-medium text-[12px] text-white disabled:opacity-60"
+					className="whitespace-nowrap rounded-[8px] bg-neutral-900 px-3 py-1.5 font-medium text-[12px] text-white disabled:opacity-60"
 				>
-					{t.signIn.nudgeAction}
+					{t.signIn.continueWithGoogle}
 				</button>
 				<button
 					type="button"
@@ -94,7 +100,7 @@ export function SignInNudge({ cabinetCount }: { cabinetCount: number }) {
 							localStorage.setItem(DISMISSED, "1");
 						} catch {}
 					}}
-					className="text-[12px] text-neutral-500 hover:text-neutral-900"
+					className="whitespace-nowrap text-[12px] text-neutral-500 hover:text-neutral-900"
 				>
 					{t.signIn.nudgeDismiss}
 				</button>

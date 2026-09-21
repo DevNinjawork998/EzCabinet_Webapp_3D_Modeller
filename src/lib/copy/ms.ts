@@ -555,7 +555,6 @@ export const ms: Dictionary = {
 		continueWithGoogle: "Teruskan dengan Google",
 		error: "Tidak dapat membuka log masuk Google. Cuba lagi",
 		nudge: "Disimpan pada peranti ini. Log masuk untuk membuat pesanan.",
-		nudgeAction: "Log masuk",
 		nudgeDismiss: "Bukan sekarang",
 		back: "Kembali ke laman utama",
 	},
