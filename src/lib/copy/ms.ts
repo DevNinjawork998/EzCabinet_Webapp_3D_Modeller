@@ -184,6 +184,11 @@ export const ms: Dictionary = {
 			shapeLocked:
 				"Kosongkan semua dinding kecuali dinding belakang untuk menukar bentuk bilik.",
 			wallName: "Dinding {n}",
+			paint: "Cat dinding",
+			paintNone: "Tiada cat",
+			paintAria: "Cat dinding {n}",
+			paintCustom: "Warna sendiri",
+			paintingWall: "Mengecat dinding {n}",
 			wallsHint:
 				"Ketik dinding dalam bilik, atau ukuran dalam pandangan pelan, untuk mengubahnya.",
 			wallUnitsHangAt: "Unit dinding tergantung pada",
@@ -549,6 +554,8 @@ export const ms: Dictionary = {
 		body: "Simpan reka bentuk anda dan jejaki pesanan anda.",
 		continueWithGoogle: "Teruskan dengan Google",
 		error: "Tidak dapat membuka log masuk Google. Cuba lagi",
+		nudge: "Disimpan pada peranti ini. Log masuk untuk membuat pesanan.",
+		nudgeDismiss: "Bukan sekarang",
 		back: "Kembali ke laman utama",
 	},
 };

@@ -118,6 +118,15 @@ export const roomLayoutSchema = z
 			)
 			.max(30)
 			.default([]),
+		// Wall paint, parallel to `runs`: a catalogue colour id or a customer's
+		// own hex. Optional so a design saved before paint existed still reads,
+		// as an unpainted room — the same bargain `free` makes.
+		//
+		// Bounded, not checked against the catalogue. Paint is priced at nothing
+		// and manufactured never, so an id nobody knows buys no discount and is
+		// not worth refusing a sale over; it renders unpainted. The whole attack
+		// surface here is size, which is what these two bounds close.
+		wallColours: z.array(z.string().max(64).nullable()).max(6).default([]),
 	})
 	.refine((room) => room.runs.length === wallsOf(room.plan).length, {
 		message: "one run per wall",

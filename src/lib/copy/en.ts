@@ -185,6 +185,11 @@ export const en = {
 			shapeLocked:
 				"Clear every wall but the back wall to change the room's shape.",
 			wallName: "Wall {n}",
+			paint: "Wall paint",
+			paintNone: "No paint",
+			paintAria: "Wall {n} paint",
+			paintCustom: "Custom colour",
+			paintingWall: "Painting wall {n}",
 			wallsHint:
 				"Tap a wall in the room, or a length in the plan view, to change it.",
 			wallUnitsHangAt: "Wall units hang at",
@@ -558,6 +563,9 @@ export const en = {
 		body: "Save your design and follow your order.",
 		continueWithGoogle: "Continue with Google",
 		error: "Could not open Google sign-in. Try again",
+		/** The nudge beside the quote button, once something is placed. */
+		nudge: "Saved on this device. Sign in to check out.",
+		nudgeDismiss: "Not now",
 		back: "Back to home",
 	},
 } as const;

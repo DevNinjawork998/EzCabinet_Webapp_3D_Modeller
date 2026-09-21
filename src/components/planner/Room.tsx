@@ -28,6 +28,19 @@ const TARGET_WALL_COLOR = "#dde7e0";
  * green, so it reads as "about to" rather than "is". */
 const DRAG_PREVIEW_WALL_COLOR = "#eaf1ec";
 
+/** How tall the marker along a targeted wall's top edge is. */
+const EDGE_STRIP_MM = 60;
+/** How far the marker stands off its wall: enough to beat z-fighting, far
+ * inside `WALL_GAP_MM` so it never pokes through a carcass. */
+const EDGE_STRIP_OFFSET_MM = 2;
+/** The brand green the wall badges already use. */
+const TARGET_EDGE_COLOR = "#1f5138";
+const PREVIEW_EDGE_COLOR = "#7fa892";
+/** The marker is a marker, not a surface. Keeping it out of the ray means the
+ * wall's own click handler — which carries the cabinet-in-front test — sees
+ * exactly what it saw before. */
+const NO_HIT = () => null;
+
 /**
  * The SPC plank tile `pnpm generate:grain` draws to `public/floor.png`: two
  * 1220mm planks long by six 180mm planks wide. Change both together.
@@ -92,11 +105,18 @@ export function Room({
 	height,
 	targetWall,
 	dragPreviewWall = null,
+	wallHex,
 	onWallPick,
 }: {
 	plan: FloorPlan;
 	height: number;
-	targetWall: number;
+	/** The wall to light as the one the customer tapped, or null to light none.
+	 * Purely visual here: the target itself lives in StudioScreen and always
+	 * points at some wall. */
+	targetWall: number | null;
+	/** Paint per wall, already resolved to hex — `Room` never reads the
+	 * catalogue. Short or absent is normal: those walls are unpainted. */
+	wallHex?: (string | null)[];
 	/** The wall a cabinet mid-drag would transfer to, or `null`. */
 	dragPreviewWall?: number | null;
 	/** Absent while measuring: a tap then picks a point, not a wall. */
@@ -132,6 +152,8 @@ export function Room({
 				const end = outline[(i + 1) % outline.length];
 				const dx = end.xMm - start.xMm;
 				const dz = end.zMm - start.zMm;
+				const paint = wallHex?.[i] ?? null;
+				const marked = i === targetWall || i === dragPreviewWall;
 				return (
 					// A three.js mesh, not a DOM element: there is no role to give it.
 					// biome-ignore lint/a11y/noStaticElementInteractions: see above
@@ -169,15 +191,47 @@ export function Room({
 					>
 						<planeGeometry args={[m(Math.hypot(dx, dz)), height]} />
 						<meshStandardMaterial
+							// Paint wins. Judging a colour is the whole point of
+							// picking one, so the wall keeps showing it even while
+							// targeted — the tints below are what an unpainted wall
+							// falls back to, and the edge strip carries the signal
+							// for a painted one.
 							color={
-								i === targetWall
+								paint ??
+								(i === targetWall
 									? TARGET_WALL_COLOR
 									: i === dragPreviewWall
 										? DRAG_PREVIEW_WALL_COLOR
-										: WALL_COLOR
+										: WALL_COLOR)
 							}
 							roughness={0.95}
 						/>
+						{marked && (
+							// A child of the wall, so it inherits the wall's position,
+							// yaw and `WALL_GAP_MM` push-out — no trigonometry, and it
+							// cannot drift. The inherited yaw also keeps it
+							// single-sided inward, so it disappears with its wall on
+							// cutaway. `toneMapped` off so it reads the same under any
+							// light and never passes for more paint.
+							<mesh
+								position={[
+									0,
+									(height - m(EDGE_STRIP_MM)) / 2,
+									m(EDGE_STRIP_OFFSET_MM),
+								]}
+								raycast={NO_HIT}
+							>
+								<planeGeometry
+									args={[m(Math.hypot(dx, dz)), m(EDGE_STRIP_MM)]}
+								/>
+								<meshBasicMaterial
+									color={
+										i === targetWall ? TARGET_EDGE_COLOR : PREVIEW_EDGE_COLOR
+									}
+									toneMapped={false}
+								/>
+							</mesh>
+						)}
 					</mesh>
 				);
 			})}

@@ -93,6 +93,9 @@ export function summariseCatalogueChanges(
 	if (JSON.stringify(live.finishes) !== JSON.stringify(next.finishes)) {
 		lines.push("Finishes changed");
 	}
+	if (JSON.stringify(live.wallColours) !== JSON.stringify(next.wallColours)) {
+		lines.push("Wall colours changed");
+	}
 	if (
 		JSON.stringify(live.doorWidthLadderMm) !==
 		JSON.stringify(next.doorWidthLadderMm)
