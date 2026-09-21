@@ -1,8 +1,16 @@
 "use client";
 
 import { fill } from "@/lib/copy/fill";
-import { CEILING_LIMITS, type RoomTypeId } from "@/lib/planner/catalogue";
-import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
+import {
+	CEILING_LIMITS,
+	type RoomTypeId,
+	wallColoursOf,
+	wallHexOf,
+} from "@/lib/planner/catalogue";
+import type {
+	PlannerCatalogue,
+	WallColour,
+} from "@/lib/planner/catalogueSchema";
 import {
 	type FloorPlan,
 	outlineOf,
@@ -166,6 +174,108 @@ function ShapeThumb({ shape }: { shape: RoomShape }) {
  * The Room panel body: which room, what shape, how long each wall is, and
  * whether the targeted wall's run fits on it.
  */
+/** What one wall currently wears, in the wall's own row. Pressing it targets
+ * the wall, which is what the strip below the rows paints. */
+function PaintDot({
+	hex,
+	label,
+	onPressAction,
+}: {
+	hex: string | null;
+	label: string;
+	onPressAction: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			aria-label={label}
+			title={label}
+			onClick={onPressAction}
+			className="h-5 w-5 shrink-0 rounded-full border border-neutral-300"
+			style={
+				hex
+					? { backgroundColor: hex }
+					: {
+							// A bare wall reads as struck through rather than white,
+							// which is itself a paint colour here.
+							backgroundImage:
+								"linear-gradient(135deg, #fff 45%, #d4d4d4 45%, #d4d4d4 55%, #fff 55%)",
+						}
+			}
+		/>
+	);
+}
+
+/** One strip for the whole panel, acting on the targeted wall — six of these,
+ * one per wall row, would not fit and would say the same thing six times. */
+function PaintStrip({
+	colours,
+	current,
+	onPickAction,
+}: {
+	colours: WallColour[];
+	current: string | null;
+	onPickAction: (colour: string | null) => void;
+}) {
+	const t = useCopy();
+	const custom = current?.startsWith("#") ? current : null;
+	const ring = (on: boolean) =>
+		on ? "0 0 0 2px #171717, 0 0 0 3px #fff" : "inset 0 0 0 1px #d4d4d4";
+	return (
+		<div className="flex flex-wrap items-center gap-1">
+			<button
+				type="button"
+				aria-pressed={current === null}
+				title={t.planner.room.paintNone}
+				onClick={() => onPickAction(null)}
+				className="h-[26px] w-[26px] rounded-md bg-white"
+				style={{
+					boxShadow: ring(current === null),
+					backgroundImage:
+						"linear-gradient(135deg, #fff 45%, #d4d4d4 45%, #d4d4d4 55%, #fff 55%)",
+				}}
+			/>
+			{colours.map((colour) => (
+				<button
+					key={colour.id}
+					type="button"
+					aria-pressed={colour.id === current}
+					title={colour.label}
+					onClick={() => onPickAction(colour.id)}
+					className="h-[26px] w-[26px] rounded-md"
+					style={{
+						backgroundColor: colour.hex,
+						boxShadow: ring(colour.id === current),
+					}}
+				/>
+			))}
+			{/* The platform's own picker: the customer matching the paint already
+			 * on their wall needs any colour, not our six. `onChange` rather than
+			 * `onInput`, so dragging inside the picker is one edit, not one per
+			 * pixel. */}
+			<label
+				title={t.planner.room.paintCustom}
+				className="relative h-[26px] w-[26px] cursor-pointer overflow-hidden rounded-md"
+				style={{
+					backgroundColor: custom ?? "#ffffff",
+					boxShadow: ring(custom !== null),
+					backgroundImage: custom
+						? undefined
+						: "conic-gradient(#f87171, #fbbf24, #4ade80, #60a5fa, #c084fc, #f87171)",
+				}}
+			>
+				<span className="sr-only">{t.planner.room.paintCustom}</span>
+				<input
+					type="color"
+					value={custom ?? "#cccccc"}
+					onChange={(e) => onPickAction(e.target.value)}
+					className="absolute inset-0 cursor-pointer opacity-0"
+				/>
+			</label>
+		</div>
+	);
+}
+
 export function RoomPanel({
 	catalogue,
 	roomId,
@@ -179,6 +289,7 @@ export function RoomPanel({
 	onShapeAction,
 	onChangeRoomAction,
 	onWallLengthAction,
+	onPaintWallAction,
 	onTargetWallAction,
 	onCeilingAction,
 	onOpenDefaultsAction,
@@ -198,11 +309,14 @@ export function RoomPanel({
 	onShapeAction: (shape: RoomShape) => void;
 	onChangeRoomAction: (id: RoomTypeId) => void;
 	onWallLengthAction: (wall: number, mm: number) => void;
+	/** A catalogue colour id, a customer's own `#rrggbb`, or null to strip. */
+	onPaintWallAction: (wall: number, colour: string | null) => void;
 	onTargetWallAction: (wall: number) => void;
 	onCeilingAction: (mm: number) => void;
 	onOpenDefaultsAction: () => void;
 }) {
 	const t = useCopy();
+	const palette = wallColoursOf(catalogue);
 	const shapeLabel: Record<RoomShape, string> = {
 		rect: t.planner.room.shapeRect,
 		l: t.planner.room.shapeL,
@@ -272,6 +386,11 @@ export function RoomPanel({
 							className={`flex items-center gap-2 ${i === targetWall ? "rounded-lg bg-[#eef3ef] p-1" : "p-1"}`}
 						>
 							<WallBadge n={i + 1} target={i === targetWall} label={label} />
+							<PaintDot
+								hex={wallHexOf(layout.wallColours?.[i] ?? null, catalogue)}
+								label={fill(t.planner.room.paintAria, { n: i + 1 })}
+								onPressAction={() => onTargetWallAction(i)}
+							/>
 							<div className="flex-1">
 								<DimensionField
 									label={label}
@@ -285,6 +404,16 @@ export function RoomPanel({
 						</div>
 					);
 				})}
+				<div className="flex flex-col gap-1.5 pt-1">
+					<p className="text-[11px] text-neutral-500 leading-4">
+						{fill(t.planner.room.paintingWall, { n: targetWall + 1 })}
+					</p>
+					<PaintStrip
+						colours={palette}
+						current={layout.wallColours?.[targetWall] ?? null}
+						onPickAction={(colour) => onPaintWallAction(targetWall, colour)}
+					/>
+				</div>
 			</div>
 
 			<DimensionField

@@ -90,4 +90,22 @@ describe("summariseCatalogueChanges", () => {
 		expect(lines).toContain("Rates changed");
 		expect(lines).toContain("Construction standards changed");
 	});
+
+	it("notices a wall colour edit", () => {
+		// Without this line publish sees nothing to publish and tells the admin
+		// their palette edit was a no-op.
+		const next = clone(PLANNER_CATALOGUE);
+		next.wallColours = [{ id: "wall-test", label: "Test", hex: "#123456" }];
+
+		const lines = summariseCatalogueChanges(PLANNER_CATALOGUE, next);
+		expect(lines).toContain("Wall colours changed");
+	});
+
+	it("says nothing about a palette neither side ever set", () => {
+		const lines = summariseCatalogueChanges(
+			PLANNER_CATALOGUE,
+			clone(PLANNER_CATALOGUE),
+		);
+		expect(lines).not.toContain("Wall colours changed");
+	});
 });

@@ -9,6 +9,7 @@ import {
 	isActiveCorner,
 	nearCornerMm,
 	offWall,
+	paintWall,
 	type RoomLayout,
 	roomEngine,
 	runIndexOf,
@@ -234,6 +235,29 @@ describe("setShape", () => {
 	it("refuses while any other wall holds a cabinet", () => {
 		const room = engine.addModule(kitchen(), "base-cabinet", 0, "s", 600, 3);
 		expect(engine.setShape(room, "l")).toBe(room);
+	});
+
+	it("keeps paint on every wall the new shape still has", () => {
+		// Paint diverges from runs on purpose: the runs rule exists because a
+		// cabinet on a resized wall may stop fitting, and a colour never does.
+		// Losing a colour the customer picked is not recoverable; keeping one
+		// is a click to change.
+		const room = paintWall(paintWall(kitchen(), 0, "sage"), 2, "clay");
+		const next = engine.setShape(room, "l");
+		expect(next.runs).toHaveLength(6);
+		expect(next.wallColours?.[0]).toBe("sage");
+		expect(next.wallColours?.[2]).toBe("clay");
+		expect(next.wallColours?.[4] ?? null).toBeNull();
+	});
+
+	it("drops paint for walls the new shape no longer has", () => {
+		// Colours past the wall count would be a document that lies, and they
+		// would reappear on a later reshape.
+		const l = engine.setShape(kitchen(), "l");
+		const painted = paintWall(paintWall(l, 0, "sage"), 5, "clay");
+		const back = engine.setShape(painted, "rect");
+		expect(back.runs).toHaveLength(4);
+		expect(back.wallColours).toEqual(["sage"]);
 	});
 });
 
@@ -1084,5 +1108,66 @@ describe("a free cabinet in the way of the runs", () => {
 		expect(shrunk.free).toHaveLength(1);
 		// A millimetre under that is where the cabinet stops fitting.
 		expect(engine.setWallLength(room, 0, minMm - 1)).toEqual(shrunk);
+	});
+});
+
+describe("paintWall", () => {
+	it("paints a wall by its index", () => {
+		expect(paintWall(kitchen(), 2, "wall-sage-mist").wallColours).toEqual([
+			null,
+			null,
+			"wall-sage-mist",
+		]);
+	});
+
+	it("takes a customer's own hex as readily as a palette id", () => {
+		expect(paintWall(kitchen(), 0, "#a8b3a0").wallColours).toEqual(["#a8b3a0"]);
+	});
+
+	it("strips a wall back to bare with null", () => {
+		const painted = paintWall(kitchen(), 2, "wall-sage-mist");
+		expect(paintWall(painted, 2, null).wallColours).toEqual([]);
+	});
+
+	it("leaves one unpainted room, however it got there", () => {
+		// A room painted and then stripped must equal one never painted, or
+		// every reader has two shapes of "no paint" to handle.
+		const stripped = paintWall(paintWall(kitchen(), 1, "x"), 1, null);
+		expect(stripped.wallColours).toEqual([]);
+	});
+
+	it("refuses a wall the room does not have", () => {
+		const room = kitchen();
+		expect(paintWall(room, -1, "wall-sage-mist")).toBe(room);
+		expect(paintWall(room, 4, "wall-sage-mist")).toBe(room);
+	});
+
+	it("is a no-op when the colour is already on that wall", () => {
+		const painted = paintWall(kitchen(), 1, "wall-clay-rose");
+		expect(paintWall(painted, 1, "wall-clay-rose")).toBe(painted);
+	});
+
+	it("works on a room that predates paint entirely", () => {
+		const { wallColours: _none, ...old } = kitchen();
+		expect(
+			paintWall(old as RoomLayout, 0, "wall-sky-wash").wallColours,
+		).toEqual(["wall-sky-wash"]);
+	});
+
+	it("moves nothing else in the room", () => {
+		const room = paintWall(kitchen(), 0, "wall-cloud-grey");
+		const before = structuredClone(room);
+		const next = paintWall(room, 2, "wall-clay-rose");
+		expect(room).toEqual(before);
+		expect(next.runs).toBe(room.runs);
+		expect(next.plan).toBe(room.plan);
+	});
+
+	it("does not leak paint into a run's one-wall view", () => {
+		// `runView` spreads whatever it does not destructure into the one-wall
+		// `PlannerLayout`, and `asRoom` spreads that back out again. A room-level
+		// field that rides along would be duplicated onto every wall.
+		const view = runView(paintWall(kitchen(), 0, "wall-sage-mist"), 0);
+		expect("wallColours" in view).toBe(false);
 	});
 });

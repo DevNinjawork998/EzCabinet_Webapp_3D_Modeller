@@ -37,6 +37,7 @@ import {
 	cornerVertexFor,
 	emptyRoom,
 	nearCornerMm,
+	paintWall,
 	type RoomLayout,
 	runIndexOf,
 	runView,
@@ -503,6 +504,17 @@ export function StudioScreen({
 			onWallLengthAction={(wall, mm) =>
 				setLayoutAction((prev) => setWallLength(prev, wall, mm))
 			}
+			onPaintWallAction={(wall, colour) => {
+				// A palette id is our own vocabulary and safe to send. A custom
+				// hex is a value the customer chose, so it is reported as the
+				// literal "custom" — which also measures how often the six
+				// swatches are not enough.
+				track("wall_painted", {
+					wall: wall + 1,
+					colour: !colour ? "none" : colour.startsWith("#") ? "custom" : colour,
+				});
+				setLayoutAction((prev) => paintWall(prev, wall, colour));
+			}}
 			onTargetWallAction={setTargetRun}
 			onCeilingAction={(mm) =>
 				setLayoutAction((prev) => setCeilingHeight(prev, mm))

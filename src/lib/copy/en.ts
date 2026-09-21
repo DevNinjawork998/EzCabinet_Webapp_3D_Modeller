@@ -185,6 +185,11 @@ export const en = {
 			shapeLocked:
 				"Clear every wall but the back wall to change the room's shape.",
 			wallName: "Wall {n}",
+			paint: "Wall paint",
+			paintNone: "No paint",
+			paintAria: "Wall {n} paint",
+			paintCustom: "Custom colour",
+			paintingWall: "Painting wall {n}",
 			wallsHint:
 				"Tap a wall in the room, or a length in the plan view, to change it.",
 			wallUnitsHangAt: "Wall units hang at",

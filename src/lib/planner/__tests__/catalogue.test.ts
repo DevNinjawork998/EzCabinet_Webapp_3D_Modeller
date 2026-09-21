@@ -9,6 +9,9 @@ import {
 	RATES,
 	ratesOf,
 	roomTypeIn,
+	WALL_COLOURS,
+	wallColoursOf,
+	wallHexOf,
 } from "../catalogue";
 import { familySchema, plannerCatalogueSchema } from "../catalogueSchema";
 
@@ -150,5 +153,73 @@ describe("isCorner", () => {
 			familySchema.safeParse({ ...corner, category: "CORNER_BASE_CABINET" })
 				.success,
 		).toBe(true);
+	});
+});
+
+describe("wallColoursOf", () => {
+	it("is the seed when the catalogue carries no palette", () => {
+		expect(wallColoursOf(PLANNER_CATALOGUE)).toEqual(WALL_COLOURS);
+	});
+
+	it("takes the catalogue's own palette", () => {
+		const own = [{ id: "x", label: "X", hex: "#010203" }];
+		expect(wallColoursOf({ ...PLANNER_CATALOGUE, wallColours: own })).toEqual(
+			own,
+		);
+	});
+
+	it("hands back a copy, so a caller cannot mutate the seed", () => {
+		wallColoursOf(PLANNER_CATALOGUE).push({
+			id: "junk",
+			label: "Junk",
+			hex: "#000000",
+		});
+		expect(wallColoursOf(PLANNER_CATALOGUE)).toEqual(WALL_COLOURS);
+	});
+
+	it("keeps an empty palette empty rather than filling it", () => {
+		// An admin who deletes every colour means it, and the fallback must not
+		// resurrect the seed behind their back.
+		expect(wallColoursOf({ ...PLANNER_CATALOGUE, wallColours: [] })).toEqual(
+			[],
+		);
+	});
+});
+
+describe("wallHexOf", () => {
+	it("resolves a palette id to its hex", () => {
+		const first = WALL_COLOURS[0];
+		expect(wallHexOf(first.id, PLANNER_CATALOGUE)).toBe(first.hex);
+	});
+
+	it("passes a custom hex straight through", () => {
+		expect(wallHexOf("#a8b3a0", PLANNER_CATALOGUE)).toBe("#a8b3a0");
+		expect(wallHexOf("#A8B3A0", PLANNER_CATALOGUE)).toBe("#A8B3A0");
+	});
+
+	it("reads an unpainted wall as null", () => {
+		expect(wallHexOf(null, PLANNER_CATALOGUE)).toBeNull();
+		expect(wallHexOf("", PLANNER_CATALOGUE)).toBeNull();
+	});
+
+	it("reads a retired palette id as unpainted, never as a wrong colour", () => {
+		expect(
+			wallHexOf("wall-colour-the-admin-deleted", PLANNER_CATALOGUE),
+		).toBeNull();
+	});
+
+	it("refuses junk rather than handing it to three.js", () => {
+		// A stored value is only ever an id or a hex. Anything else is a
+		// tampered document, and an unpainted wall is the safe reading.
+		for (const junk of ["#fff", "#gggggg", "red", "javascript:alert(1)"]) {
+			expect(wallHexOf(junk, PLANNER_CATALOGUE)).toBeNull();
+		}
+	});
+
+	it("prefers the catalogue's palette over the seed", () => {
+		const own = [{ id: "wall-white-dove", label: "Repainted", hex: "#123456" }];
+		expect(
+			wallHexOf("wall-white-dove", { ...PLANNER_CATALOGUE, wallColours: own }),
+		).toBe("#123456");
 	});
 });

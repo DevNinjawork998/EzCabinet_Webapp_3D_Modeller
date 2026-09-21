@@ -20,6 +20,7 @@ export type JourneyEvent =
 	| "room_picked"
 	| "planner_started"
 	| "room_shape_changed"
+	| "wall_painted"
 	| "cabinet_added"
 	| "cabinet_removed"
 	| "cabinet_resized"

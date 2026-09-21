@@ -370,6 +370,43 @@ describe("a free-standing order", () => {
 		expect(parsed.free).toEqual([]);
 	});
 
+	it("reads a design saved before wall paint as unpainted", () => {
+		const { wallColours: _none, ...saved } = emptyRoom(4200);
+		const parsed = roomLayoutSchema.parse(saved);
+		expect(parsed.wallColours).toEqual([]);
+	});
+
+	it("keeps wall paint through the schema", () => {
+		const painted = {
+			...emptyRoom(4200),
+			wallColours: ["wall-sage-mist", null, "#a8b3a0"],
+		};
+		expect(roomLayoutSchema.parse(painted).wallColours).toEqual([
+			"wall-sage-mist",
+			null,
+			"#a8b3a0",
+		]);
+	});
+
+	it("refuses more wall colours than any plan has walls", () => {
+		const tooMany = { ...emptyRoom(4200), wallColours: Array(7).fill("x") };
+		expect(roomLayoutSchema.safeParse(tooMany).success).toBe(false);
+	});
+
+	it("refuses a wall colour longer than any id or hex", () => {
+		const bloated = { ...emptyRoom(4200), wallColours: ["x".repeat(65)] };
+		expect(roomLayoutSchema.safeParse(bloated).success).toBe(false);
+	});
+
+	it("accepts a colour the catalogue does not know", () => {
+		// Deliberate: paint is priced at nothing and manufactured never, so an
+		// unknown value buys no discount and cannot be tampering worth refusing
+		// a sale over. It renders unpainted. Do not "fix" this into a refusal —
+		// it would turn a paying customer away because an admin retired a swatch.
+		const room = { ...emptyRoom(4200), wallColours: ["wall-retired"] };
+		expect(roomLayoutSchema.safeParse(room).success).toBe(true);
+	});
+
 	it("keeps a free cabinet's centre through the schema", () => {
 		const parsed = roomLayoutSchema.parse(island());
 		expect(parsed.free).toHaveLength(1);
