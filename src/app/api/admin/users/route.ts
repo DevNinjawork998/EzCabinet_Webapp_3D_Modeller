@@ -65,10 +65,23 @@ export const POST = withAuth("users:manage", async (request, _ctx, actor) => {
 		if (existing.role !== "CUSTOMER") {
 			return NextResponse.json({ error: "already_staff" }, { status: 409 });
 		}
-		await prisma.user.update({
-			where: { id: existing.id },
-			data: { role, invitedById },
-		});
+		// A customer row should carry no password — customers sign in with
+		// Google. One that does was made by someone other than the address's
+		// owner (public password sign-up was open until it was closed), so the
+		// password and any session it opened go before the row gains a role.
+		// `emailVerified` then follows the invite's own reasoning below: the
+		// superadmin typing the address is the assertion that it is theirs, and
+		// Better Auth will not link Google to an unverified row.
+		await prisma.$transaction([
+			prisma.account.deleteMany({
+				where: { userId: existing.id, providerId: "credential" },
+			}),
+			prisma.session.deleteMany({ where: { userId: existing.id } }),
+			prisma.user.update({
+				where: { id: existing.id },
+				data: { role, invitedById, emailVerified: true },
+			}),
+		]);
 		return NextResponse.json({ ok: true, id: existing.id, promoted: true });
 	}
 

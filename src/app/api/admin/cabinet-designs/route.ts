@@ -6,6 +6,7 @@ import { prisma } from "@/lib/catalogue/db";
 import {
 	deleteMeshFile,
 	fetchMeshFile,
+	MESH_PATHNAME,
 	sha256Hex,
 } from "@/lib/catalogue/meshBlob";
 import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
@@ -14,7 +15,9 @@ export const runtime = "nodejs";
 
 const createSchema = z.object({
 	blobUrl: z.string().min(1),
-	blobPathname: z.string().min(1),
+	// Only a path the upload token could have issued. This route reads and
+	// deletes whatever it is given, so any other private blob is out of bounds.
+	blobPathname: z.string().regex(MESH_PATHNAME),
 	filename: z.string().min(1),
 	name: z.string().min(1),
 	category: z.enum([

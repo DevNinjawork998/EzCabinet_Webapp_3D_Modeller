@@ -21,22 +21,35 @@ export type MeshArchive = {
 
 const IMAGE = /\.(png|jpe?g|webp|tga|bmp)$/i;
 
+/**
+ * The most a design archive may inflate to, images excluded — they are
+ * skipped, never decompressed. A whole wall run's `.obj` is a few MB of text;
+ * past this it is a zip bomb or a file with the furniture library left in,
+ * and inflating it would take the function's memory down first.
+ */
+export const MAX_INFLATED_BYTES = 100 * 1024 * 1024;
+
 /** Editor cruft, not content. */
 const isNoise = (path: string) =>
 	path.endsWith("/") || /(^|\/)(__MACOSX\/|\._|\.DS_Store$)/.test(path);
 
 export function readArchive(bytes: Uint8Array): MeshArchive {
 	const imageNames: string[] = [];
+	let inflated = 0;
 
 	// One pass. The filter runs for every entry, so it is also where the
 	// texture names get collected — decompressing a 30 MB texture folder just
 	// to read its filenames would be the whole cost of the import for nothing.
 	const files = unzipSync(bytes, {
-		filter: ({ name }) => {
+		filter: ({ name, originalSize }) => {
 			if (isNoise(name)) return false;
 			if (IMAGE.test(name)) {
 				imageNames.push(basename(name));
 				return false;
+			}
+			inflated += originalSize;
+			if (inflated > MAX_INFLATED_BYTES) {
+				throw new Error("archive too large once unzipped");
 			}
 			return true;
 		},

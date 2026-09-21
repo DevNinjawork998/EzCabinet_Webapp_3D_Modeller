@@ -71,7 +71,10 @@ export async function POST(
 	const delivery = await prisma.delivery.findUnique({
 		where: { carrierOrderId: event.carrierOrderId },
 	});
-	if (!delivery) {
+	// Only the partner that booked the job may move it. Carrier order ids are
+	// not secret — an EasyParcel AWB is printed on the label — so a payload
+	// verified as one carrier must not reach another carrier's delivery.
+	if (!delivery || delivery.carrierId !== carrier) {
 		return NextResponse.json({ received: true });
 	}
 
