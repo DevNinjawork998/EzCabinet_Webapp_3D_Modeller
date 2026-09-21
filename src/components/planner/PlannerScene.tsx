@@ -2318,6 +2318,8 @@ export default function PlannerScene({
 	onSelectAction,
 	onMeasurePickAction,
 	onWallPickAction,
+	onRetargetAction,
+	wallLit = false,
 	onWallLengthAction,
 	pickerRef,
 	hitTestRef,
@@ -2377,6 +2379,12 @@ export default function PlannerScene({
 	onMeasurePickAction?: (snap: SnapPoint) => void;
 	/** A wall was tapped, in the scene or on the plan's length labels. */
 	onWallPickAction?: (run: number) => void;
+	/** The target moving because a cabinet landed on another wall, not because
+	 * the customer tapped one — so it moves without lighting the wall. */
+	onRetargetAction?: (run: number) => void;
+	/** Whether the target wall is lit. Only a tap on a wall lights it; the
+	 * target itself always exists, since Add and elevation act on it. */
+	wallLit?: boolean;
 	/** A wall's length was typed on the plan. Absent, the plan shows none. */
 	onWallLengthAction?: (wall: number, mm: number) => void;
 	/** Filled in by the scene: which wall a screen point drops onto, and how
@@ -2479,9 +2487,9 @@ export default function PlannerScene({
 	const onTransfer = useCallback(
 		(id: string, run: number, xMm: number) => {
 			onLayoutChangeAction(rooms.moveToRun(roomRef.current, id, run, xMm));
-			onWallPickAction?.(run);
+			onRetargetAction?.(run);
 		},
-		[rooms, onLayoutChangeAction, onWallPickAction],
+		[rooms, onLayoutChangeAction, onRetargetAction],
 	);
 	// A floor-following drag let go: free there, onto the wall it landed near,
 	// or refused — the room unchanged, which `Run` has already drawn as a snap
@@ -2493,9 +2501,9 @@ export default function PlannerScene({
 			if (next === room) return;
 			onLayoutChangeAction(next);
 			const run = runIndexOf(next, id);
-			if (run >= 0 && run !== runIndexOf(room, id)) onWallPickAction?.(run);
+			if (run >= 0 && run !== runIndexOf(room, id)) onRetargetAction?.(run);
 		},
-		[rooms, onLayoutChangeAction, onWallPickAction],
+		[rooms, onLayoutChangeAction, onRetargetAction],
 	);
 	const onFreeRotate = useCallback(
 		(id: string, deg: number) => {
@@ -2558,7 +2566,7 @@ export default function PlannerScene({
 			<Room
 				plan={layout.plan}
 				height={m(layout.ceilingHeightMm)}
-				targetWall={targetRun}
+				targetWall={wallLit ? targetRun : null}
 				dragPreviewWall={previewWall}
 				wallHex={wallHex}
 				onWallPick={measureMode ? undefined : onWallPickAction}

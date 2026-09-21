@@ -105,7 +105,10 @@ export function Room({
 }: {
 	plan: FloorPlan;
 	height: number;
-	targetWall: number;
+	/** The wall to light as the one the customer tapped, or null to light none.
+	 * Purely visual here: the target itself lives in StudioScreen and always
+	 * points at some wall. */
+	targetWall: number | null;
 	/** Paint per wall, already resolved to hex — `Room` never reads the
 	 * catalogue. Short or absent is normal: those walls are unpainted. */
 	wallHex?: (string | null)[];
