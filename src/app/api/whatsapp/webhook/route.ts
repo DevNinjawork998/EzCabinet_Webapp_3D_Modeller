@@ -5,7 +5,7 @@ import { autoReply } from "@/lib/whatsapp/outbox";
 import {
 	parseWebhook,
 	signatureValid,
-	statusAdvances,
+	statusesBefore,
 } from "@/lib/whatsapp/webhook";
 
 export const runtime = "nodejs";
@@ -43,31 +43,56 @@ export async function POST(request: Request) {
 		return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 	}
 
+	// A verified payload always gets 200: Meta retries anything else for days,
+	// and a malformed or partially-failing payload is our problem, not theirs
+	// to keep resending.
 	let body: unknown;
 	try {
 		body = JSON.parse(raw);
-	} catch {
-		return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+	} catch (error) {
+		logItemFailure("invalid_json", error);
+		return NextResponse.json({ ok: true });
 	}
 	const { statuses, senders } = parseWebhook(body);
 
 	for (const update of statuses) {
-		const row = await prisma.notification.findUnique({
-			where: { metaMessageId: update.messageId },
-			select: { id: true, status: true },
-		});
-		if (!row || !statusAdvances(row.status, update.status)) continue;
-		await prisma.notification.update({
-			where: { id: row.id },
-			data: {
-				status: update.status,
-				...(update.error ? { lastError: update.error } : {}),
-			},
-		});
+		try {
+			// The advance check is part of the write, not a read-then-write:
+			// Meta can send `delivered` and `read` as concurrent POSTs, and two
+			// in-memory checks against the same stale read can both pass.
+			await prisma.notification.updateMany({
+				where: {
+					metaMessageId: update.messageId,
+					status: { in: statusesBefore(update.status) },
+				},
+				data: {
+					status: update.status,
+					...(update.error ? { lastError: update.error } : {}),
+				},
+			});
+		} catch (error) {
+			logItemFailure("status_update", error, update.messageId);
+		}
 	}
 
-	for (const phone of senders) await autoReply(phone);
+	for (const phone of senders) {
+		try {
+			await autoReply(phone);
+		} catch (error) {
+			logItemFailure("auto_reply", error, phone);
+		}
+	}
 
-	// 200 whatever we did with it — Meta retries anything else for days.
 	return NextResponse.json({ ok: true });
+}
+
+function logItemFailure(step: string, error: unknown, ref?: string): void {
+	console.error(
+		JSON.stringify({
+			type: "WHATSAPP_WEBHOOK_ITEM_FAILED",
+			step,
+			ref,
+			message: error instanceof Error ? error.message : String(error),
+		}),
+	);
 }

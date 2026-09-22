@@ -115,3 +115,16 @@ export function statusAdvances(
 	if (incoming === "FAILED") return RANK[current] < RANK.DELIVERED;
 	return RANK[incoming] > RANK[current];
 }
+
+/**
+ * Every status a row can be in for `incoming` to be a real advance — the
+ * write-time guard for `statusAdvances`, so a concurrent update can be
+ * expressed as one `WHERE status IN (...)` instead of a read-then-write.
+ */
+export function statusesBefore(
+	incoming: NotificationStatus,
+): NotificationStatus[] {
+	return (Object.keys(RANK) as NotificationStatus[]).filter((current) =>
+		statusAdvances(current, incoming),
+	);
+}

@@ -1,6 +1,11 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { parseWebhook, signatureValid, statusAdvances } from "../webhook";
+import {
+	parseWebhook,
+	signatureValid,
+	statusAdvances,
+	statusesBefore,
+} from "../webhook";
 
 const sign = (raw: string, secret: string) =>
 	`sha256=${createHmac("sha256", secret).update(raw).digest("hex")}`;
@@ -86,5 +91,19 @@ describe("statusAdvances", () => {
 		expect(statusAdvances("SENT", "FAILED")).toBe(true);
 		expect(statusAdvances("DELIVERED", "FAILED")).toBe(false);
 		expect(statusAdvances("FAILED", "READ")).toBe(false);
+	});
+});
+
+describe("statusesBefore", () => {
+	it("lists every status DELIVERED can advance from", () => {
+		expect(statusesBefore("DELIVERED")).toEqual(["PENDING", "SENT"]);
+	});
+
+	it("lists every status READ can advance from", () => {
+		expect(statusesBefore("READ")).toEqual(["PENDING", "SENT", "DELIVERED"]);
+	});
+
+	it("lists every status FAILED can land on", () => {
+		expect(statusesBefore("FAILED")).toEqual(["PENDING", "SENT"]);
 	});
 });
