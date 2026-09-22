@@ -182,13 +182,14 @@ export const ms: Dictionary = {
 			shapeL: "Bentuk L",
 			shapeLMirror: "Bentuk L, bertentangan",
 			shapeLocked:
-				"Kosongkan semua dinding kecuali dinding belakang untuk menukar bentuk bilik.",
+				"Bentuk yang kelabu akan meninggalkan kabinet tanpa dinding — di sudut baharu, atau melepasi hujung dinding yang lebih pendek. Alihkannya dahulu.",
 			wallName: "Dinding {n}",
 			paint: "Cat dinding",
 			paintNone: "Tiada cat",
 			paintAria: "Cat dinding {n}",
 			paintCustom: "Warna sendiri",
 			paintingWall: "Mengecat dinding {n}",
+			paintAll: "Sapukan pada semua dinding",
 			wallsHint:
 				"Ketik dinding dalam bilik, atau ukuran dalam pandangan pelan, untuk mengubahnya.",
 			wallUnitsHangAt: "Unit dinding tergantung pada",

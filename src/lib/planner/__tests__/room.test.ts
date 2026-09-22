@@ -9,6 +9,7 @@ import {
 	isActiveCorner,
 	nearCornerMm,
 	offWall,
+	paintAllWalls,
 	paintWall,
 	type RoomLayout,
 	roomEngine,
@@ -232,32 +233,84 @@ describe("setShape", () => {
 		expect(next.runs[0]).toBe(room.runs[0]);
 	});
 
-	it("refuses while any other wall holds a cabinet", () => {
+	it("keeps a side-wall cabinet on the same physical wall", () => {
+		// Rect wall 3 (left) is the L's wall 5: same line, same start.
 		const room = engine.addModule(kitchen(), "base-cabinet", 0, "s", 600, 3);
+		const next = engine.setShape(room, "l");
+		expect(next.plan.template).toBe("l");
+		expect(next.runs[5].floor).toEqual(room.runs[3].floor);
+		expect(next.runs[3].floor).toEqual([]);
+	});
+
+	it("keeps a right-wall cabinet that still fits the shortened wall", () => {
+		// Rect wall 1 becomes the L's wall 1, shortened by the notch depth.
+		const room = engine.addModule(kitchen(), "base-cabinet", 0, "r", 600, 1);
+		const next = engine.setShape(room, "l");
+		expect(next.plan.template).toBe("l");
+		expect(next.runs[1].floor.map((m) => m.id)).toEqual(["r"]);
+		expect(next.runs[1].floor[0].xMm).toBe(room.runs[1].floor[0].xMm);
+	});
+
+	it("shifts a front-wall cabinet clear of the notch by the notch width", () => {
+		// Rect wall 2 runs right to left from the front-right corner; the L's
+		// wall 4 is the same line starting at the notch's inner edge.
+		const room = engine.addModule(kitchen(), "base-cabinet", 3000, "f", 600, 2);
+		const next = engine.setShape(room, "l");
+		expect(next).not.toBe(room);
+		const notch = next.plan.template === "l" ? next.plan.notchWidthMm : 0;
+		expect(next.runs[4].floor[0].xMm).toBe(room.runs[2].floor[0].xMm - notch);
+	});
+
+	it("refuses when a cabinet stands where the notch would be", () => {
+		const room = engine.addModule(kitchen(), "base-cabinet", 0, "n", 600, 2);
 		expect(engine.setShape(room, "l")).toBe(room);
 	});
 
-	it("keeps paint on every wall the new shape still has", () => {
-		// Paint diverges from runs on purpose: the runs rule exists because a
-		// cabinet on a resized wall may stop fitting, and a colour never does.
-		// Losing a colour the customer picked is not recoverable; keeping one
-		// is a click to change.
+	it("brings every wall of an L back to the rectangle's walls", () => {
+		const l = engine.addModule(
+			engine.setShape(kitchen(), "l"),
+			"base-cabinet",
+			0,
+			"s",
+			600,
+			5,
+		);
+		const back = engine.setShape(l, "rect");
+		expect(back.plan.template).toBe("rect");
+		expect(back.runs[3].floor.map((m) => m.id)).toEqual(["s"]);
+	});
+
+	it("refuses to drop a cabinet on a notch wall going back to a rectangle", () => {
+		const l = engine.addModule(
+			engine.setShape(kitchen(), "l"),
+			"base-cabinet",
+			0,
+			"k",
+			600,
+			2,
+		);
+		expect(engine.setShape(l, "rect")).toBe(l);
+	});
+
+	it("keeps paint on the same physical wall", () => {
+		// A colour never stops fitting, so it follows its wall wherever the
+		// new shape puts it; losing one the customer picked is not recoverable.
 		const room = paintWall(paintWall(kitchen(), 0, "sage"), 2, "clay");
 		const next = engine.setShape(room, "l");
 		expect(next.runs).toHaveLength(6);
 		expect(next.wallColours?.[0]).toBe("sage");
-		expect(next.wallColours?.[2]).toBe("clay");
-		expect(next.wallColours?.[4] ?? null).toBeNull();
+		expect(next.wallColours?.[4]).toBe("clay");
+		expect(next.wallColours?.[2] ?? null).toBeNull();
 	});
 
-	it("drops paint for walls the new shape no longer has", () => {
-		// Colours past the wall count would be a document that lies, and they
-		// would reappear on a later reshape.
+	it("drops paint only for walls the new shape does not have", () => {
+		// The L's notch walls have no rectangle wall to go to; wall 5 is the
+		// rectangle's wall 3.
 		const l = engine.setShape(kitchen(), "l");
-		const painted = paintWall(paintWall(l, 0, "sage"), 5, "clay");
+		const painted = paintWall(paintWall(l, 2, "sage"), 5, "clay");
 		const back = engine.setShape(painted, "rect");
 		expect(back.runs).toHaveLength(4);
-		expect(back.wallColours).toEqual(["sage"]);
+		expect(back.wallColours).toEqual([null, null, null, "clay"]);
 	});
 });
 
@@ -1169,5 +1222,44 @@ describe("paintWall", () => {
 		// field that rides along would be duplicated onto every wall.
 		const view = runView(paintWall(kitchen(), 0, "wall-sage-mist"), 0);
 		expect("wallColours" in view).toBe(false);
+	});
+});
+
+describe("paintAllWalls", () => {
+	it("paints every wall of a rectangle", () => {
+		expect(paintAllWalls(kitchen(), "wall-sage-mist").wallColours).toEqual([
+			"wall-sage-mist",
+			"wall-sage-mist",
+			"wall-sage-mist",
+			"wall-sage-mist",
+		]);
+	});
+
+	it("paints all six walls of an L", () => {
+		const l = engine.setShape(kitchen(), "l");
+		expect(paintAllWalls(l, "#a8b3a0").wallColours).toEqual(
+			Array(6).fill("#a8b3a0"),
+		);
+	});
+
+	it("overwrites a feature wall", () => {
+		const room = paintWall(paintWall(kitchen(), 0, "sage"), 2, "clay");
+		expect(paintAllWalls(room, "sage").wallColours).toEqual(
+			Array(4).fill("sage"),
+		);
+	});
+
+	it("returns the same room when every wall already wears the colour", () => {
+		const painted = paintAllWalls(kitchen(), "wall-clay-rose");
+		expect(paintAllWalls(painted, "wall-clay-rose")).toBe(painted);
+	});
+
+	it("moves nothing else in the room", () => {
+		const room = paintWall(kitchen(), 1, "wall-cloud-grey");
+		const next = paintAllWalls(room, "wall-cloud-grey");
+		expect(next.runs).toBe(room.runs);
+		expect(next.plan).toBe(room.plan);
+		expect(next.corners).toBe(room.corners);
+		expect(next.free).toBe(room.free);
 	});
 });

@@ -37,6 +37,7 @@ import {
 	cornerVertexFor,
 	emptyRoom,
 	nearCornerMm,
+	paintAllWalls,
 	paintWall,
 	type RoomLayout,
 	runIndexOf,
@@ -525,6 +526,13 @@ export function StudioScreen({
 					colour: !colour ? "none" : colour.startsWith("#") ? "custom" : colour,
 				});
 				setLayoutAction((prev) => paintWall(prev, wall, colour));
+			}}
+			onPaintAllAction={(colour) => {
+				track("wall_painted", {
+					wall: "all",
+					colour: colour.startsWith("#") ? "custom" : colour,
+				});
+				setLayoutAction((prev) => paintAllWalls(prev, colour));
 			}}
 			onTargetWallAction={pickWall}
 			onCeilingAction={(mm) =>
