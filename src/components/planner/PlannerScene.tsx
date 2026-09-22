@@ -7,7 +7,15 @@ import {
 	useFrame,
 	useThree,
 } from "@react-three/fiber";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	lazy,
+	Suspense,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import type {
 	Group,
 	Object3D,
@@ -98,6 +106,9 @@ import { MeasureOverlay } from "./MeasureOverlay";
 import { PositionDimensions } from "./PositionDimensions";
 import { Room } from "./Room";
 import { WallLengths, WallNumbers } from "./WallLengths";
+
+/** Only the `high` tier downloads this — see `HighQualityEffects`. */
+const HighQualityEffects = lazy(() => import("./HighQualityEffects"));
 
 const m = (mm: number) => mm / 1000;
 
@@ -1338,6 +1349,9 @@ function Run({
 	const endDrag = useCallback(() => {
 		const drag = dragRef.current;
 		if (!drag) return;
+		// A refused free-standing drop snaps back via `land()` below with no
+		// layout change, so the effect on `layout` never fires — ask directly.
+		markShadowsDirty();
 		dragRef.current = null;
 		setDragging(false);
 		if (controls) controls.enabled = true;
@@ -2535,11 +2549,17 @@ export default function PlannerScene({
 			onPointerMissed={() => onSelectAction(null, false)}
 			// The mid-range-Android failure mode: the GPU drops the context and the
 			// scene goes blank without throwing, so nothing else would report it.
-			onCreated={({ gl }) =>
+			onCreated={({ gl }) => {
 				gl.domElement.addEventListener("webglcontextlost", () =>
 					captureError(new Error("webgl context lost")),
-				)
-			}
+				);
+				// A restored context comes back with an empty shadow map — nothing
+				// else asks for a redraw, so the scene would stay unshadowed until
+				// something else moved.
+				gl.domElement.addEventListener("webglcontextrestored", () =>
+					markShadowsDirty(),
+				);
+			}}
 			// Redrawn on demand, never per frame — see `SHADOW_MAP`.
 			shadows={SHADOW_MAP}
 		>
@@ -2558,6 +2578,12 @@ export default function PlannerScene({
 				onDecline={() => setMeasured("low")}
 				onFallback={() => setMeasured("low")}
 			/>
+
+			{quality === "high" && (
+				<Suspense fallback={null}>
+					<HighQualityEffects />
+				</Suspense>
+			)}
 
 			<Room
 				plan={layout.plan}

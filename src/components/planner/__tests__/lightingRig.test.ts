@@ -127,6 +127,18 @@ describe("syncShadowFlags", () => {
 		syncShadowFlags(new Group().add(new Group().add(deep)));
 		expect(deep.castShadow).toBe(true);
 	});
+
+	it("a transparent (glass) door receives but never casts", () => {
+		const glassDoor = new Mesh(
+			box,
+			new MeshStandardMaterial({ transparent: true, opacity: 0.15 }),
+		);
+		syncShadowFlags(new Group().add(glassDoor));
+		expect([glassDoor.castShadow, glassDoor.receiveShadow]).toEqual([
+			false,
+			true,
+		]);
+	});
 });
 
 describe("qualityFromSearch", () => {

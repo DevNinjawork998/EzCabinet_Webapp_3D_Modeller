@@ -44,9 +44,18 @@ export function StudioLighting({
 }) {
 	const gl = useThree((state) => state.gl);
 	const light = useRef<DirectionalLight>(null);
+	const fill = useRef<DirectionalLight>(null);
 	const rig = useMemo(
 		() => keyLightRig(plan, ceilingHeightMm),
 		[plan, ceilingHeightMm],
+	);
+	const fillPosition = useMemo<[number, number, number]>(
+		() => [
+			rig.target[0] + FILL_OFFSET_M[0],
+			rig.target[1] + FILL_OFFSET_M[1],
+			rig.target[2] + FILL_OFFSET_M[2],
+		],
+		[rig.target],
 	);
 	const mapSize = SHADOW_MAP_SIZE[quality];
 
@@ -67,6 +76,12 @@ export function StudioLighting({
 		if (!key) return;
 		key.target.position.set(...rig.target);
 		key.target.updateMatrixWorld();
+		// The fill aims at the same point, but never sizes a shadow camera —
+		// it doesn't cast one.
+		if (fill.current) {
+			fill.current.target.position.set(...rig.target);
+			fill.current.target.updateMatrixWorld();
+		}
 		const camera = key.shadow.camera;
 		camera.left = -rig.halfExtent;
 		camera.right = rig.halfExtent;
@@ -105,17 +120,21 @@ export function StudioLighting({
 					rotation-x={Math.PI / 2}
 					scale={[8, 4, 1]}
 				/>
-				{/* Two side strips: the edge highlights on doors and handles. */}
+				{/* Two side strips: the edge highlights on doors and handles, and —
+				    since the key light throws its one visible cast shadow by
+				    sitting off to one side (see lightingRig.ts) — the fill that
+				    keeps the far side wall off the key light's path from reading
+				    dark. */}
 				<Lightformer
 					form="rect"
-					intensity={0.8}
+					intensity={4.5}
 					position={[-5, 2, 1]}
 					rotation-y={Math.PI / 2}
 					scale={[6, 1.2, 1]}
 				/>
 				<Lightformer
 					form="rect"
-					intensity={0.8}
+					intensity={4.5}
 					position={[5, 2, 1]}
 					rotation-y={-Math.PI / 2}
 					scale={[6, 1.2, 1]}
@@ -143,14 +162,54 @@ export function StudioLighting({
 				shadow-normalBias={SHADOW_NORMAL_BIAS}
 				shadow-radius={SHADOW_RADIUS}
 			/>
+			{/* Fixes I3: the key sits on -x (see lightingRig.ts), so a cabinet
+			    front on that same wall faces +x, into the room — a direction the
+			    side Lightformers (tuned for the flat wall, not a sideways-facing
+			    front) don't reach well, and it read 20-25% darker than the back
+			    wall. This is a second directional light from +x, high, never
+			    casting a shadow (no shadow map to size, so it's nearly free): it
+			    lights that front without adding a second cast shadow to check for
+			    doubling. Kept at z=0 (see FILL_OFFSET_M) rather than "in front"
+			    like the key — a z component lit the z-facing reference-scene door
+			    front too, which the ±3%-of-Phase-1 target doesn't have room for. */}
+			<directionalLight
+				ref={fill}
+				castShadow={false}
+				position={fillPosition}
+				intensity={FILL_INTENSITY}
+			/>
 		</>
 	);
 }
 
-/** Tuned by eye against the real finishes — see the plan's Task 2 Step 4. */
+/** Tuned by eye against the real finishes — see the plan's Task 2 Step 4.
+ * Re-tuned in Task 12 against `KEY_OFFSET_M`'s off-to-one-side key (see
+ * lightingRig.ts): the side Lightformers now carry most of the far wall's
+ * brightness (the key light itself lights almost none of it, by design — see
+ * below), so they went up a lot; `KEY_INTENSITY` came back down to keep the
+ * door front matching Phase 1 once that fill was added. */
 const ENVIRONMENT_INTENSITY = 0.8;
 const AMBIENT_INTENSITY = 0.3;
-const KEY_INTENSITY = 1.6;
+const KEY_INTENSITY = 1.3;
+/** Metres, relative to the room's centre-height target — see `fillPosition`
+ * above. Mostly a mirror of `KEY_OFFSET_M` (lightingRig.ts) onto +x, so it
+ * lights the wall the key doesn't reach without landing on top of it — but
+ * z is 0, not mirrored to +3: a nonzero z lit the reference scene's z-facing
+ * door front too (N·L stops being ~0 for that face), which blew past the
+ * ±3%-of-Phase-1 target long before the key-side wall got close to 10%. */
+const FILL_OFFSET_M: [number, number, number] = [6, 4, 0];
+/** Task 13: a non-shadow fill for cabinet fronts on the key's own wall (see
+ * the comment on the second `directionalLight` below). Measured on the L
+ * room (base units on wall 1 and the key-side wall 6, dev catalogue's only
+ * base cabinets): key-side fronts went from ~20-25% darker than the back
+ * wall to ~6% (avg rgb ~155 vs ~145 across three sample points each). Checked
+ * against the reference scene (scene.md) at the same time: door front
+ * unchanged (rgb ~166 vs Phase 1's 167,155,140, since it doesn't face +x) and
+ * side wall ~146→~157, a ~7-8% rise, the top of the "~8%" budget but not over
+ * it. 0.5 got the key-side wall closer to parity but pushed the reference
+ * side wall to ~+12-13%, so this is the lower of the two values that still
+ * clears the L-room target. */
+const FILL_INTENSITY = 0.35;
 /** Tuned against 18 mm panels: acne if too small, a gap under the cabinet
  * ("peter-panning") if too large. */
 const SHADOW_BIAS = -0.0005;

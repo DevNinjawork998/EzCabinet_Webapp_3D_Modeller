@@ -52,7 +52,8 @@ check in Verification.
 | Elevation and plan views (orthographic) | Shadows/AO clutter a technical view | Verified in all three views; if needed, shadows/AO switch off in elevation/plan |
 | Finish, door-style, wall-paint colours | Colour shift | Neutral tone mapping plus side-by-side swatch check before merge |
 | Procedural fallback (`Cabinet.tsx`) | Looks different from drafted cabinets | Same cast/receive flags on both |
-| On-top overlays (`depthTest={false}`) on `high` | AO darkens them | Overlays render outside the AO pass; checked in tier test |
+| On-top overlays (`depthTest={false}`) on `high` | AO darkens them | Not fully safeguarded: Task 11 saw no visible darkening or halo on a real selection, but the overlays are not drawn outside the composer's passes — see the row below |
+| Overlay colours on the high tier | The composer's Neutral ToneMapping effect and N8AO apply to the whole image, so `toneMapped={false}` does not hold on high: brand green `#1f5138` renders ≈(4,75,46) instead of (31,81,56), white ≈242 | Accepted; follow-up: draw overlays on their own layer after the composer |
 | Weak phones | Frame drops | Costly work is `high`-only and lazy; `low` adds no per-frame work except during a drag |
 | Tests, typecheck, Biome | — | Stay green; every PR gated on them |
 
@@ -93,10 +94,26 @@ No new dependencies. Frame rate unchanged.
 - **Cast + receive:** cabinets (drafted mesh and procedural fallback),
   worktops. **Receive only:** floor, walls — walls never cast. **Neither:**
   measuring overlay, selection outlines, badges, drag previews, hit planes.
-- **Key light high, near-overhead, slight forward tilt.** Rooms have walls all
-  round; a front light would backlight every far-wall cabinet and throw shadows
-  into the room. Overhead treats every wall alike: shadow under wall units onto
-  the worktop, a line at the floor, a hint on the wall behind.
+- **Key light at `[-5, 5.5, 5]` metres from target (Task 12 tuning).** High and
+  well in front of the room, angled toward the reference run's open end: a
+  cabinet run sits flush against its wall, so a shadow with any z-throw lands
+  almost on top of the cabinet's own silhouette there — it only reads as a
+  *separate* shadow when thrown sideways past the run's open end, which only
+  happens toward the side the key is *not* on. The negative x is that side for
+  Task 1's reference scene, not a universal rule. Door-front brightness stays
+  within ±3% of the Phase 1 value at this position. **I3, handled by a
+  non-shadow fill (Task 13):** measured on an L room with base units on both
+  the back wall and the key's own -x wall (dev catalogue only, no wall or tall
+  units), cabinet *fronts* on the key's own wall read ~20–25% darker than the
+  back wall's fronts at every x tried in -5..-2 — the side Lightformers' fill
+  lights the flat wall it was tuned against, not a front facing sideways into
+  the room, and shallower x loses the Task 12 cast shadow before it fixes
+  this. Rather than move `KEY_OFFSET_M`, a second, non-shadow-casting
+  `directionalLight` was added (`Lighting.tsx`, `FILL_INTENSITY`/
+  `FILL_OFFSET_M = [6, 4, 0]` metres from target, aimed from +x): it brought
+  the key-side fronts to ~6% darker than the back wall while leaving the
+  reference scene's door front unchanged and its side wall's rise (~7-8%)
+  under the ~8% budget, at zero shadow-map cost.
 - **Frustum fitted to the room:** orthographic shadow camera sized from the
   min/max of `outlineOf(plan)` plus ceiling height, refitted when the plan
   changes. 1024² on `low`, 2048² on `high`.
