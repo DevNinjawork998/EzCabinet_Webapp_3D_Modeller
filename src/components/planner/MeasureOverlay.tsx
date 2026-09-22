@@ -105,6 +105,7 @@ function Marker({
 				transparent={opacity < 1}
 				opacity={opacity}
 				depthTest={false}
+				toneMapped={false}
 			/>
 		</mesh>
 	);
@@ -175,6 +176,7 @@ function AxisSegment({
 			gapSize={0.015}
 			lineWidth={1.5}
 			depthTest={false}
+			toneMapped={false}
 		/>
 	);
 }

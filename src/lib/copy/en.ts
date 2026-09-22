@@ -563,6 +563,9 @@ export const en = {
 		body: "Save your design and follow your order.",
 		continueWithGoogle: "Continue with Google",
 		error: "Could not open Google sign-in. Try again",
+		/** The nudge beside the quote button, once something is placed. */
+		nudge: "Saved on this device. Sign in to check out.",
+		nudgeDismiss: "Not now",
 		back: "Back to home",
 	},
 } as const;

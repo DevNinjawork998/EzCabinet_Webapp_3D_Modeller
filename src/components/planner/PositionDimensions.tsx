@@ -176,9 +176,24 @@ function Dimension({
 
 	return (
 		<>
-			<Line points={[start, end]} color={LINE_COLOR} lineWidth={2} />
-			<Line points={tick(start)} color={LINE_COLOR} lineWidth={2} />
-			<Line points={tick(end)} color={LINE_COLOR} lineWidth={2} />
+			<Line
+				points={[start, end]}
+				color={LINE_COLOR}
+				lineWidth={2}
+				toneMapped={false}
+			/>
+			<Line
+				points={tick(start)}
+				color={LINE_COLOR}
+				lineWidth={2}
+				toneMapped={false}
+			/>
+			<Line
+				points={tick(end)}
+				color={LINE_COLOR}
+				lineWidth={2}
+				toneMapped={false}
+			/>
 			<Html
 				position={point((fromMm + toMm) / 2)}
 				center

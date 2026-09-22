@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { track } from "@/lib/analytics";
 import { authClient } from "@/lib/auth/client";
+import { useCopy } from "./CopyContext";
 
 const DISMISSED = "ezcabinet.planner.nudgeDismissed";
 
@@ -14,8 +15,22 @@ const DISMISSED = "ezcabinet.planner.nudgeDismissed";
  *
  * It is a nudge, not a gate. The design is already safe on disk (plannerDraft);
  * this is about the customer knowing they can come back to it.
+ *
+ * It renders in the flow of the price footer, directly above the quote
+ * button, never as a floating layer. It used to be `fixed` against the
+ * viewport, which put it exactly on top of the estimated total — the one
+ * number the customer is deciding on — and, at z-30, over the breakdown
+ * modal too. Being about checkout, beside the checkout button is where it
+ * belongs anyway.
+ *
+ * The button says "Continue with Google", not "Sign in" or "Sign up".
+ * Customers only have Google, and Better Auth makes the account on first use,
+ * so signing up and signing in are the same click — and until they click, a
+ * visitor is anonymous and nothing can tell a new one from a returning one.
+ * One label that is right for both beats a guess that is sometimes wrong.
  */
 export function SignInNudge({ cabinetCount }: { cabinetCount: number }) {
+	const t = useCopy();
 	const { data: session, isPending } = authClient.useSession();
 	const [dismissed, setDismissed] = useState(true);
 	const [busy, setBusy] = useState(false);
@@ -50,7 +65,7 @@ export function SignInNudge({ cabinetCount }: { cabinetCount: number }) {
 				callbackURL: window.location.href,
 			});
 			if (failure) {
-				setError("Could not open Google sign-in. Try again");
+				setError(t.signIn.error);
 				setBusy(false);
 				return;
 			}
@@ -59,24 +74,22 @@ export function SignInNudge({ cabinetCount }: { cabinetCount: number }) {
 			// is left set rather than cleared.
 			track("sign_in_nudge", { action: "accepted" });
 		} catch {
-			setError("Could not open Google sign-in. Try again");
+			setError(t.signIn.error);
 			setBusy(false);
 		}
 	}
 
 	return (
-		<div className="fixed inset-x-3 bottom-24 z-30 mx-auto flex max-w-[420px] flex-col gap-1.5 rounded-[10px] border border-neutral-300 bg-white px-4 py-3 shadow-lg md:inset-x-auto md:right-6">
-			<div className="flex items-center gap-3">
-				<p className="flex-1 text-sm">
-					This design is saved on this device — sign in to check out.
-				</p>
+		<div className="flex flex-col gap-2 rounded-[10px] border border-neutral-200 bg-[#faf9f7] px-3 py-2.5">
+			<p className="text-[12px] text-neutral-700 leading-4">{t.signIn.nudge}</p>
+			<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
 				<button
 					type="button"
 					onClick={signIn}
 					disabled={busy}
-					className="rounded-[8px] bg-neutral-900 px-3 py-1.5 font-medium text-sm text-white disabled:opacity-60"
+					className="whitespace-nowrap rounded-[8px] bg-neutral-900 px-3 py-1.5 font-medium text-[12px] text-white disabled:opacity-60"
 				>
-					Sign in
+					{t.signIn.continueWithGoogle}
 				</button>
 				<button
 					type="button"
@@ -87,12 +100,12 @@ export function SignInNudge({ cabinetCount }: { cabinetCount: number }) {
 							localStorage.setItem(DISMISSED, "1");
 						} catch {}
 					}}
-					className="text-neutral-500 text-xs hover:text-neutral-900"
+					className="whitespace-nowrap text-[12px] text-neutral-500 hover:text-neutral-900"
 				>
-					Not now
+					{t.signIn.nudgeDismiss}
 				</button>
 			</div>
-			{error && <p className="text-red-700 text-xs">{error}.</p>}
+			{error && <p className="text-[12px] text-red-700">{error}.</p>}
 		</div>
 	);
 }

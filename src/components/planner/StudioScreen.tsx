@@ -275,6 +275,16 @@ export function StudioScreen({
 	const [view, setView] = useState<PlannerView>("3d");
 	// Which wall the add menu builds on. Tapping a wall in the room sets it.
 	const [targetRun, setTargetRun] = useState(0);
+	// A wall is lit only once the customer taps one, and goes dark on the next
+	// tap anywhere else — the same rhythm as selecting a cabinet. The target
+	// above never goes away (Add builds on it, elevation faces it); only the
+	// glow does, so a wall nobody chose is not lit from the moment the studio
+	// opens.
+	const [wallLit, setWallLit] = useState(false);
+	const pickWall = (wall: number) => {
+		setTargetRun(wall);
+		setWallLit(true);
+	};
 	// A shape change can leave fewer walls than the index held.
 	const run = Math.min(targetRun, layout.runs.length - 1);
 	// A pan now survives a layout change, so something has to be able to put
@@ -307,6 +317,7 @@ export function StudioScreen({
 
 	const select = (id: string | null, additive: boolean) => {
 		setVerb(null);
+		setWallLit(false);
 		if (id === null) return setSelectedIdsAction([]);
 		if (!additive) return setSelectedIdsAction([id]);
 		setSelectedIdsAction(
@@ -515,7 +526,7 @@ export function StudioScreen({
 				});
 				setLayoutAction((prev) => paintWall(prev, wall, colour));
 			}}
-			onTargetWallAction={setTargetRun}
+			onTargetWallAction={pickWall}
 			onCeilingAction={(mm) =>
 				setLayoutAction((prev) => setCeilingHeight(prev, mm))
 			}
@@ -867,7 +878,9 @@ export function StudioScreen({
 						onLayoutChangeAction={setLayoutAction}
 						onSelectAction={select}
 						onMeasurePickAction={onMeasurePick}
-						onWallPickAction={setTargetRun}
+						onWallPickAction={pickWall}
+						onRetargetAction={setTargetRun}
+						wallLit={wallLit}
 						onWallLengthAction={(wall, mm) =>
 							setLayoutAction((prev) => setWallLength(prev, wall, mm))
 						}
@@ -1298,12 +1311,11 @@ export function StudioScreen({
 						}
 						totalLabel={formatRm(price.totalRm, { maximumFractionDigits: 0 })}
 						ctaDisabled={placed.length === 0}
+						notice={<SignInNudge cabinetCount={placed.length} />}
 						onQuoteAction={onGoToQuoteAction}
 					/>
 				</aside>
 			</div>
-
-			<SignInNudge cabinetCount={placed.length} />
 		</main>
 	);
 }

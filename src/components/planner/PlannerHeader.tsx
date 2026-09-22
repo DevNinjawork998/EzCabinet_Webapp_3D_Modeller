@@ -33,17 +33,24 @@ export function PlannerHeader({
 }) {
 	const t = useCopy();
 	return (
-		<div className="flex h-[52px] shrink-0 items-center justify-between gap-6 border-neutral-200 border-b bg-white px-5">
+		<div className="flex h-[52px] shrink-0 items-center justify-between gap-3 border-neutral-200 border-b bg-white px-4 sm:gap-6 sm:px-5">
 			{/* Padding on the crumbs rather than gap: the tap target is the padded
 			    box, not just the glyphs. */}
 			<nav
 				aria-label={t.planner.breadcrumbAriaLabel}
-				className="flex min-w-0 items-center gap-0.5 text-[13px] text-neutral-400"
+				className="flex min-w-0 items-center gap-0.5 whitespace-nowrap text-[13px] text-neutral-400"
 			>
 				{trail.map((crumb, i) => {
 					const last = i === trail.length - 1;
 					return (
-						<span key={crumb.label} className="flex items-center gap-0.5">
+						// On a phone only the root and the current screen fit; the
+						// middle crumbs' way back is the screen's own back button.
+						<span
+							key={crumb.label}
+							className={`items-center gap-0.5 ${
+								i === 0 || last ? "flex min-w-0" : "hidden sm:flex"
+							}`}
+						>
 							{i > 0 && <span aria-hidden>/</span>}
 							{crumb.href && !last ? (
 								<Link
@@ -67,7 +74,7 @@ export function PlannerHeader({
 							) : (
 								<span
 									aria-current={last ? "page" : undefined}
-									className={`px-1 py-2.5 ${
+									className={`truncate px-1 py-2.5 ${
 										last ? "text-neutral-900" : ""
 									} ${i === 0 ? "font-semibold" : ""}`}
 								>
@@ -92,7 +99,7 @@ export function AdminLink() {
 	return (
 		<Link
 			href="/admin/login"
-			className="border-neutral-200 border-l pl-3.5 text-[12px] text-neutral-400 hover:text-neutral-600"
+			className="hidden border-neutral-200 border-l pl-3.5 text-[12px] text-neutral-400 hover:text-neutral-600 sm:block"
 		>
 			{t.planner.admin}
 		</Link>

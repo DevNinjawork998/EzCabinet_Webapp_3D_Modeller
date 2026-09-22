@@ -519,6 +519,8 @@ export const zh: Dictionary = {
 		body: "保存您的设计并跟踪您的订单。",
 		continueWithGoogle: "使用 Google 继续",
 		error: "无法打开 Google 登录，请重试",
+		nudge: "已保存在此设备上。登录后即可下单。",
+		nudgeDismiss: "稍后再说",
 		back: "返回主页",
 	},
 };
