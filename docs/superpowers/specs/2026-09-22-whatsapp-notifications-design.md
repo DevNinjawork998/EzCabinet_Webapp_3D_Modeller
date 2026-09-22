@@ -50,7 +50,7 @@ locale           String           @default("en")
 productionStage  ProductionStage?
 
 enum ProductionStage {
-  IN_QUEUE
+  MEASURE
   CUTTING
   EDGING
   ASSEMBLY
@@ -61,6 +61,10 @@ enum ProductionStage {
 
 The stage names are placeholders until EzCabinet's factory confirms its real
 steps (see Rollout). Renaming them is a migration plus three translations.
+`MEASURE` comes first because the order page already promises a site re-measure
+straight after payment. Stage labels live in the site dictionaries
+(`order.stages.*` in `lib/copy/{en,zh,ms}.ts`) so the order page and the
+messages say the same words.
 
 `locale` is validated against `LOCALES` in `lib/copy/locales.ts`, not a Prisma
 enum, for the same reason `carrierId` is not: adding a language should not be a
@@ -88,11 +92,14 @@ model Notification {
   attempts      Int                @default(0)
   lastError     String?
   metaMessageId String?            @unique
+  /// When this row last entered the queue — creation, or an admin's Resend.
+  /// The 48 h expiry counts from here, not from `createdAt`.
+  queuedAt      DateTime           @default(now())
   sentAt        DateTime?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  @@index([status, createdAt])
+  @@index([status, queuedAt])
   @@index([orderId])
 }
 
@@ -152,6 +159,13 @@ Each trigger inserts its `Notification` row **in the same transaction** as the
 state change it reports, so "the order is paid" and "the customer must be told"
 cannot diverge.
 
+**One exception: delivery booked.** The booking route's final write records a
+booking the carrier has already charged for. If the notification insert failed
+inside that transaction it would roll the write back, the row would look
+unbooked, and a retry would buy a second lorry. So that route enqueues after the
+booking write commits, in its own `try`, and logs a failure instead of
+propagating it.
+
 | Event | Write site | Template variables | Button link |
 | --- | --- | --- | --- |
 | Order placed | `POST /api/orders` | name, order ref (`IC-YYYYMMDD-NNN`), total RM | `/order/{publicToken}` |
@@ -179,8 +193,8 @@ Rules:
 Server-only, like `lib/logistics`.
 
 - **`templates.ts`** — pure. `(kind, vars, locale, stage?) → Meta template
-  payload`. One table holds each kind's template name and variable order, and
-  the stage names in en / zh / ms. The template wording itself is in
+  payload`. One table holds each kind's template name and variable order;
+  stage names come from the site dictionaries. The template wording itself is in
   `docs/ops/whatsapp-ezcabinet-setup.md`, the copy EzCabinet submits; the
   variable order here must match it.
 - **`send.ts`** — one Cloud API call, `POST /v{N}/{phone-number-id}/messages`,
@@ -204,10 +218,15 @@ Server-only, like `lib/logistics`.
 
 | Error | Outcome |
 | --- | --- |
-| 429, 5xx, timeout | Stays retryable; `attempts` + 1, `lastError` set. Max 5 attempts. |
+| 429, 5xx, timeout, Meta rate-limit codes | Stays `PENDING`; `attempts` + 1, `lastError` set. After 5 attempts, `FAILED`. |
 | Meta permanent error — recipient not on WhatsApp, template paused or rejected, user blocked the business | `FAILED`, never retried, error shown to the admin. |
-| Row older than 48 h and never sent | `FAILED` with `lastError: "expired"`. A three-day-late "your cabinet is in assembly" is worse than none. |
+| Row queued more than 48 h ago and never sent | `FAILED` with `lastError: "expired"`. A three-day-late "your cabinet is in assembly" is worse than none. |
 | `WHATSAPP_TOKEN` unset | Rows stay `PENDING`, one log line, nothing throws. |
+
+`FAILED` is terminal: only an admin's Resend (which resets `attempts` and
+`queuedAt`) puts a row back in the queue. Each send first claims the row with a
+conditional update on `attempts`, and the cron only picks rows untouched for a
+minute, so the `after()` flush and a cron run cannot both send one message.
 
 The last row is the local-dev and preview behaviour. **Preview deployments must
 not carry `WHATSAPP_TOKEN`** — a preview is a public URL and must never message
@@ -273,10 +292,12 @@ Public prefix, so it authenticates itself — `proxy.ts` only gates `/admin`.
   variables in the approved order; dedupe-key builder; Meta error classifier;
   webhook signature verification (good, bad, missing header); status
   forward-only.
-- **Route:** the stage endpoint refuses a backward or skipped step and an unpaid
-  order; the auth coverage test picks the new admin route up automatically;
-  webhook returns 401 on a bad signature; no opt-in enqueues nothing; a
-  duplicate carrier reading enqueues once.
+- **Rules as pure functions** (the repo has no route tests, so each route's
+  rules live in a tested function it calls): the next stage and refusal of a
+  backward or skipped step; no opt-in builds no row; a delivery with no order
+  builds no row; which delivery statuses message; dedupe keys equal for a
+  repeated carrier reading. The auth coverage test picks the new admin routes up
+  automatically.
 - **Fixtures:** recorded Meta responses, as `lib/logistics` does.
 - **Real API:** `pnpm whatsapp:ping <e164>` sends one template to a test number.
   Not in CI, for the same reasons `easyparcel:ping` is not.

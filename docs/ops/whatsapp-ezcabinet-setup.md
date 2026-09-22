@@ -115,11 +115,11 @@ fixed at submission and the app appends the private link token.
 > page. We'll message you here as your cabinets are made and delivered.
 
 **`payment_confirmed`**
-> Payment received for order {{1}}. Your cabinets are now queued for
-> production. We'll update you at each step.
+> Payment received for order {{1}}. We'll contact you to arrange the site
+> re-measure, then update you here at each production step.
 
 **`production_stage`**
-> Update on order {{1}}: your cabinets are now at the {{2}} stage.
+> Update on order {{1}} — current step: {{2}}.
 
 **`delivery_booked`**
 > Your order {{1}} is ready and delivery is booked with {{2}}. Tracking number:
@@ -150,7 +150,7 @@ matches what Meta approved.
 
 The design uses placeholders:
 
-**In queue → Cutting → Edging → Assembly → Quality check → Ready**
+**Site re-measure → Cutting → Edge banding → Assembly → Quality check → Ready for delivery**
 
 EzCabinet's factory manager should confirm:
 
