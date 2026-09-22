@@ -1,7 +1,7 @@
 # WhatsApp order notifications — design
 
 Date: 2026-09-22
-Status: approved in brainstorming, awaiting spec review
+Status: implemented — go-live waits on docs/ops/whatsapp-ezcabinet-setup.md
 
 ## Goal
 
@@ -172,7 +172,7 @@ propagating it.
 | Payment confirmed | `POST /api/admin/orders/[id]/paid` | order ref | `/order/{publicToken}` |
 | Stage advanced | **new** `POST /api/admin/orders/[id]/stage` | order ref, localized stage name | `/order/{publicToken}` |
 | Delivery booked | `POST /api/admin/deliveries/[id]/book` | order ref, carrier name, tracking no. (`carrierOrderId`) | `/track/{publicToken}` |
-| Picked up / delivered / failed or cancelled | `applyTrackingUpdate` (`lib/logistics/store.ts`) | order ref | `/track/{publicToken}` |
+| Picked up / delivered / failed or cancelled | `applyTrackingUpdate` (`lib/logistics/store.ts`) and the admin status route `POST /api/admin/deliveries/[id]/advance` — the only way the `manual` carrier moves | order ref | `/track/{publicToken}` |
 
 Rules:
 
@@ -244,7 +244,10 @@ Public prefix, so it authenticates itself — `proxy.ts` only gates `/admin`.
   Meta signs its webhooks, so this is a real check.
   - **Status events** (`sent`, `delivered`, `read`, `failed`) update the row
     found by `metaMessageId`. Status only moves forward; a late `delivered`
-    after `read` is ignored.
+    after `read` is ignored — enforced by a conditional `updateMany` in the
+    write itself, since Meta sends `delivered` and `read` concurrently.
+  - Every verified `POST` answers `200`; a per-item failure is logged, not
+    surfaced as a non-200, or Meta would retry the whole batch.
   - **Inbound messages** get one free-form auto-reply — "This number sends order
     updates only. To chat with our team: wa.me/<sales number>" — in the
     matching order's locale when the phone matches an order, English otherwise.

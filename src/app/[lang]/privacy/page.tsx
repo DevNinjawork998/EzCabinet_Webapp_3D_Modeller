@@ -26,6 +26,7 @@ export default async function PrivacyPage({
 		[p.collectHeading, p.collect],
 		[p.notCollectHeading, p.notCollect],
 		[p.whereHeading, p.where],
+		[p.whatsappHeading, p.whatsapp],
 		[p.choiceHeading, p.choice],
 		[p.contactHeading, fill(p.contact, { email: t.landing.footer.email })],
 	] as const;
