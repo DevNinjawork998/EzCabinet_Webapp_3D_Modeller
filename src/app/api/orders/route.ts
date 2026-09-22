@@ -5,6 +5,7 @@ import { authEnabled } from "@/lib/auth/enabled";
 import { currentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/catalogue/db";
 import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
+import { LOCALES } from "@/lib/copy/locales";
 import { toE164 } from "@/lib/logistics/phone";
 import {
 	ORDER_DESIGN_VERSION,
@@ -13,6 +14,8 @@ import {
 import { PAYMENT_PROVIDER } from "@/lib/orders/payment";
 import { priceOrder } from "@/lib/orders/price";
 import { validateOrder } from "@/lib/orders/validate";
+import { enqueue, flushSoon } from "@/lib/whatsapp/outbox";
+import { draftFor, NOTIFY_ORDER_SELECT } from "@/lib/whatsapp/templates";
 
 export const runtime = "nodejs";
 
@@ -39,6 +42,10 @@ const orderInputSchema = z.object({
 	}),
 	/** The re-measure notice is a condition of the order, not a preference. */
 	remeasureAccepted: z.literal(true),
+	/** Unticked by default. No opt-in, no WhatsApp message — PDPA and Meta both require it. */
+	whatsappOptIn: z.boolean().default(false),
+	/** The site language, so messages arrive in it. */
+	locale: z.enum(LOCALES).default("en"),
 });
 
 export async function POST(request: Request) {
@@ -63,7 +70,8 @@ export async function POST(request: Request) {
 			{ status: 400 },
 		);
 	}
-	const { roomId, finishId, layout, customer } = parsed.data;
+	const { roomId, finishId, layout, customer, whatsappOptIn, locale } =
+		parsed.data;
 
 	// A number a driver cannot ring is the order's real failure mode, so it is
 	// refused here rather than discovered on delivery day.
@@ -89,26 +97,36 @@ export async function POST(request: Request) {
 	}
 
 	const price = priceOrder(layout, finishId, published.data);
-	const order = await prisma.order.create({
-		data: {
-			customerName: customer.name,
-			customerPhone: phone,
-			customerEmail: customer.email,
-			siteAddress: customer.siteAddress,
-			addressNotes: customer.addressNotes || null,
-			roomId,
-			finishId,
-			design: { schemaVersion: ORDER_DESIGN_VERSION, layout } as never,
-			catalogueVersionId: published.id,
-			breakdown: price.breakdown as never,
-			cabinetsRm: price.cabinetsRm,
-			deliveryRm: price.deliveryRm,
-			totalRm: price.totalRm,
-			paymentProvider: PAYMENT_PROVIDER,
-			userId: user?.id ?? null,
-		},
-		select: { publicToken: true },
+	const { order, notificationIds } = await prisma.$transaction(async (tx) => {
+		const order = await tx.order.create({
+			data: {
+				customerName: customer.name,
+				customerPhone: phone,
+				customerEmail: customer.email,
+				siteAddress: customer.siteAddress,
+				addressNotes: customer.addressNotes || null,
+				roomId,
+				finishId,
+				design: { schemaVersion: ORDER_DESIGN_VERSION, layout } as never,
+				catalogueVersionId: published.id,
+				breakdown: price.breakdown as never,
+				cabinetsRm: price.cabinetsRm,
+				deliveryRm: price.deliveryRm,
+				totalRm: price.totalRm,
+				paymentProvider: PAYMENT_PROVIDER,
+				userId: user?.id ?? null,
+				whatsappOptIn,
+				whatsappOptInAt: whatsappOptIn ? new Date() : null,
+				locale,
+			},
+			select: NOTIFY_ORDER_SELECT,
+		});
+		const notificationIds = await enqueue(tx, [
+			draftFor({ kind: "ORDER_PLACED", order }),
+		]);
+		return { order, notificationIds };
 	});
+	flushSoon(notificationIds);
 
 	return NextResponse.json({ token: order.publicToken }, { status: 201 });
 }
