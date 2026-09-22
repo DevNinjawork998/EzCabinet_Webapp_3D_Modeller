@@ -127,11 +127,12 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 			// records money already spent at the carrier, and a failed insert here
 			// must never roll it back — the row would look unbooked and a retry
 			// would buy a second lorry.
-			if (booked.orderId) {
+			const orderId = booked.orderId;
+			if (orderId) {
 				try {
 					const ids = await prisma.$transaction(async (tx) => {
 						const order = await tx.order.findUniqueOrThrow({
-							where: { id: booked.orderId as string },
+							where: { id: orderId },
 							select: NOTIFY_ORDER_SELECT,
 						});
 						return enqueue(tx, [
