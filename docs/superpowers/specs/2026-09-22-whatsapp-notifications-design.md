@@ -26,7 +26,7 @@ points anyone who replies at EzCabinet's sales team.
 
 Rejected mechanisms: sending inline in the request (a slow or down Meta blocks
 the admin, and a failure loses the message with no record); Vercel Queues or
-Workflow (new infrastructure for ~8 message types at a factory's order volume —
+Workflow (new infrastructure for 7 message types at a factory's order volume —
 Postgres already gives the same guarantees here).
 
 ## Constraint that shapes everything
@@ -180,9 +180,9 @@ Server-only, like `lib/logistics`.
 
 - **`templates.ts`** — pure. `(kind, vars, locale, stage?) → Meta template
   payload`. One table holds each kind's template name and variable order, and
-  the stage names in en / zh / ms. The template copy submitted to Meta lives in
-  the same file as comments, so the approved text and the code filling it are
-  reviewed together.
+  the stage names in en / zh / ms. The template wording itself is in
+  `docs/ops/whatsapp-ezcabinet-setup.md`, the copy EzCabinet submits; the
+  variable order here must match it.
 - **`send.ts`** — one Cloud API call, `POST /v{N}/{phone-number-id}/messages`,
   through `lib/logistics/http.ts` (timeout, retry only when safe). Returns the
   Meta message id or a classified error.
@@ -283,12 +283,13 @@ Public prefix, so it authenticates itself — `proxy.ts` only gates `/admin`.
 
 ## Rollout — EzCabinet's side
 
-These block go-live, not the build:
+These block go-live, not the build. The full checklist, with how-to steps and
+the template copy to submit, is `docs/ops/whatsapp-ezcabinet-setup.md` — that
+file is the source of the approved wording `templates.ts` must match.
 
 1. **Meta Business verification** and a **dedicated phone number** for the
    Cloud API. That number cannot also be used in the WhatsApp phone app.
-2. **Template approval:** 7 templates × 3 languages, copy taken from
-   `templates.ts`.
+2. **Template approval:** 7 templates × 3 languages.
 3. **The factory's real stage names.**
 4. **The sales WhatsApp number** for the auto-reply.
 5. **Counsel sign-off** on the privacy paragraph.
