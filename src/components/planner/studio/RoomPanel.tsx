@@ -290,6 +290,7 @@ export function RoomPanel({
 	onChangeRoomAction,
 	onWallLengthAction,
 	onPaintWallAction,
+	onPaintAllAction,
 	onTargetWallAction,
 	onCeilingAction,
 	onOpenDefaultsAction,
@@ -311,12 +312,15 @@ export function RoomPanel({
 	onWallLengthAction: (wall: number, mm: number) => void;
 	/** A catalogue colour id, a customer's own `#rrggbb`, or null to strip. */
 	onPaintWallAction: (wall: number, colour: string | null) => void;
+	/** Paint every wall the colour of the one being painted. */
+	onPaintAllAction: (colour: string) => void;
 	onTargetWallAction: (wall: number) => void;
 	onCeilingAction: (mm: number) => void;
 	onOpenDefaultsAction: () => void;
 }) {
 	const t = useCopy();
 	const palette = wallColoursOf(catalogue);
+	const targetPaint = layout.wallColours?.[targetWall] ?? null;
 	const shapeLabel: Record<RoomShape, string> = {
 		rect: t.planner.room.shapeRect,
 		l: t.planner.room.shapeL,
@@ -405,12 +409,28 @@ export function RoomPanel({
 					);
 				})}
 				<div className="flex flex-col gap-1.5 pt-1">
-					<p className="text-[11px] text-neutral-500 leading-4">
-						{fill(t.planner.room.paintingWall, { n: targetWall + 1 })}
-					</p>
+					<div className="flex items-baseline justify-between gap-2">
+						<p className="text-[11px] text-neutral-500 leading-4">
+							{fill(t.planner.room.paintingWall, { n: targetWall + 1 })}
+						</p>
+						{/* Only when it would change something: this wall is painted
+						    and at least one other wall is not the same colour. */}
+						{targetPaint &&
+							layout.runs.some(
+								(_, i) => (layout.wallColours?.[i] ?? null) !== targetPaint,
+							) && (
+								<button
+									type="button"
+									onClick={() => onPaintAllAction(targetPaint)}
+									className="text-[11px] text-[#1f5138] leading-4 underline underline-offset-2 hover:text-[#163d2a]"
+								>
+									{t.planner.room.paintAll}
+								</button>
+							)}
+					</div>
 					<PaintStrip
 						colours={palette}
-						current={layout.wallColours?.[targetWall] ?? null}
+						current={targetPaint}
 						onPickAction={(colour) => onPaintWallAction(targetWall, colour)}
 					/>
 				</div>
