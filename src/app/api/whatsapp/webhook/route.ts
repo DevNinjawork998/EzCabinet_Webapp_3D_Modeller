@@ -79,11 +79,16 @@ export async function POST(request: Request) {
 		try {
 			await autoReply(phone);
 		} catch (error) {
-			logItemFailure("auto_reply", error, phone);
+			logItemFailure("auto_reply", error, maskPhone(phone));
 		}
 	}
 
 	return NextResponse.json({ ok: true });
+}
+
+/** Never log a customer's full number — only enough to find the row. */
+function maskPhone(phone: string): string {
+	return `…${phone.slice(-4)}`;
 }
 
 function logItemFailure(step: string, error: unknown, ref?: string): void {

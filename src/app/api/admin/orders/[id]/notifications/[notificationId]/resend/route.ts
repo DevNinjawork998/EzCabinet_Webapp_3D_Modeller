@@ -10,6 +10,8 @@ export const runtime = "nodejs";
  *
  * Only a `FAILED` row, and only one belonging to this order. Resetting
  * `queuedAt` restarts the 48 h expiry — the admin chose to send it late.
+ * `metaMessageId` is cleared too: a late status callback naming the old,
+ * failed send must not mark this re-queued row delivered.
  */
 export const POST = withAuth<{
 	params: Promise<{ id: string; notificationId: string }>;
@@ -22,6 +24,7 @@ export const POST = withAuth<{
 			attempts: 0,
 			lastError: null,
 			queuedAt: new Date(),
+			metaMessageId: null,
 		},
 	});
 	if (count !== 1) {

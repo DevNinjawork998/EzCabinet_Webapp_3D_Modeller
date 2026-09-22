@@ -76,12 +76,47 @@ describe("draftFor", () => {
 			order,
 			delivery: { ...delivery, carrierId: "lalamove", carrierOrderId: "LLM-9" },
 		});
-		expect(draft?.dedupeKey).toBe("delivery:del1:booked");
+		expect(draft?.dedupeKey).toBe("delivery:del1:booked:LLM-9");
 		expect(draft?.deliveryId).toBe("del1");
 		expect(draft?.vars).toEqual({
 			body: ["IC-20260826-014", "Lalamove", "LLM-9"],
 			button: "tok_delivery",
 		});
+	});
+
+	it("delivery booked, rebooked with a new carrier order: a fresh dedupe key", () => {
+		const first = draftFor({
+			kind: "DELIVERY_BOOKED",
+			order,
+			delivery: { ...delivery, carrierId: "lalamove", carrierOrderId: "LLM-9" },
+		});
+		const rebooked = draftFor({
+			kind: "DELIVERY_BOOKED",
+			order,
+			delivery: {
+				...delivery,
+				carrierId: "lalamove",
+				carrierOrderId: "LLM-10",
+			},
+		});
+		expect(first?.dedupeKey).not.toBe(rebooked?.dedupeKey);
+	});
+
+	it("delivery booked, manual carrier: the tracking number shown is the order ref, not the internal id", () => {
+		const draft = draftFor({
+			kind: "DELIVERY_BOOKED",
+			order,
+			delivery: {
+				...delivery,
+				carrierId: "manual",
+				carrierOrderId: "manual-ckv9x8z0000",
+			},
+		});
+		expect(draft?.vars.body).toEqual([
+			"IC-20260826-014",
+			"Own lorry / phoned in",
+			"IC-20260826-014",
+		]);
 	});
 
 	it("the same carrier reading twice gives the same key", () => {
@@ -101,13 +136,22 @@ describe("draftFor", () => {
 
 describe("deliveryKindFor", () => {
 	it("messages only the three moments a customer acts on", () => {
-		expect(deliveryKindFor("PICKED_UP")).toBe("PICKED_UP");
-		expect(deliveryKindFor("DELIVERED")).toBe("DELIVERED");
-		expect(deliveryKindFor("FAILED")).toBe("DELIVERY_FAILED");
-		expect(deliveryKindFor("CANCELLED")).toBe("DELIVERY_FAILED");
-		expect(deliveryKindFor("DRIVER_ASSIGNED")).toBeNull();
-		expect(deliveryKindFor("IN_TRANSIT")).toBeNull();
-		expect(deliveryKindFor("BOOKED")).toBeNull();
+		expect(deliveryKindFor("PICKED_UP", "IN_TRANSIT")).toBe("PICKED_UP");
+		expect(deliveryKindFor("DELIVERED", "PICKED_UP")).toBe("DELIVERED");
+		expect(deliveryKindFor("FAILED", "IN_TRANSIT")).toBe("DELIVERY_FAILED");
+		expect(deliveryKindFor("CANCELLED", "BOOKED")).toBe("DELIVERY_FAILED");
+		expect(deliveryKindFor("DRIVER_ASSIGNED", "BOOKED")).toBeNull();
+		expect(deliveryKindFor("IN_TRANSIT", "BOOKED")).toBeNull();
+		expect(deliveryKindFor("BOOKED", "QUOTED")).toBeNull();
+	});
+
+	it("a cancel before booking (DRAFT/QUOTED) is not a failed delivery", () => {
+		expect(deliveryKindFor("CANCELLED", "DRAFT")).toBeNull();
+		expect(deliveryKindFor("CANCELLED", "QUOTED")).toBeNull();
+	});
+
+	it("a cancel after delivery is not a failed delivery", () => {
+		expect(deliveryKindFor("CANCELLED", "DELIVERED")).toBeNull();
 	});
 });
 

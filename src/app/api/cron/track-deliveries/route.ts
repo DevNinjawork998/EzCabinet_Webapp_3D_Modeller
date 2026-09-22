@@ -19,9 +19,10 @@ export const runtime = "nodejs";
  * Public prefix, so it checks its own bearer token — `proxy.ts` only gates
  * `/admin` and `/api/admin`. Vercel sends `Authorization: Bearer $CRON_SECRET`.
  *
- * ponytail: one sequential pass over active jobs, capped. Hundreds of live
- * deliveries would want batching or a queue; at this company's volume the cap
- * is the whole safeguard against the 30s function limit.
+ * ponytail: one sequential pass over active jobs, capped, followed by the
+ * WhatsApp outbox's own capped flush (up to 50 sends). Hundreds of live
+ * deliveries would want batching or a queue; at this company's volume the two
+ * caps together are the whole safeguard against the 30s function limit.
  */
 const MAX_PER_RUN = 50;
 

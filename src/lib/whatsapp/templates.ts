@@ -5,7 +5,10 @@ import type {
 } from "@/generated/prisma/enums";
 import { isLocale, type Locale } from "@/lib/copy/locales";
 import { LABEL as CARRIER_LABEL } from "@/lib/logistics/carriers";
-import type { DeliveryStatusName } from "@/lib/logistics/types";
+import {
+	ACTIVE_STATUSES,
+	type DeliveryStatusName,
+} from "@/lib/logistics/types";
 import { orderRef } from "@/lib/orders/ref";
 
 /**
@@ -95,15 +98,25 @@ const LANGUAGE: Record<Locale, string> = { en: "en", zh: "zh_CN", ms: "ms" };
 export const localeOf = (value: string): Locale =>
 	isLocale(value) ? value : "en";
 
+const ACTIVE = new Set<DeliveryStatusName>(ACTIVE_STATUSES);
+
 /**
  * The delivery statuses a customer hears about. Assigned-driver and in-transit
  * pings are noise; picked up, delivered and failed are what they act on.
+ *
+ * CANCELLED/FAILED only reads as "delivery failed" when it interrupts a job
+ * that was actually moving (`from` in `ACTIVE_STATUSES`) — a quote cancelled
+ * before booking, or a job cancelled after it already delivered, is not a
+ * failed delivery.
  */
 export function deliveryKindFor(
 	status: DeliveryStatusName,
+	from: DeliveryStatusName,
 ): "PICKED_UP" | "DELIVERED" | "DELIVERY_FAILED" | null {
 	if (status === "PICKED_UP" || status === "DELIVERED") return status;
-	if (status === "FAILED" || status === "CANCELLED") return "DELIVERY_FAILED";
+	if ((status === "FAILED" || status === "CANCELLED") && ACTIVE.has(from)) {
+		return "DELIVERY_FAILED";
+	}
 	return null;
 }
 
@@ -155,12 +168,17 @@ export function draftFor(event: NotifyEvent): NotificationDraft | null {
 			return {
 				...base,
 				deliveryId: event.delivery.id,
-				dedupeKey: `delivery:${event.delivery.id}:booked`,
+				dedupeKey: `delivery:${event.delivery.id}:booked:${event.delivery.carrierOrderId}`,
 				vars: {
 					body: [
 						ref,
 						CARRIER_LABEL[event.delivery.carrierId] ?? event.delivery.carrierId,
-						event.delivery.carrierOrderId,
+						// A manual carrier has no real tracking number — `carrierOrderId`
+						// is our own internal `manual-<cuid>` — so the customer sees the
+						// order ref they already know instead of an id meant for us.
+						event.delivery.carrierId === "manual"
+							? ref
+							: event.delivery.carrierOrderId,
 					],
 					button: event.delivery.publicToken,
 				},

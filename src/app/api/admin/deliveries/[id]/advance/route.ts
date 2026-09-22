@@ -122,7 +122,7 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 			}
 		}
 
-		const kind = deliveryKindFor(status);
+		const kind = deliveryKindFor(status, current);
 
 		const { updated, notificationIds } = await prisma.$transaction(
 			async (tx) => {

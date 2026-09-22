@@ -36,6 +36,18 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 		}
 		const { stage } = parsed.data;
 
+		// The dictionary lookup is not DB work; loading it before the
+		// transaction keeps the open transaction to reads and writes only.
+		const localeRow = await prisma.order.findUnique({
+			where: { id },
+			select: { locale: true },
+		});
+		if (!localeRow) {
+			return NextResponse.json({ error: "not_found" }, { status: 404 });
+		}
+		const t = await getDictionary(localeOf(localeRow.locale));
+		const stageLabel = t.order.stages[stage];
+
 		const result = await prisma.$transaction(async (tx) => {
 			const order = await tx.order.findUnique({
 				where: { id },
@@ -51,14 +63,8 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 			});
 			if (count !== 1) return { error: "not_next_stage" as const };
 
-			const t = await getDictionary(localeOf(order.locale));
 			const ids = await enqueue(tx, [
-				draftFor({
-					kind: "STAGE",
-					order,
-					stage,
-					stageLabel: t.order.stages[stage],
-				}),
+				draftFor({ kind: "STAGE", order, stage, stageLabel }),
 			]);
 			return { ids };
 		});

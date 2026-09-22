@@ -87,7 +87,12 @@ export async function applyTrackingUpdate(
 		isForwardTransition(current.status as DeliveryStatusName, next);
 
 	// `moves` already proved `next` is a status; TypeScript cannot see that.
-	const kind = moves ? deliveryKindFor(next as DeliveryStatusName) : null;
+	const kind = moves
+		? deliveryKindFor(
+				next as DeliveryStatusName,
+				current.status as DeliveryStatusName,
+			)
+		: null;
 
 	const { row, notificationIds } = await prisma.$transaction(async (tx) => {
 		const row = await tx.delivery.update({

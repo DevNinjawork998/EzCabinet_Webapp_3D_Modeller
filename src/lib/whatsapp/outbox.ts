@@ -56,7 +56,9 @@ export async function flush(
 	ids?: string[],
 ): Promise<{ sent: number; failed: number }> {
 	if (!whatsappConfigured()) {
-		// Local dev and preview: rows wait, and expire after 48 h. Never a throw —
+		// Local dev and preview: rows wait indefinitely — the 48 h expiry sweep
+		// below never runs while the token is unset, so nothing is marked failed
+		// until a token is present and a flush actually happens. Never a throw —
 		// a missing token must not break checkout.
 		if (ids?.length) console.warn("WHATSAPP_TOKEN unset; message left pending");
 		return { sent: 0, failed: 0 };
@@ -78,6 +80,12 @@ export async function flush(
 
 	let sent = 0;
 	let failed = 0;
+	// ponytail: a send that succeeds and is then followed by a failed DB update
+	// (the `notification.update` below) leaves the row PENDING with `attempts`
+	// already bumped, so the next flush re-sends it — at-least-once, not
+	// exactly-once. Fine for a template message; upgrade to a two-phase claim
+	// (mark SENDING before the API call, verify before re-sending) if a
+	// duplicate WhatsApp message ever matters.
 	for (const row of rows) {
 		const claimed = await prisma.notification.updateMany({
 			where: { id: row.id, status: "PENDING", attempts: row.attempts },
