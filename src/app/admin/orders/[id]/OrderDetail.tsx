@@ -4,7 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { fieldClass } from "@/components/admin/styles";
+import type {
+	NotificationKind,
+	NotificationStatus,
+	ProductionStage,
+} from "@/generated/prisma/enums";
+import { en } from "@/lib/copy/en";
 import type { DeliveryStatusName } from "@/lib/logistics/types";
+import { nextStage } from "@/lib/orders/stage";
 import type { SummaryLine } from "@/lib/orders/summary";
 import { shortTime } from "../../logistics/time";
 import { STATUS_LABEL } from "../../logistics/tracking";
@@ -37,6 +44,16 @@ export type OrderView = {
 	paidAt: string | null;
 	paidByName: string | null;
 	deliveries: { id: string; number: number; status: DeliveryStatusName }[];
+	productionStage: ProductionStage | null;
+	whatsappOptIn: boolean;
+	notifications: {
+		id: string;
+		kind: NotificationKind;
+		stage: ProductionStage | null;
+		status: NotificationStatus;
+		lastError: string | null;
+		createdAt: string;
+	}[];
 };
 
 const FOCUS =
@@ -48,14 +65,34 @@ const EYEBROW =
 const CHIP = `min-h-9 rounded-full border border-neutral-200 bg-white px-[15px] py-2 font-medium text-[12px] text-neutral-600 hover:bg-[#f8f7f4] disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`;
 const PRIMARY = `inline-flex min-h-9 items-center self-start rounded-full bg-[#1f5138] px-[18px] py-2.5 font-semibold text-[12px] text-white hover:bg-[#17402c] disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS}`;
 
+const STAGE_LABEL = en.order.stages;
+
+const KIND_LABEL: Record<NotificationKind, string> = {
+	ORDER_PLACED: "Order placed",
+	PAYMENT_CONFIRMED: "Payment confirmed",
+	STAGE: "Production step",
+	DELIVERY_BOOKED: "Delivery booked",
+	PICKED_UP: "Picked up",
+	DELIVERED: "Delivered",
+	DELIVERY_FAILED: "Delivery failed",
+};
+
+const MESSAGE_STATUS: Record<NotificationStatus, string> = {
+	PENDING: "Queued",
+	SENT: "Sent",
+	DELIVERED: "Delivered",
+	READ: "Read",
+	FAILED: "Failed",
+};
+
 /**
- * One order: what was bought, who for, and its two admin moves — mark it paid
- * (manual payment, until a gateway does this) and create its delivery.
+ * One order: what was bought, who for, and its admin moves — mark it paid,
+ * advance production, create its delivery.
  */
 export function OrderDetail({ order }: { order: OrderView }) {
 	const router = useRouter();
 	const [paymentRef, setPaymentRef] = useState("");
-	const [busy, setBusy] = useState<"paid" | "cancel" | null>(null);
+	const [busy, setBusy] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
 	async function act(kind: "paid" | "cancel") {
@@ -79,6 +116,29 @@ export function OrderDetail({ order }: { order: OrderView }) {
 		}
 		router.refresh();
 	}
+
+	async function post(url: string, body: unknown, key: string) {
+		setBusy(key);
+		setError(null);
+		const res = await fetch(url, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+		setBusy(null);
+		if (!res.ok) {
+			const payload = await res.json().catch(() => null);
+			setError(
+				payload?.error === "not_next_stage"
+					? "Someone else moved this order on. Reload to see where it is."
+					: "Could not update this order.",
+			);
+			return;
+		}
+		router.refresh();
+	}
+
+	const upcoming = nextStage(order.productionStage);
 
 	const awaiting = order.status === "AWAITING_PAYMENT";
 	const paid = order.status === "PAID";
@@ -201,6 +261,38 @@ export function OrderDetail({ order }: { order: OrderView }) {
 						)}
 					</section>
 
+					{paid && (
+						<section className={CARD}>
+							<h2 className={EYEBROW}>Production</h2>
+							<p className="text-[13px] text-neutral-600">
+								{order.productionStage
+									? `Now at: ${STAGE_LABEL[order.productionStage]}`
+									: "Not started."}
+								{order.whatsappOptIn
+									? " Each step is sent to the customer on WhatsApp."
+									: ""}
+							</p>
+							{upcoming && (
+								<button
+									type="button"
+									className={PRIMARY}
+									disabled={busy !== null}
+									onClick={() =>
+										post(
+											`/api/admin/orders/${order.id}/stage`,
+											{ stage: upcoming },
+											"stage",
+										)
+									}
+								>
+									{busy === "stage"
+										? "Saving…"
+										: `Advance to: ${STAGE_LABEL[upcoming]}`}
+								</button>
+							)}
+						</section>
+					)}
+
 					<section className={CARD}>
 						<h2 className={EYEBROW}>Deliveries</h2>
 						{order.deliveries.length === 0 ? (
@@ -260,6 +352,54 @@ export function OrderDetail({ order }: { order: OrderView }) {
 						>
 							Customer's confirmation page
 						</a>
+					</section>
+
+					<section className={CARD}>
+						<h2 className={EYEBROW}>WhatsApp</h2>
+						{!order.whatsappOptIn ? (
+							<p className="text-[12px] text-neutral-500">
+								Customer did not opt in to WhatsApp.
+							</p>
+						) : order.notifications.length === 0 ? (
+							<p className="text-[12px] text-neutral-500">No messages yet.</p>
+						) : (
+							<ul className="flex flex-col gap-2">
+								{order.notifications.map((n) => (
+									<li key={n.id} className="flex flex-col gap-0.5 text-[12px]">
+										<span className="text-neutral-700">
+											{KIND_LABEL[n.kind]}
+											{n.stage ? ` · ${STAGE_LABEL[n.stage]}` : ""}
+										</span>
+										<span
+											className={
+												n.status === "FAILED"
+													? "text-[#7a2c1c]"
+													: "text-[#8a857c]"
+											}
+										>
+											{MESSAGE_STATUS[n.status]} · {shortTime(n.createdAt)}
+											{n.lastError ? ` · ${n.lastError}` : ""}
+										</span>
+										{n.status === "FAILED" && (
+											<button
+												type="button"
+												className={`${CHIP} self-start`}
+												disabled={busy !== null}
+												onClick={() =>
+													post(
+														`/api/admin/orders/${order.id}/notifications/${n.id}/resend`,
+														{},
+														n.id,
+													)
+												}
+											>
+												{busy === n.id ? "Resending…" : "Resend"}
+											</button>
+										)}
+									</li>
+								))}
+							</ul>
+						)}
 					</section>
 				</aside>
 			</div>

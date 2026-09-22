@@ -23,6 +23,17 @@ export default async function OrderAdminPage({
 					orderBy: { createdAt: "desc" },
 				},
 				paidByUser: { select: { name: true } },
+				notifications: {
+					orderBy: { createdAt: "asc" },
+					select: {
+						id: true,
+						kind: true,
+						stage: true,
+						status: true,
+						lastError: true,
+						createdAt: true,
+					},
+				},
 			},
 		}),
 		readPublishedPlannerCatalogue(),
@@ -67,6 +78,12 @@ export default async function OrderAdminPage({
 					paidAt: order.paidAt?.toISOString() ?? null,
 					paidByName: order.paidByUser?.name ?? null,
 					deliveries: order.deliveries,
+					productionStage: order.productionStage,
+					whatsappOptIn: order.whatsappOptIn,
+					notifications: order.notifications.map((n) => ({
+						...n,
+						createdAt: n.createdAt.toISOString(),
+					})),
 				}}
 			/>
 		</div>

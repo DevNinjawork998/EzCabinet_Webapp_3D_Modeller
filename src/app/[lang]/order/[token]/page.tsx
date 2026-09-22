@@ -7,6 +7,7 @@ import { fill } from "@/lib/copy/fill";
 import { isLocale } from "@/lib/copy/locales";
 import { paymentInstructions } from "@/lib/orders/payment";
 import { orderRef } from "@/lib/orders/ref";
+import { STAGES, stageReached } from "@/lib/orders/stage";
 import { summaryLines } from "@/lib/orders/summary";
 
 /**
@@ -51,6 +52,7 @@ export default async function OrderPage({
 				cabinetsRm: true,
 				deliveryRm: true,
 				totalRm: true,
+				productionStage: true,
 				deliveries: {
 					select: { publicToken: true },
 					orderBy: { createdAt: "desc" },
@@ -175,11 +177,22 @@ export default async function OrderPage({
 						<section className={CARD}>
 							<h2 className={`${CARD_HEADING} mb-3.5`}>{o.nextHeading}</h2>
 							<ol className="flex flex-col gap-3">
-								{[
-									{ label: o.stagePaid, done: true },
-									{ label: o.stages.MEASURE, detail: o.stageMeasureDetail },
-									{ label: o.stageDelivery },
-								].map((stage) => (
+								{(
+									[
+										{ label: o.stagePaid, done: true },
+										...STAGES.map((stage) => ({
+											label: o.stages[stage],
+											detail:
+												stage === "MEASURE" ? o.stageMeasureDetail : undefined,
+											done: stageReached(order.productionStage, stage),
+										})),
+										{ label: o.stageDelivery },
+									] as {
+										label: string;
+										detail?: string;
+										done?: boolean;
+									}[]
+								).map((stage) => (
 									<li key={stage.label} className="flex items-start gap-3">
 										<span
 											className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] text-white ${
