@@ -177,8 +177,7 @@ export default async function OrderPage({
 							<ol className="flex flex-col gap-3">
 								{[
 									{ label: o.stagePaid, done: true },
-									{ label: o.stageMeasure, detail: o.stageMeasureDetail },
-									{ label: o.stageBuild },
+									{ label: o.stages.MEASURE, detail: o.stageMeasureDetail },
 									{ label: o.stageDelivery },
 								].map((stage) => (
 									<li key={stage.label} className="flex items-start gap-3">

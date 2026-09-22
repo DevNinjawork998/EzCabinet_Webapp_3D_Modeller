@@ -381,6 +381,7 @@ export const en = {
 		addressNotes: "Access notes — unit, gate code, lift",
 		remeasureNote:
 			"I understand a designer re-measures on site before production and will contact me if the design has to change.",
+		whatsappOptIn: "Send order updates to this number on WhatsApp",
 		saved: "Saved",
 		submitCta: "Place order",
 		submitting: "Placing your order…",
@@ -456,10 +457,17 @@ export const en = {
 			"Use your order ID as the transfer reference so we can match your payment. We'll contact you once it arrives, usually within one working day.",
 		nextHeading: "What happens next",
 		stagePaid: "Payment received",
-		stageMeasure: "Site re-measure",
 		stageMeasureDetail:
 			"A designer confirms your measurements before production.",
-		stageBuild: "Cabinets built in our workshop",
+		/** Production stages, in order — `lib/orders/stage.ts`. Also the words WhatsApp sends. */
+		stages: {
+			MEASURE: "Site re-measure",
+			CUTTING: "Cutting",
+			EDGING: "Edge banding",
+			ASSEMBLY: "Assembly",
+			QC: "Quality check",
+			READY: "Ready for delivery",
+		},
 		stageDelivery: "Delivery to your site",
 		trackDelivery: "Track your delivery",
 		backToPlanner: "Back to planner",
@@ -551,12 +559,20 @@ export const en = {
 		whereHeading: "Who processes it, and where",
 		where:
 			"Usage data is processed by PostHog Inc. on servers in the European Union (Frankfurt), under a data processing agreement. This means the data is transferred outside Malaysia. The website itself is hosted by Vercel.",
+		whatsappHeading: "WhatsApp order updates",
+		whatsapp:
+			"If you tick the box at checkout, we send updates about your order — payment, production steps and delivery — to your phone number on WhatsApp. WhatsApp is operated by Meta Platforms, which processes your number and these messages, possibly outside Malaysia. We send nothing else, and you can stop the updates by blocking the number.",
 		choiceHeading: "Your choice",
 		choice:
 			"If you decline, we only count visits without cookies or local storage, with an identifier that resets daily, and no recordings are made. You can change your choice at any time by clearing this site's data in your browser.",
 		contactHeading: "Contact",
 		contact: "Questions, or requests to access or correct your data: {email}",
 		back: "Back to home",
+	},
+	/** Server-sent WhatsApp text — `lib/whatsapp/outbox.ts`. */
+	whatsapp: {
+		autoReply:
+			"This number only sends EzCabinet order updates. To chat with our team, message us at {number}",
 	},
 	/** The one hard stop before checkout — see CLAUDE.md's conversion decision. */
 	signIn: {

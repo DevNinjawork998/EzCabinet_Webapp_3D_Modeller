@@ -363,6 +363,7 @@ export const zh: Dictionary = {
 		addressNotes: "进出须知——单位、门禁密码、电梯",
 		remeasureNote:
 			"我了解设计师会在制作前到场重新测量，如设计需要更改会先联系我。",
+		whatsappOptIn: "通过 WhatsApp 向此号码发送订单进度",
 		saved: "已保存",
 		submitCta: "下单",
 		submitting: "正在下单……",
@@ -433,9 +434,15 @@ export const zh: Dictionary = {
 			"请以订单编号作为转账备注，方便我们核对付款。款项到账后我们会联系您，通常在一个工作日内。",
 		nextHeading: "接下来的步骤",
 		stagePaid: "已收到付款",
-		stageMeasure: "到场重新测量",
 		stageMeasureDetail: "设计师会在制作前核实您的尺寸。",
-		stageBuild: "在工厂制作橱柜",
+		stages: {
+			MEASURE: "到场重新测量",
+			CUTTING: "板材切割",
+			EDGING: "封边",
+			ASSEMBLY: "组装",
+			QC: "质量检查",
+			READY: "准备送货",
+		},
 		stageDelivery: "送货到府",
 		trackDelivery: "追踪您的配送",
 		backToPlanner: "返回设计工具",
@@ -509,12 +516,19 @@ export const zh: Dictionary = {
 		whereHeading: "由谁处理，在哪里处理",
 		where:
 			"使用数据由 PostHog Inc. 根据数据处理协议，在欧盟（法兰克福）的服务器上处理。这意味着数据会被传输至马来西亚境外。网站本身由 Vercel 托管。",
+		whatsappHeading: "WhatsApp 订单通知",
+		whatsapp:
+			"如果您在结账时勾选此选项，我们会通过 WhatsApp 向您的电话号码发送订单进度——付款、生产步骤和送货。WhatsApp 由 Meta Platforms 运营，Meta 会处理您的号码和这些信息，处理地点可能在马来西亚境外。我们不会发送其他内容，您可以屏蔽该号码以停止接收通知。",
 		choiceHeading: "您的选择",
 		choice:
 			"若您拒绝，我们只会在不使用 Cookie 或本地存储的情况下统计访问次数，所用标识每天重置，也不会进行任何录像。您可随时在浏览器中清除本网站的数据以更改选择。",
 		contactHeading: "联系我们",
 		contact: "如有疑问，或要求查阅或更正您的数据，请联系：{email}",
 		back: "返回主页",
+	},
+	whatsapp: {
+		autoReply:
+			"此号码仅用于发送 EzCabinet 订单通知。如需与我们的团队联系，请发送信息至 {number}",
 	},
 	signIn: {
 		heading: "登录",
