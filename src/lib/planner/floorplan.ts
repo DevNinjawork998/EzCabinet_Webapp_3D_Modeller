@@ -109,6 +109,46 @@ export function wallsOf(plan: FloorPlan): WallGeom[] {
 	});
 }
 
+/**
+ * For each wall of `from`, the wall of `to` standing on the same line and
+ * facing the same way, with how far along it the old wall's start now is —
+ * or null when the new plan has no such wall. This is what lets a reshape keep
+ * a cabinet on the physical wall it was on: rect wall 3 is an L's wall 5, and
+ * the rect's front wall is the L's front wall shortened by the notch.
+ */
+export function wallCorrespondence(
+	from: FloorPlan,
+	to: FloorPlan,
+): ({ wall: number; offsetMm: number } | null)[] {
+	const next = wallsOf(to);
+	return wallsOf(from).map((old) => {
+		const wall = next.findIndex((w) => {
+			const along = {
+				xMm: (w.endMm.xMm - w.startMm.xMm) / w.lengthMm,
+				zMm: (w.endMm.zMm - w.startMm.zMm) / w.lengthMm,
+			};
+			const sameWay =
+				Math.abs(
+					along.xMm * (old.endMm.xMm - old.startMm.xMm) +
+						along.zMm * (old.endMm.zMm - old.startMm.zMm) -
+						old.lengthMm,
+				) < 1;
+			// Same line: the old start sits on the new wall's line.
+			const offLine =
+				(old.startMm.xMm - w.startMm.xMm) * w.inward.xMm +
+				(old.startMm.zMm - w.startMm.zMm) * w.inward.zMm;
+			return sameWay && Math.abs(offLine) < 1;
+		});
+		if (wall < 0) return null;
+		const w = next[wall];
+		const offsetMm =
+			((old.startMm.xMm - w.startMm.xMm) * (w.endMm.xMm - w.startMm.xMm) +
+				(old.startMm.zMm - w.startMm.zMm) * (w.endMm.zMm - w.startMm.zMm)) /
+			w.lengthMm;
+		return { wall, offsetMm };
+	});
+}
+
 /** Where a wall's number (or its length figure) sits: the wall's midpoint,
  * pushed `insetMm` into the room along its inward normal. Shared by the plan
  * labels, the room-panel map and the 3D floor badges so all three agree on

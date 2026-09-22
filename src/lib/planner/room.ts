@@ -7,6 +7,7 @@ import {
 	footprintInPlan,
 	frameOf,
 	nearestWall,
+	outlineOf,
 	setWallLength as planWithWallLength,
 	pointInPlan,
 	type RoomShape,
@@ -18,6 +19,7 @@ import {
 	type Vec2,
 	vertexKind,
 	type WallFrame,
+	wallCorrespondence,
 	wallsOf,
 } from "./floorplan";
 import {
@@ -412,6 +414,17 @@ export function paintWall(
 		i === wall ? colour : (current[i] ?? null),
 	);
 	return { ...room, wallColours: trimPaint(next) };
+}
+
+/**
+ * Paint every wall one colour — the "apply to all walls" in the Room panel,
+ * so a customer painting a whole room does not repeat it wall by wall. A
+ * feature wall is apply-to-all then repaint the one.
+ */
+export function paintAllWalls(room: RoomLayout, colour: string): RoomLayout {
+	const current = room.wallColours ?? [];
+	if (room.runs.every((_, i) => current[i] === colour)) return room;
+	return { ...room, wallColours: room.runs.map(() => colour) };
 }
 
 export function setDoors(
@@ -918,25 +931,69 @@ export function roomEngine(catalogue: PlannerCatalogue) {
 	/** Another template. Refused while any wall but the back wall, or any
 	 * corner, holds something — the same answer the old L → straight gave rather
 	 * than deleting what the customer placed. */
+	/**
+	 * Change the room's template, keeping everything on the physical wall it
+	 * stands against. A run moves to the new wall on the same line
+	 * (`wallCorrespondence`), shifted by where that wall now starts; a corner
+	 * unit stays if its corner is still an inside corner; paint follows its
+	 * wall. The reshape is refused — the room returned unchanged — only when
+	 * something has nowhere to go: a cabinet on a wall the new shape does not
+	 * have, one that would stand past the end of its shortened wall (in the
+	 * L's notch), a corner that stops being one, or anything `accepts` rejects.
+	 */
 	function setShape(room: RoomLayout, shape: RoomShape): RoomLayout {
 		if (shapeOf(room.plan) === shape) return room;
-		if (room.runs.slice(1).some(hasCabinets)) return room;
-		if (room.corners.some((c) => c.floor || c.wall)) return room;
 		const plan = reshape(room.plan, shape);
+		const walls = wallsOf(plan);
+		const map = wallCorrespondence(room.plan, plan);
+		const runs = walls.map(() => emptyRun());
+		for (const [i, run] of room.runs.entries()) {
+			if (!hasCabinets(run)) continue;
+			const to = map[i];
+			if (!to) return room;
+			const move = (module: PlacedModule) => ({
+				...module,
+				xMm: module.xMm + to.offsetMm,
+			});
+			const moved = { floor: run.floor.map(move), wall: run.wall.map(move) };
+			const lengthMm = walls[to.wall].lengthMm;
+			const fits = [...moved.floor, ...moved.wall].every(
+				(m) => m.xMm >= 0 && m.xMm + m.widthMm <= lengthMm + 0.5,
+			);
+			if (!fits) return room;
+			// An unmoved run keeps its identity, as the back wall always has.
+			runs[to.wall] = to.offsetMm === 0 ? run : moved;
+		}
+		// A vertex is the corner at the end of its wall: `outline[v + 1]`.
+		const before = outlineOf(room.plan);
+		const after = outlineOf(plan);
+		const corners: CornerUnits[] = [];
+		for (const corner of room.corners) {
+			const at = before[(corner.vertex + 1) % before.length];
+			const vertex = after.findIndex(
+				(_, w) =>
+					after[(w + 1) % after.length].xMm === at.xMm &&
+					after[(w + 1) % after.length].zMm === at.zMm &&
+					vertexKind(plan, w) === "inside",
+			);
+			if (vertex >= 0) corners.push({ ...corner, vertex });
+			else if (corner.floor || corner.wall) return room;
+		}
+		// Paint is not a cabinet: a colour never stops fitting, so it follows its
+		// wall wherever it goes and is only dropped for a wall the new shape does
+		// not have.
+		const paint = room.wallColours && walls.map((): string | null => null);
+		if (paint)
+			for (const [i, colour] of (room.wallColours ?? []).entries()) {
+				const to = map[i];
+				if (to && colour) paint[to.wall] = colour;
+			}
 		const next: RoomLayout = {
 			...room,
 			plan,
-			runs: wallsOf(plan).map((_, i) => (i === 0 ? room.runs[0] : emptyRun())),
-			corners: [],
-			// Paint is not a cabinet. The runs rule above discards because a
-			// cabinet on a changed wall may stop fitting; a colour never does, and
-			// a colour the customer picked is not recoverable once dropped. So
-			// keep every wall the new shape still has — but only those, or the
-			// document claims paint for walls that do not exist and resurrects
-			// them on the next reshape.
-			...(room.wallColours && {
-				wallColours: trimPaint(room.wallColours.slice(0, wallsOf(plan).length)),
-			}),
+			runs,
+			corners,
+			...(paint && { wallColours: trimPaint(paint) }),
 		};
 		return accepts(room, next) ? next : room;
 	}
