@@ -4,6 +4,8 @@ import { prisma } from "@/lib/catalogue/db";
 import { getAdapter } from "@/lib/logistics/registry";
 import { toJob } from "@/lib/logistics/store";
 import { bookInputSchema, CarrierNotConfigured } from "@/lib/logistics/types";
+import { enqueue, flushSoon } from "@/lib/whatsapp/outbox";
+import { draftFor, NOTIFY_ORDER_SELECT } from "@/lib/whatsapp/templates";
 
 export const runtime = "nodejs";
 
@@ -120,6 +122,42 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 					},
 				},
 			});
+
+			// Deliberately not in the booking write's transaction: that write
+			// records money already spent at the carrier, and a failed insert here
+			// must never roll it back — the row would look unbooked and a retry
+			// would buy a second lorry.
+			if (booked.orderId) {
+				try {
+					const ids = await prisma.$transaction(async (tx) => {
+						const order = await tx.order.findUniqueOrThrow({
+							where: { id: booked.orderId as string },
+							select: NOTIFY_ORDER_SELECT,
+						});
+						return enqueue(tx, [
+							draftFor({
+								kind: "DELIVERY_BOOKED",
+								order,
+								delivery: {
+									id: booked.id,
+									publicToken: booked.publicToken,
+									carrierId,
+									carrierOrderId: booking.carrierOrderId,
+								},
+							}),
+						]);
+					});
+					flushSoon(ids);
+				} catch (error) {
+					console.error(
+						JSON.stringify({
+							type: "WHATSAPP_ENQUEUE_FAILED",
+							deliveryId: booked.id,
+							message: (error as Error).message,
+						}),
+					);
+				}
+			}
 
 			return NextResponse.json({ delivery: booked }, { status: 201 });
 		} catch (error) {

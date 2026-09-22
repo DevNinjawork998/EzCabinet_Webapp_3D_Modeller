@@ -3,6 +3,8 @@ import { z } from "zod";
 import { BYPASS_USER } from "@/lib/auth/requireAuth";
 import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
+import { enqueue, flushSoon } from "@/lib/whatsapp/outbox";
+import { draftFor, NOTIFY_ORDER_SELECT } from "@/lib/whatsapp/templates";
 
 export const runtime = "nodejs";
 
@@ -31,16 +33,27 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 			);
 		}
 
-		const { count } = await prisma.order.updateMany({
-			where: { id, status: "AWAITING_PAYMENT" },
-			data: {
-				status: "PAID",
-				paidAt: new Date(),
-				paidByUserId: user.id === BYPASS_USER.id ? null : user.id,
-				paymentRef: parsed.data.paymentRef,
-			},
+		const notificationIds = await prisma.$transaction(async (tx) => {
+			const { count } = await tx.order.updateMany({
+				where: { id, status: "AWAITING_PAYMENT" },
+				data: {
+					status: "PAID",
+					paidAt: new Date(),
+					paidByUserId: user.id === BYPASS_USER.id ? null : user.id,
+					paymentRef: parsed.data.paymentRef,
+				},
+			});
+			if (count !== 1) return null;
+			const order = await tx.order.findUniqueOrThrow({
+				where: { id },
+				select: NOTIFY_ORDER_SELECT,
+			});
+			return enqueue(tx, [draftFor({ kind: "PAYMENT_CONFIRMED", order })]);
 		});
-		if (count === 1) return NextResponse.json({ ok: true });
+		if (notificationIds) {
+			flushSoon(notificationIds);
+			return NextResponse.json({ ok: true });
+		}
 
 		const exists = await prisma.order.findUnique({
 			where: { id },

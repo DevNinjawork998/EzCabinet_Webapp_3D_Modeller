@@ -1,6 +1,12 @@
 import "server-only";
 import type { Delivery } from "@/generated/prisma/client";
 import { prisma } from "@/lib/catalogue/db";
+import { enqueue, flushSoon } from "@/lib/whatsapp/outbox";
+import {
+	deliveryKindFor,
+	draftFor,
+	NOTIFY_ORDER_SELECT,
+} from "@/lib/whatsapp/templates";
 import { isForwardTransition } from "./status";
 import type {
 	DeliveryItem,
@@ -71,6 +77,7 @@ export async function applyTrackingUpdate(
 ): Promise<Delivery> {
 	const current = await prisma.delivery.findUniqueOrThrow({
 		where: { id: deliveryId },
+		include: { order: { select: NOTIFY_ORDER_SELECT } },
 	});
 
 	const next = update.status;
@@ -79,8 +86,11 @@ export async function applyTrackingUpdate(
 		next !== undefined &&
 		isForwardTransition(current.status as DeliveryStatusName, next);
 
-	const [row] = await prisma.$transaction([
-		prisma.delivery.update({
+	// `moves` already proved `next` is a status; TypeScript cannot see that.
+	const kind = moves ? deliveryKindFor(next as DeliveryStatusName) : null;
+
+	const { row, notificationIds } = await prisma.$transaction(async (tx) => {
+		const row = await tx.delivery.update({
 			where: { id: deliveryId },
 			data: {
 				...(moves ? { status: next } : {}),
@@ -104,8 +114,8 @@ export async function applyTrackingUpdate(
 						}
 					: {}),
 			},
-		}),
-		prisma.deliveryEvent.create({
+		});
+		await tx.deliveryEvent.create({
 			data: {
 				deliveryId,
 				source,
@@ -117,8 +127,22 @@ export async function applyTrackingUpdate(
 						: `No change (${current.status})`),
 				raw: (update.raw ?? null) as never,
 			},
-		}),
-	]);
+		});
+		// A job an admin made by hand has no order, so no consent record and no
+		// message. A repeated reading re-uses the dedupe key and inserts nothing.
+		const notificationIds =
+			kind && current.order
+				? await enqueue(tx, [
+						draftFor({
+							kind,
+							order: current.order,
+							delivery: { id: deliveryId, publicToken: current.publicToken },
+						}),
+					])
+				: [];
+		return { row, notificationIds };
+	});
+	flushSoon(notificationIds);
 
 	return row;
 }
