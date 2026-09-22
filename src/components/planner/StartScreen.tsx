@@ -158,7 +158,7 @@ export function StartScreen({
 					{ label: t.planner.crumbs.roomPlanner },
 				]}
 			>
-				<span className="text-[13px] text-neutral-500">
+				<span className="hidden text-[13px] sm:inline text-neutral-500">
 					{t.landing.hero.eyebrow}
 				</span>
 				<AdminLink />

@@ -434,7 +434,11 @@ export function Cabinet({
 						args={[w + SELECTION_PAD, h + SELECTION_PAD, d + SELECTION_PAD]}
 					/>
 					<meshBasicMaterial colorWrite={false} depthWrite={false} />
-					<Edges color={SELECTION_COLOR} lineWidth={SELECTION_LINE_PX} />
+					<Edges
+						color={SELECTION_COLOR}
+						lineWidth={SELECTION_LINE_PX}
+						toneMapped={false}
+					/>
 				</mesh>
 			)}
 		</group>
