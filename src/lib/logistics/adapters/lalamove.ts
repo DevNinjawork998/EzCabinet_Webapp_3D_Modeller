@@ -1,6 +1,7 @@
 import "server-only";
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { z } from "zod";
+import { secretsMatch } from "@/lib/secretsMatch";
 import { WORKSHOP_PHONE } from "../carriers";
 import { carrierFetch } from "../http";
 import { suggestVehicle, type VehicleClass } from "../measure";
@@ -348,13 +349,6 @@ const webhookSchema = z.object({
 			.nullish(),
 	}),
 });
-
-/** Constant-time, and length-safe — `timingSafeEqual` throws on a length mismatch. */
-function secretsMatch(a: string, b: string): boolean {
-	const left = Buffer.from(a);
-	const right = Buffer.from(b);
-	return left.length === right.length && timingSafeEqual(left, right);
-}
 
 export const lalamoveAdapter: CarrierAdapter = {
 	id: "lalamove",

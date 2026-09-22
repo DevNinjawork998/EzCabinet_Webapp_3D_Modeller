@@ -6,6 +6,7 @@ import { prisma } from "@/lib/catalogue/db";
 import {
 	deleteMeshFile,
 	fetchMeshFile,
+	MESH_PATHNAME,
 	sha256Hex,
 } from "@/lib/catalogue/meshBlob";
 import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
@@ -14,7 +15,8 @@ export const runtime = "nodejs";
 
 const patchSchema = z.object({
 	blobUrl: z.string().min(1).optional(),
-	blobPathname: z.string().min(1).optional(),
+	// Only a path the upload token could have issued — see the POST route.
+	blobPathname: z.string().regex(MESH_PATHNAME).optional(),
 	filename: z.string().min(1).optional(),
 	name: z.string().min(1).optional(),
 	category: z

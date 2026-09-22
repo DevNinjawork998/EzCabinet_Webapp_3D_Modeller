@@ -513,8 +513,15 @@ staff member could ever use the Google button. The superadmin typing a
 colleague's work address is the assertion that it is theirs.
 
 `AUTH_ENABLED=false` opens the admin surface and lets checkout take an
-anonymous order, for local work. It is ignored when `VERCEL_ENV` is
-`production`.
+anonymous order, for local work. It is ignored whenever `VERCEL_ENV` is set —
+preview included, since a preview is a public URL with real carrier
+credentials behind it.
+
+Public password sign-up is closed (`disabledPaths: ["/sign-up/email"]` in
+`lib/auth.ts`); invites and the seed call `auth.api.signUpEmail` server-side,
+which the router never sees. Promoting an existing customer row strips any
+password and session it carries before granting the role — a customer row
+with a password was made by someone other than the address's owner.
 
 Design: `docs/superpowers/specs/2026-09-20-rbac-design.md`.
 
@@ -551,7 +558,7 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
 7. **Free cabinets have no resize, replace or duplicate yet** — those controls are hidden on a free selection. **No floor-follow drag in elevation view**, since elevation is a flat wall-facing projection with nowhere for "off the wall" to go. **Switching to an L is refused silently** while a free cabinet stands in the notch's would-be area — the room panel just doesn't move. **A free cabinet can stand under an empty corner square's billed worktop**: `runFootprints` ignores an empty reserved corner square, so nothing stops a free cabinet occupying the same floor space that corner's worktop is priced over.
 8. **A journey event fired next to a redirect can be lost.** `track()` in `lib/analytics.ts` loads `posthog-js` on idle and captures asynchronously, with no `sendBeacon` or `keepalive`. `sign_in_nudge` with `action: "accepted"` fires and is immediately followed by the Google OAuth redirect, so that leg of the sign-in funnel will under-count — the browser can navigate away before the beacon goes out. Not new, and not unique to that event: any event fired next to a redirect has the same problem. The fix, when someone wants one, is a `keepalive` fetch or firing the event server-side after the callback, and both are decisions about the funnel rather than cleanup.
 9. **The Customers filter on `/admin/users` narrows client-side over a capped list.** `GET /api/admin/users` has `take: 200`, and `staff=0` drops the `NOT: { role: "CUSTOMER" }` clause rather than adding a customer-only one, so that cap is shared across staff and customers and the browser filters the result afterwards. A public planner accumulates customer sign-ups steadily, so once total accounts pass 200 the Customers view silently shows an incomplete list with nothing in the UI saying so. The fix is a `role` parameter on the endpoint's existing `where`, which removes both the truncation and the over-fetch of rows the customer view discards. Growth debt on an endpoint that is already reviewed and gated, not a defect: with three accounts today it cannot bite.
-10. **`mustChangePassword` is written and never enforced.** Both the invite and the seed set it on a fresh password-holding row, and nothing checks it — no screen forces the change, so a superadmin hands over a password the employee simply keeps. Recorded as deliberate in the plan's own self-review (the forcing screen belongs with the customer-account work in a later sub-project) rather than half-built now, but it is a bigger hole than either of the two Task 10 review carry-forwards written down alongside it.
+10. **Resolved: `mustChangePassword` is enforced.** `withAuth` refuses and `requirePage` redirects to `/admin/change-password` while it is set. Kept as a numbered entry so references to issue 11 stay valid.
 11. **`advance` takes its actor from the session; `book` and `split` still take a client-typed one.** `DeliveryDetail.tsx`'s name field feeds `bookedBy` and `split`'s `actor`, and `split` falls back to the literal `"Admin"` when the field is left blank — so the delivery activity log has mixed provenance, a session user's real name on some rows and whatever an admin typed (or nothing) on others. Narrowed, not closed.
 12. **`prisma.config.ts` sets no `shadowDatabaseUrl`.** That is why `prisma migrate dev` refuses non-interactively and `prisma migrate diff --from-migrations` cannot run — both need a shadow database to diff against. Until it is set, a migration written outside an interactive terminal has to be hand-written and independently verified (`prisma migrate diff --from-config-datasource --to-schema`) rather than generated. The fix is two lines in `prisma.config.ts` pointing at a disposable shadow database URL; not done here.
 

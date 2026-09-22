@@ -3,6 +3,7 @@ import { prisma } from "@/lib/catalogue/db";
 import { getAdapter } from "@/lib/logistics/registry";
 import { applyTrackingUpdate } from "@/lib/logistics/store";
 import { ACTIVE_STATUSES } from "@/lib/logistics/types";
+import { secretsMatch } from "@/lib/secretsMatch";
 
 export const runtime = "nodejs";
 
@@ -28,7 +29,12 @@ export async function GET(request: Request) {
 		console.error("CRON_SECRET is not set; refusing to poll");
 		return NextResponse.json({ error: "not_configured" }, { status: 500 });
 	}
-	if (request.headers.get("authorization") !== `Bearer ${secret}`) {
+	if (
+		!secretsMatch(
+			request.headers.get("authorization") ?? "",
+			`Bearer ${secret}`,
+		)
+	) {
 		return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 	}
 
