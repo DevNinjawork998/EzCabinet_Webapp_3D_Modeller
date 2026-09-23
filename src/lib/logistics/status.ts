@@ -90,6 +90,37 @@ export const CARRIER_STATUS_MAPS: Record<
 		canceled: "CANCELLED",
 		returned: "FAILED",
 	},
+	/**
+	 * FedEx event codes (`latestStatusDetail.derivedCode`), from the API
+	 * reference guide's "Tracking Event Codes" tables.
+	 *
+	 * Keyed on the two-letter code, not the description: the description is
+	 * localised — the sandbox answered `DL` as "Entregado" — and the code is
+	 * the stable half, the same reasoning as EasyParcel's numeric table.
+	 *
+	 * `DE`, `DD` and `SE` are exceptions, not steps along the route, and stay
+	 * unmapped: an exception can resolve into a delivery, and reading it as
+	 * `FAILED` would stop the poll on a parcel that is still moving. `RS`
+	 * ("returning package to shipper") is the one that means somebody has to
+	 * phone the customer.
+	 */
+	fedex: {
+		oc: "BOOKED",
+		pd: "BOOKED",
+		ds: "BOOKED",
+		pu: "PICKED_UP",
+		do: "PICKED_UP",
+		ip: "PICKED_UP",
+		it: "IN_TRANSIT",
+		ar: "IN_TRANSIT",
+		af: "IN_TRANSIT",
+		dp: "IN_TRANSIT",
+		tr: "IN_TRANSIT",
+		od: "IN_TRANSIT",
+		dl: "DELIVERED",
+		rs: "FAILED",
+		ca: "CANCELLED",
+	},
 	citylink: {},
 	/**
 	 * EasyParcel's shipment status *codes*, as strings.
