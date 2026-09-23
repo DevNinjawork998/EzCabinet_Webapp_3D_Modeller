@@ -16,7 +16,7 @@ The wardrobe survives only as a seed family (`id: "wardrobe"`) in `lib/planner/c
 
 ## Status
 
-Phase 0 (catalogue + pricing spec with client) not yet complete — see Open questions. The engine, the planner UI, and the admin catalogue surface are built. `/admin/cabinet-designs` is the one catalogue screen: each uploaded design is one cabinet, filed under the rooms that offer it, and `POST /api/admin/cabinet-designs/publish` rebuilds the catalogue from the design rows (`lib/catalogue/buildCatalogue.ts`). Customers can check out: `POST /api/orders` re-validates and re-prices the design and stores an `Order` (manual bank transfer until a gateway is chosen), `/admin/orders` marks it paid, and **Create delivery** opens the logistics form pre-filled from the design (`lib/orders`). Share links are the remaining Phase 3 work.
+Phase 0 (catalogue + pricing spec with client) not yet complete — see Open questions. The engine, the planner UI, and the admin catalogue surface are built. `/admin/cabinet-designs` is the one catalogue screen: each uploaded design is one cabinet, filed under the rooms that offer it, and `POST /api/admin/cabinet-designs/publish` rebuilds the catalogue from the design rows (`lib/catalogue/buildCatalogue.ts`). Customers can check out: `POST /api/orders` re-validates and re-prices the design and stores an `Order` (manual bank transfer until a gateway is chosen), `/admin/orders` marks it paid, and **Create delivery** opens the logistics form pre-filled from the design (`lib/orders`). Opted-in customers get WhatsApp updates for the order, each admin-advanced production stage and the delivery (`lib/whatsapp`, Meta Cloud API); go-live waits on EzCabinet — see Open questions. Share links are the remaining Phase 3 work.
 
 **Confirmed client requirement (resolved):** EzCabinet designs in SketchUp and asked for "upload SketchUp designs so we can maintain new configurations." It is resolved the literal way: the planner **renders the model they drew** — see [3D](#3d). This reversed an earlier decision to rebuild each cabinet procedurally from extracted numbers; that section carries the measurements that changed it.
 
@@ -191,6 +191,12 @@ src/
     price.ts             ← the planner's price + the flat delivery fee, server-side
     items.ts             ← order → delivery rows: box from the design, weight from its row
     payment.ts           ← manual bank transfer; the seam a gateway plugs into
+    stage.ts             ← production stages, forward-only, one at a time
+  lib/whatsapp/          ← customer WhatsApp updates via Meta's Cloud API
+    templates.ts         ← event → template name, variables, payload; pure
+    send.ts              ← one API call; retryable or not
+    outbox.ts            ← enqueue in the state change's transaction; flush after
+    webhook.ts           ← Meta's signature, status order; pure
   lib/mesh/              ← reads an OBJ export into catalogue data
     archive.ts           ← unzip; the .obj text and the texture filenames
     objRead.ts           ← OBJ parse: named boxes in the file's own units
@@ -256,6 +262,7 @@ published. "Which catalogue is live" is now a value with an owner.
 - **Sizes are validated against the family's ladder.** Reject off-ladder widths server-side.
 - **The catalogue lives in the database.** Cabinets and their prices are `CabinetDesign` rows, rebuilt into a `CatalogueVersion` on every publish — the version table is the price history. The disaster-recovery copy for cabinets is Postgres plus the design files in Blob; `lib/planner/catalogue.ts` seeds only settings. Ship seed changes as their own commit.
 - **Every admin route calls `requireAuth`.** `lib/auth/route.ts`'s `withAuth` wraps every handler under `src/app/api/admin`, with one named exemption in the coverage test's allow-list (`logistics/easyparcel/callback/route.ts` — EasyParcel's own redirect, checked by its `state` cookie instead), and the test fails the build on any other exported method it does not see gated — see [Auth](#auth).
+- **A WhatsApp message is queued in the same transaction as the change it reports**, deduplicated by `dedupeKey` — except delivery booked, which queues after the booking commits so a failed insert can never roll back money spent at a carrier. Preview deployments never get `WHATSAPP_TOKEN`.
 
 ## 3D
 
@@ -541,7 +548,7 @@ Separate Postgres database from Factory Tracker.
 | 1 | Layout schema, rules, pricing — headless, tested against fixtures ✅ |
 | 2 | Planner UI + 3D scene ✅ |
 | 3 | Lead capture, share links, admin inbox (admin catalogue + designs ✅; paid checkout, orders admin, order → delivery pre-fill ✅; share links and a real payment gateway not started); L-shaped kitchens ✅ |
-| 4 | Approved quote → **SKU list** → production job in Factory Tracker |
+| 4 | Approved quote → **SKU list** → production job in Factory Tracker. Factory Tracker pushes production stages onto `POST /api/admin/orders/[id]/stage` (today an admin presses it). |
 
 **Phase 4 changed shape when the planner started rendering the drafted model.** A derived cut list is no longer available, because the app no longer derives the cabinet — it draws the one the client already drew. What Factory Tracker receives is a SKU list (`1× BC 800mm`). For a factory that manufactures to standard modules that is arguably the more useful payload, but it is a change to the contract and **the client should hear it**.
 
@@ -599,6 +606,7 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
 - Does Prisma Postgres offer an ap-southeast region? If not, quote submission eats a transpacific round trip.
 - Does EzCabinet have an EasyParcel account, and who tops up the wallet? `submit_orders` deducts at booking time and a shipment cannot be booked against an empty wallet.
 - **City-Link: a live host, credentials, and whether a rate API exists.** The guide we hold documents only the test server (`devsvr2019a.citylinkexpress.com:21145`) and its credentials page is blank — ask for the company code, account number and meter number, the live URL, and whether anything prices a shipment. Without a rate call an admin compares City-Link blind on price.
+- **WhatsApp go-live is waiting on EzCabinet.** Meta Business verification, a dedicated number, a system-user token, a payment method, 21 template approvals, the factory's real stage names, the sales number and counsel's privacy sign-off. Checklist and template copy: `docs/ops/whatsapp-ezcabinet-setup.md`.
 - **Which Malaysian payment gateway?** Orders take payment by manual bank transfer until one is chosen (Billplz, Curlec, senangPay, iPay88, …). `BANK_TRANSFER` in `lib/orders/payment.ts` is a placeholder account, and the confirmation page shows it to customers — fill it in before checkout goes live.
 - **The delivery fee.** `RATES.deliveryFlatRm` is `85`, the figure from the client's Order Confirmation design; set the real one in the catalogue settings. It is flat — one fee whatever the load or the distance.
 - **What happens when a paid design changes at re-measure?** The customer pays full price up front; there is no refund or top-up flow, so a re-measure that changes the cabinets is handled outside the app today.

@@ -385,6 +385,7 @@ export const ms: Dictionary = {
 		addressNotes: "Nota akses — unit, kod pagar, lif",
 		remeasureNote:
 			"Saya faham pereka bentuk akan mengukur semula di tapak sebelum pengeluaran dan akan menghubungi saya jika reka bentuk perlu diubah.",
+		whatsappOptIn: "Hantar kemas kini pesanan ke nombor ini melalui WhatsApp",
 		saved: "Disimpan",
 		submitCta: "Buat pesanan",
 		submitting: "Sedang membuat pesanan…",
@@ -460,10 +461,16 @@ export const ms: Dictionary = {
 			"Gunakan ID pesanan anda sebagai rujukan pindahan supaya kami dapat memadankan bayaran anda. Kami akan menghubungi anda sebaik ia diterima, lazimnya dalam satu hari bekerja.",
 		nextHeading: "Langkah seterusnya",
 		stagePaid: "Bayaran diterima",
-		stageMeasure: "Ukur semula di tapak",
 		stageMeasureDetail:
 			"Pereka bentuk mengesahkan ukuran anda sebelum pengeluaran.",
-		stageBuild: "Kabinet dibina di bengkel kami",
+		stages: {
+			MEASURE: "Ukur semula di tapak",
+			CUTTING: "Pemotongan papan",
+			EDGING: "Pelekatan jalur tepi",
+			ASSEMBLY: "Pemasangan",
+			QC: "Pemeriksaan kualiti",
+			READY: "Sedia untuk dihantar",
+		},
 		stageDelivery: "Penghantaran ke tapak anda",
 		trackDelivery: "Jejak penghantaran anda",
 		backToPlanner: "Kembali ke perancang",
@@ -542,6 +549,9 @@ export const ms: Dictionary = {
 		whereHeading: "Siapa yang memprosesnya, dan di mana",
 		where:
 			"Data penggunaan diproses oleh PostHog Inc. pada pelayan di Kesatuan Eropah (Frankfurt), di bawah perjanjian pemprosesan data. Ini bermakna data dipindahkan ke luar Malaysia. Laman web ini sendiri dihoskan oleh Vercel.",
+		whatsappHeading: "Kemas kini pesanan melalui WhatsApp",
+		whatsapp:
+			"Jika anda menanda kotak semasa pembayaran, kami akan menghantar kemas kini tentang pesanan anda — bayaran, langkah pengeluaran dan penghantaran — ke nombor telefon anda melalui WhatsApp. WhatsApp dikendalikan oleh Meta Platforms, yang memproses nombor anda dan mesej ini, mungkin di luar Malaysia. Kami tidak menghantar apa-apa lagi, dan anda boleh menghentikan kemas kini dengan menyekat nombor tersebut.",
 		choiceHeading: "Pilihan anda",
 		choice:
 			"Jika anda menolak, kami hanya mengira lawatan tanpa kuki atau storan tempatan, dengan pengecam yang ditetapkan semula setiap hari, dan tiada rakaman dibuat. Anda boleh menukar pilihan pada bila-bila masa dengan memadam data laman ini dalam pelayar anda.",
@@ -549,6 +559,10 @@ export const ms: Dictionary = {
 		contact:
 			"Pertanyaan, atau permintaan untuk mengakses atau membetulkan data anda: {email}",
 		back: "Kembali ke laman utama",
+	},
+	whatsapp: {
+		autoReply:
+			"Nombor ini hanya menghantar kemas kini pesanan EzCabinet. Untuk berbual dengan pasukan kami, hantar mesej ke {number}",
 	},
 	signIn: {
 		heading: "Log masuk",

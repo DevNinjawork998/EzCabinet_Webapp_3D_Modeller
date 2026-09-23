@@ -8,6 +8,12 @@ import {
 	DELIVERY_STATUSES,
 	type DeliveryStatusName,
 } from "@/lib/logistics/types";
+import { enqueue, flushSoon } from "@/lib/whatsapp/outbox";
+import {
+	deliveryKindFor,
+	draftFor,
+	NOTIFY_ORDER_SELECT,
+} from "@/lib/whatsapp/templates";
 
 export const runtime = "nodejs";
 
@@ -29,7 +35,10 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 	"logistics:book",
 	async (request, { params }, user) => {
 		const { id } = await params;
-		const delivery = await prisma.delivery.findUnique({ where: { id } });
+		const delivery = await prisma.delivery.findUnique({
+			where: { id },
+			include: { order: { select: NOTIFY_ORDER_SELECT } },
+		});
 		if (!delivery) {
 			return NextResponse.json({ error: "not_found" }, { status: 404 });
 		}
@@ -113,20 +122,41 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 			}
 		}
 
-		const updated = await prisma.delivery.update({
-			where: { id },
-			data: {
-				status,
-				events: {
-					create: {
-						source: "ADMIN",
+		const kind = deliveryKindFor(status, current);
+
+		const { updated, notificationIds } = await prisma.$transaction(
+			async (tx) => {
+				const updated = await tx.delivery.update({
+					where: { id },
+					data: {
 						status,
-						actor,
-						message: note ?? `Marked ${status} by hand`,
+						events: {
+							create: {
+								source: "ADMIN",
+								status,
+								actor,
+								message: note ?? `Marked ${status} by hand`,
+							},
+						},
 					},
-				},
+				});
+				const notificationIds =
+					kind && delivery.order
+						? await enqueue(tx, [
+								draftFor({
+									kind,
+									order: delivery.order,
+									delivery: {
+										id: delivery.id,
+										publicToken: delivery.publicToken,
+									},
+								}),
+							])
+						: [];
+				return { updated, notificationIds };
 			},
-		});
+		);
+		flushSoon(notificationIds);
 
 		return NextResponse.json({ delivery: updated });
 	},

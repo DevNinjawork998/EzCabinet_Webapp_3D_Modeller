@@ -130,6 +130,8 @@ export function QuoteScreen({
 					addressNotes: field("addressNotes") || null,
 				},
 				remeasureAccepted: true,
+				whatsappOptIn: new FormData(form).get("whatsappOptIn") === "on",
+				locale,
 			}),
 		}).catch(() => null);
 		const body = await res?.json().catch(() => null);
@@ -283,6 +285,17 @@ export function QuoteScreen({
 							/>
 							<span className="text-[12px] text-neutral-500 leading-4">
 								{t.quote.remeasureNote}
+							</span>
+						</label>
+						<label className="flex items-start gap-2">
+							<input
+								name="whatsappOptIn"
+								type="checkbox"
+								disabled={busy}
+								className="mt-0.5"
+							/>
+							<span className="text-[12px] text-neutral-500 leading-4">
+								{t.quote.whatsappOptIn}
 							</span>
 						</label>
 						{error && (
