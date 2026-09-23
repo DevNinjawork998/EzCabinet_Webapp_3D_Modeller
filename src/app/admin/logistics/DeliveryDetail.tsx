@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fieldClass } from "@/components/admin/styles";
 import { CARRIERS, KIND, LABEL } from "@/lib/logistics/carriers";
 import { type PinState, pinState } from "@/lib/logistics/coords";
+import { LABEL_FALLBACK } from "@/lib/logistics/label";
 import {
 	suggestVehicle,
 	totalVolumeM3,
@@ -1284,13 +1285,13 @@ export function DeliveryDetail({
 										</div>
 									)}
 
-									{delivery.carrierId === "gdex" &&
+									{delivery.carrierId !== null &&
+										delivery.carrierId in LABEL_FALLBACK &&
 										delivery.labelUrl === null && (
 											<p className={`${WARN} text-[12px] leading-[18px]`}>
 												The consignment note was not captured when this job was
-												booked, so it cannot be shown here. Print it from the
-												GDEX portal — GDEX only serves the PDF while the
-												shipment is pending.
+												booked, so it cannot be shown here.{" "}
+												{LABEL_FALLBACK[delivery.carrierId]}
 											</p>
 										)}
 
