@@ -184,7 +184,8 @@ src/
     store.ts             ← the single write path for a tracking update
     registry.ts          ← which partners we can reach right now
     tokens.ts            ← a partner's OAuth tokens: one row, refreshed under a lock
-    adapters/            ← one file per partner; manual, lalamove and easyparcel are live
+    label.ts             ← captured shipping labels: blob path, and which carriers have one
+    adapters/            ← one file per partner; manual, lalamove, easyparcel, gdex and fedex are built
   lib/orders/            ← checkout: a customer's design becomes an order
     layoutSchema.ts      ← zod twin of PlannerLayout; stored as { schemaVersion, layout }
     validate.ts          ← can this design be sold as it stands — every rule explicit
@@ -568,6 +569,7 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
 10. **Resolved: `mustChangePassword` is enforced.** `withAuth` refuses and `requirePage` redirects to `/admin/change-password` while it is set. Kept as a numbered entry so references to issue 11 stay valid.
 11. **`advance` takes its actor from the session; `book` and `split` still take a client-typed one.** `DeliveryDetail.tsx`'s name field feeds `bookedBy` and `split`'s `actor`, and `split` falls back to the literal `"Admin"` when the field is left blank — so the delivery activity log has mixed provenance, a session user's real name on some rows and whatever an admin typed (or nothing) on others. Narrowed, not closed.
 12. **`prisma.config.ts` sets no `shadowDatabaseUrl`.** That is why `prisma migrate dev` refuses non-interactively and `prisma migrate diff --from-migrations` cannot run — both need a shadow database to diff against. Until it is set, a migration written outside an interactive terminal has to be hand-written and independently verified (`prisma migrate diff --from-config-datasource --to-schema`) rather than generated. The fix is two lines in `prisma.config.ts` pointing at a disposable shadow database URL; not done here.
+13. **FedEx's sandbox cannot check our requests.** It answers only its own canned inputs — any request that differs from a documented example returns `SERVICE.PACKAGECOMBINATION.INVALID`, and its canned Malaysian rates are USD — so `adapters/fedex.ts` is tested against fixtures built from FedEx's documented shapes, not against FedEx. `pnpm fedex:ping` against **production** is the first real check: run it once production credentials exist, before the first FedEx booking. Production also needs label certification with FedEx, which can take weeks.
 
 ## Open questions — resolve before trusting pricing.ts
 
@@ -602,7 +604,16 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
   placeholder, and it is the number a Lalamove driver rings from the loading bay.
   `WORKSHOP_POSTCODE`, `WORKSHOP_CITY` and `WORKSHOP_STATE` are placeholders
   derived from `WORKSHOP_PIN`, and EasyParcel prices the origin zone off them —
-  a wrong postcode there is a wrong price on every parcel quote.
+  a wrong postcode there is a wrong price on every parcel quote. FedEx takes
+  the shipper and pickup address from the same constants (GDEX avoided this
+  with its account profile; FedEx cannot), plus `WORKSHOP_CLOSE_TIME`, also a
+  placeholder.
+- **Does EzCabinet's FedEx account sell `FEDEX_PRIORITY` domestically, and in
+  MYR?** The adapter prefers it and falls back to the cheapest service
+  offered; a non-MYR price is refused rather than shown as RM. Only production
+  credentials or their FedEx rep can answer. `FEDEX_PRIORITY_EXPRESS_FREIGHT`
+  (freight, over 68 kg) could carry whole cabinets — out of scope, worth
+  asking.
 - Does Prisma Postgres offer an ap-southeast region? If not, quote submission eats a transpacific round trip.
 - Does EzCabinet have an EasyParcel account, and who tops up the wallet? `submit_orders` deducts at booking time and a shipment cannot be booked against an empty wallet.
 - **City-Link: a live host, credentials, and whether a rate API exists.** The guide we hold documents only the test server (`devsvr2019a.citylinkexpress.com:21145`) and its credentials page is blank — ask for the company code, account number and meter number, the live URL, and whether anything prices a shipment. Without a rate call an admin compares City-Link blind on price.

@@ -28,6 +28,7 @@ export const CARRIERS = [
 	{ id: "gdex", label: "GDEX", kind: "parcel" },
 	{ id: "citylink", label: "City-Link", kind: "parcel" },
 	{ id: "easyparcel", label: "EasyParcel", kind: "parcel" },
+	{ id: "fedex", label: "FedEx", kind: "parcel" },
 ] as const satisfies readonly {
 	id: string;
 	label: string;
