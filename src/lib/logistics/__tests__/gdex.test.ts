@@ -9,7 +9,6 @@ import {
 	consignmentBody,
 	GdexNotDeliverable,
 	gdexAdapter,
-	labelPathname,
 	pickupConfirmation,
 	pickupDays,
 	pickupInfo,
@@ -512,14 +511,6 @@ describe("gdexAdapter", () => {
 			);
 			expect(fetchMock.mock.calls[0][1].method).toBe("PUT");
 		});
-	});
-});
-
-describe("labelPathname", () => {
-	it("is derived from the consignment number, so no column stores it", () => {
-		expect(labelPathname("MY1700012345")).toBe(
-			"logistics/gdex/MY1700012345.pdf",
-		);
 	});
 });
 

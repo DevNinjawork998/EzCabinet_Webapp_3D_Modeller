@@ -61,8 +61,9 @@ type Options = {
 	 * `body`/`text` are not credential-shaped keys, so an OAuth token exchange
 	 * would otherwise write a working access and refresh token into the log the
 	 * moment an admin turns on `LOGISTICS_DEBUG` to see why a carrier call is
-	 * failing. Set on the EasyParcel token call only: every other carrier body
-	 * is the main debugging tool for a refused quote and must stay visible.
+	 * failing. Set on the EasyParcel and FedEx token calls only: every other
+	 * carrier body is the main debugging tool for a refused quote and must
+	 * stay visible.
 	 */
 	sensitive?: boolean;
 };

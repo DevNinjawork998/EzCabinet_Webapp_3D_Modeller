@@ -2,7 +2,7 @@ import { get } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
-import { labelPathname } from "@/lib/logistics/adapters/gdex";
+import { LABEL_FALLBACK, labelPathname } from "@/lib/logistics/label";
 
 export const runtime = "nodejs";
 
@@ -21,9 +21,10 @@ export const runtime = "nodejs";
  * column holding a path that is a pure function of an existing one is a column
  * that can disagree with itself.
  *
- * GDEX only serves the PDF while a shipment is pending, so this reads the copy
- * taken at booking time. A 404 here means that capture failed — the note is
- * still printable from GDEX's own portal.
+ * Reads the copy taken at booking time, for every carrier in
+ * `LABEL_FALLBACK`. GDEX only serves its PDF while a shipment is pending, and
+ * FedEx's label link is not ours to rely on later. A 404 here means that
+ * capture failed — the label is still printable from the carrier's own portal.
  */
 export const GET = withAuth<{ params: Promise<{ id: string }> }>(
 	"logistics:read",
@@ -36,16 +37,20 @@ export const GET = withAuth<{ params: Promise<{ id: string }> }>(
 
 		if (
 			!delivery ||
-			delivery.carrierId !== "gdex" ||
+			delivery.carrierId === null ||
+			!Object.hasOwn(LABEL_FALLBACK, delivery.carrierId) ||
 			delivery.carrierOrderId === null
 		) {
 			return NextResponse.json({ error: "not_found" }, { status: 404 });
 		}
 
-		const result = await get(labelPathname(delivery.carrierOrderId), {
-			access: "private",
-			useCache: false,
-		});
+		const result = await get(
+			labelPathname(delivery.carrierId, delivery.carrierOrderId),
+			{
+				access: "private",
+				useCache: false,
+			},
+		);
 		if (result?.statusCode !== 200) {
 			return NextResponse.json({ error: "not_found" }, { status: 404 });
 		}

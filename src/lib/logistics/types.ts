@@ -130,6 +130,16 @@ export type CarrierBooking = {
 	 * partners, which have nothing to print.
 	 */
 	labelUrl?: string | null;
+	/**
+	 * Whatever the partner needs later to undo the collection it booked
+	 * alongside the shipment. Opaque to everything but its own adapter, and
+	 * persisted only inside the booking event's `raw` — FedEx cancels a pickup
+	 * by confirmation code, date and depot, none of which is the tracking
+	 * number `cancel` is handed.
+	 */
+	pickupRef?: string | null;
+	/** One line for the booking event, e.g. the carrier's pickup confirmation. */
+	note?: string | null;
 };
 
 /** One reading of where a job is. Every field is optional but the status. */

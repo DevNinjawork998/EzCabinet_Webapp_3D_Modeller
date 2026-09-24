@@ -116,7 +116,7 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 							actor: bookedBy,
 							message: `Booked with ${carrierId}${
 								quote.priceRm === null ? "" : ` for RM ${quote.priceRm}`
-							}`,
+							}${booking.note ? ` — ${booking.note}` : ""}`,
 							raw: { booking, quote } as never,
 						},
 					},
