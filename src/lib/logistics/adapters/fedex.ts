@@ -497,7 +497,12 @@ export function shipBody(
 			serviceType,
 			packagingType: "YOUR_PACKAGING",
 			pickupType: "CONTACT_FEDEX_TO_SCHEDULE",
-			shippingChargesPayment: { paymentType: "SENDER" },
+			// FedEx wants the payor spelled out even when it is the shipper, or
+			// refuses with ACCOUNT.NUMBER.MISMATCH.
+			shippingChargesPayment: {
+				paymentType: "SENDER",
+				payor: { responsibleParty: { accountNumber: { value: account } } },
+			},
 			labelSpecification: { imageType: "PDF", labelStockType: "PAPER_4X6" },
 			totalWeight: totalKg(packages),
 			requestedPackageLineItems: packages,
