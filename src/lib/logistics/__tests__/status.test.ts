@@ -122,3 +122,32 @@ describe("gdex statuses", () => {
 		expect(mapCarrierStatus("gdex", "Bagged")).toBeNull();
 	});
 });
+
+describe("fedex status table", () => {
+	it.each([
+		["OC", "BOOKED"],
+		["PD", "BOOKED"],
+		["DS", "BOOKED"],
+		["PU", "PICKED_UP"],
+		["DO", "PICKED_UP"],
+		["IP", "PICKED_UP"],
+		["IT", "IN_TRANSIT"],
+		["AR", "IN_TRANSIT"],
+		["AF", "IN_TRANSIT"],
+		["DP", "IN_TRANSIT"],
+		["TR", "IN_TRANSIT"],
+		["OD", "IN_TRANSIT"],
+		["DL", "DELIVERED"],
+		["RS", "FAILED"],
+		["CA", "CANCELLED"],
+	])("maps %s to %s", (code, status) => {
+		expect(mapCarrierStatus("fedex", code)).toBe(status);
+	});
+
+	it.each(["DE", "DD", "SE", "HP"])(
+		"leaves the exception %s unmapped, so the row stays where it is",
+		(code) => {
+			expect(mapCarrierStatus("fedex", code)).toBeNull();
+		},
+	);
+});

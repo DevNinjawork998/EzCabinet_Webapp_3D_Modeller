@@ -1,6 +1,7 @@
 import "server-only";
 import { citylinkAdapter } from "./adapters/citylink";
 import { easyparcelAdapter } from "./adapters/easyparcel";
+import { fedexAdapter } from "./adapters/fedex";
 import { gdexAdapter } from "./adapters/gdex";
 import { lalamoveAdapter } from "./adapters/lalamove";
 import { manualAdapter } from "./adapters/manual";
@@ -20,6 +21,7 @@ const ADAPTERS: Record<string, CarrierAdapter> = {
 	gdex: gdexAdapter,
 	citylink: citylinkAdapter,
 	easyparcel: easyparcelAdapter,
+	fedex: fedexAdapter,
 };
 
 /**

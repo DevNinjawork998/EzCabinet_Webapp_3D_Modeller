@@ -3,6 +3,7 @@ import { put } from "@vercel/blob";
 import { z } from "zod";
 import { geocoderFault } from "../geocode";
 import { carrierFetch } from "../http";
+import { labelPathname } from "../label";
 import { suggestVehicle, type VehicleClass } from "../measure";
 import { toE164 } from "../phone";
 import { mapCarrierStatus } from "../status";
@@ -595,20 +596,6 @@ async function senderDetails(): Promise<GdexUserDetails> {
 }
 
 /**
- * Where a consignment note lives, derived rather than stored.
- *
- * The consignment number is already on the delivery row as `carrierOrderId`, so
- * the serving route can rebuild this path without a second column. Private: the
- * note carries the customer's name, phone and home address, and a consignment
- * number is guessable enough that a public object would be a disclosure waiting
- * to happen. `/api/admin/deliveries/[id]/label` is the only way in, behind the
- * admin cookie `proxy.ts` already enforces.
- */
-export function labelPathname(consignmentNumber: string): string {
-	return `logistics/gdex/${consignmentNumber}.pdf`;
-}
-
-/**
  * Fetch the consignment note and keep a copy.
  *
  * GDEX serves the PDF only while the shipment is pending — once it is
@@ -637,7 +624,7 @@ async function storeLabel(consignmentNumber: string): Promise<string | null> {
 			trace("gdex.label", { consignmentNumber, status: response.status });
 			return null;
 		}
-		await put(labelPathname(consignmentNumber), await response.blob(), {
+		await put(labelPathname("gdex", consignmentNumber), await response.blob(), {
 			access: "private",
 			addRandomSuffix: false,
 			contentType: "application/pdf",

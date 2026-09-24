@@ -357,10 +357,20 @@ model Order {
   paymentProvider    String      @default("manual")
   paymentRef         String?
   paidAt             DateTime?
+  /// Ticked by the customer at checkout. No opt-in, no WhatsApp message.
+  whatsappOptIn      Boolean          @default(false)
+  whatsappOptInAt    DateTime?
+  /// The site language the customer checked out in (`LOCALES`), which picks
+  /// the WhatsApp template language. A string, not an enum, so adding a
+  /// language is not a migration.
+  locale             String           @default("en")
+  /// Null until an admin starts production. Forward-only — `lib/orders/stage.ts`.
+  productionStage    ProductionStage?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
   deliveries Delivery[]
+  notifications Notification[]
 
   /// Null on a pre-cutover or anonymous order. `publicToken` still opens it.
   userId       String?
@@ -495,4 +505,77 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+/// The factory steps an admin advances an order through. Placeholders until
+/// EzCabinet confirms its real ones — docs/ops/whatsapp-ezcabinet-setup.md.
+enum ProductionStage {
+  MEASURE
+  CUTTING
+  EDGING
+  ASSEMBLY
+  QC
+  READY
+}
+
+enum NotificationKind {
+  ORDER_PLACED
+  PAYMENT_CONFIRMED
+  STAGE
+  DELIVERY_BOOKED
+  PICKED_UP
+  DELIVERED
+  DELIVERY_FAILED
+}
+
+/// `FAILED` is terminal until an admin presses Resend.
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+/// One WhatsApp message a customer is owed or was sent: the outbox and the
+/// log the admin order page renders. Written in the same transaction as the
+/// state change it reports — see `lib/whatsapp/outbox.ts`.
+model Notification {
+  id            String             @id @default(cuid())
+  orderId       String
+  order         Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// A bare id, not a relation: a split consumes the delivery, and the
+  /// message sent about it is still history.
+  deliveryId    String?
+  kind          NotificationKind
+  stage         ProductionStage?
+  /// One message per real-world event. A second insert for the same event is
+  /// skipped — carriers report the same status by webhook and by poll.
+  dedupeKey     String             @unique
+  /// E.164, snapshotted — the order's phone can be corrected later.
+  to            String
+  template      String
+  locale        String
+  /// `{ body: string[], button: string }` — `TemplateVars` in templates.ts.
+  vars          Json
+  status        NotificationStatus @default(PENDING)
+  attempts      Int                @default(0)
+  lastError     String?
+  metaMessageId String?            @unique
+  /// When this row last entered the queue — creation or a Resend. The 48 h
+  /// expiry counts from here.
+  queuedAt      DateTime           @default(now())
+  sentAt        DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([status, queuedAt])
+  @@index([orderId])
+}
+
+/// The auto-reply throttle: when we last answered this number.
+model WhatsappAutoReply {
+  /// E.164 of whoever messaged us.
+  phone     String   @id
+  repliedAt DateTime
 }
