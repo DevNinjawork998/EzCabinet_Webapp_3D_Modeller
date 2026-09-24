@@ -1,9 +1,13 @@
 import "server-only";
+import { put } from "@vercel/blob";
 import { z } from "zod";
-import { pickupPlace } from "../carriers";
+import { pickupPlace, WORKSHOP_CLOSE_TIME, WORKSHOP_PHONE } from "../carriers";
 import { CarrierHttpError, carrierFetch } from "../http";
+import { labelPathname } from "../label";
+import { toE164 } from "../phone";
 import { trace } from "../trace";
 import {
+	type CarrierBooking,
 	CarrierNotConfigured,
 	type CarrierQuote,
 	type DeliveryJob,
@@ -389,5 +393,323 @@ export async function fedexQuote(job: DeliveryJob): Promise<CarrierQuote> {
 		etaMinutes: null,
 		quoteRef: rate.serviceType,
 		notes: `Parcel, ${kg} kg — ${rate.serviceName}`,
+	};
+}
+
+/** The shipper and pickup contact FedEx prints on the label. */
+const SHIPPER_NAME = "EzCabinet Sdn Bhd";
+
+/** FedEx reads at most three street lines of 35 characters each. */
+const LINE_CHARS = 35;
+const MAX_LINES = 3;
+
+/**
+ * An address line wrapped at word boundaries into FedEx's street lines.
+ *
+ * ponytail: anything past the third line is dropped, which is what FedEx does
+ * with a fourth line anyway. The postcode and town travel in their own fields,
+ * so the courier still has the area; a very long street line is where to look
+ * first if one arrives at the wrong door.
+ */
+export function streetLines(address: string): string[] {
+	const lines: string[] = [];
+	for (const word of address.replace(/\s+/g, " ").trim().split(" ")) {
+		const last = lines.at(-1);
+		if (last !== undefined && `${last} ${word}`.length <= LINE_CHARS) {
+			lines[lines.length - 1] = `${last} ${word}`;
+		} else {
+			lines.push(word.slice(0, LINE_CHARS));
+		}
+	}
+	return lines.slice(0, MAX_LINES);
+}
+
+/**
+ * A number FedEx will dial, as `60123456789` — E.164 without the `+`, inside
+ * FedEx's 15-digit limit. Malaysian only, for GDEX's reason: a `+65` number on
+ * a domestic parcel is a courier who cannot phone the gate.
+ *
+ * Unverified against FedEx's Malaysian validation; `fedex-ping` against
+ * production is where a refused format would show.
+ */
+function phoneOrThrow(raw: string, whose: string): string {
+	const e164 = toE164(raw);
+	if (e164 === null || !e164.startsWith("+60")) {
+		throw new FedexNotDeliverable(
+			`The ${whose} phone number (${raw}) is not a Malaysian number FedEx can call`,
+		);
+	}
+	return e164.slice(1);
+}
+
+const totalKg = (packages: FedexPackage[]) =>
+	Math.round(
+		packages.reduce((sum, p) => sum + p.groupPackageCount * p.weight.value, 0) *
+			10,
+	) / 10;
+
+/**
+ * The shipment. `URL_ONLY` + `LABELS_ONLY` because that is the only way FedEx
+ * returns every package's label merged into one PDF — one file to print, and
+ * one blob to keep.
+ */
+export function shipBody(
+	job: DeliveryJob,
+	account: string,
+	serviceType: string,
+) {
+	const packages = packagesOf(job);
+	return {
+		accountNumber: { value: account },
+		labelResponseOptions: "URL_ONLY",
+		mergeLabelDocOption: "LABELS_ONLY",
+		requestedShipment: {
+			shipper: {
+				contact: {
+					companyName: SHIPPER_NAME,
+					phoneNumber: phoneOrThrow(WORKSHOP_PHONE, "workshop's"),
+				},
+				address: {
+					streetLines: streetLines(job.pickupAddress),
+					...addressOf(pickupPlaceOf(job)),
+				},
+			},
+			recipients: [
+				{
+					contact: {
+						personName: job.customerName.slice(0, 70),
+						phoneNumber: phoneOrThrow(job.customerPhone, "customer's"),
+					},
+					address: {
+						streetLines: streetLines(job.siteAddress),
+						...addressOf(sitePlaceOf(job)),
+					},
+				},
+			],
+			shipDatestamp: pickupDate(job),
+			serviceType,
+			packagingType: "YOUR_PACKAGING",
+			pickupType: "CONTACT_FEDEX_TO_SCHEDULE",
+			shippingChargesPayment: { paymentType: "SENDER" },
+			labelSpecification: { imageType: "PDF", labelStockType: "PAPER_4X6" },
+			totalWeight: totalKg(packages),
+			requestedPackageLineItems: packages,
+		},
+	};
+}
+
+/**
+ * The collection. `readyDateTimestamp` is the scheduled instant as ISO — the
+ * format FedEx's own example uses — and `customerCloseTime` the workshop's
+ * wall-clock closing time. `FDXE` because `FEDEX_PRIORITY` is an Express
+ * service.
+ */
+export function pickupBody(job: DeliveryJob, account: string) {
+	pickupDate(job);
+	return {
+		associatedAccountNumber: { value: account },
+		originDetail: {
+			pickupLocation: {
+				contact: {
+					companyName: SHIPPER_NAME,
+					phoneNumber: phoneOrThrow(WORKSHOP_PHONE, "workshop's"),
+				},
+				address: {
+					streetLines: streetLines(job.pickupAddress),
+					...addressOf(pickupPlaceOf(job)),
+				},
+			},
+			readyDateTimestamp: (job.scheduledAt as Date).toISOString(),
+			customerCloseTime: WORKSHOP_CLOSE_TIME,
+		},
+		carrierCode: "FDXE",
+	};
+}
+
+const shipSchema = z.object({
+	output: z.object({
+		transactionShipments: z
+			.array(
+				z.object({
+					masterTrackingNumber: z.string().nullish(),
+					shipmentDocuments: z
+						.array(
+							z.object({
+								contentType: z.string().nullish(),
+								url: z.string().nullish(),
+							}),
+						)
+						.nullish(),
+					pieceResponses: z
+						.array(
+							z.object({
+								trackingNumber: z.string().nullish(),
+								packageDocuments: z
+									.array(z.object({ url: z.string().nullish() }))
+									.nullish(),
+							}),
+						)
+						.nullish(),
+				}),
+			)
+			.min(1),
+	}),
+});
+
+const pickupSchema = z.object({
+	output: z.object({
+		pickupConfirmationCode: z.string().min(1),
+		location: z.string().nullish(),
+	}),
+});
+
+const cancelShipmentSchema = z.object({
+	output: z.object({ cancelledShipment: z.boolean() }),
+});
+
+export type PickupRef = { code: string; date: string; location: string | null };
+
+export const pickupRefSchema = z.object({
+	code: z.string(),
+	date: z.string(),
+	location: z.string().nullable(),
+});
+
+/** FedEx's public tracking page; unlike GDEX, a link we can give the customer. */
+export const trackingUrlFor = (trackingNumber: string) =>
+	`https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(trackingNumber)}`;
+
+/** Idempotent: cancelling a cancelled shipment is a no-op FedEx answers either way. */
+export async function cancelShipment(trackingNumber: string): Promise<void> {
+	const reply = readReply(
+		cancelShipmentSchema,
+		await call(
+			"PUT",
+			"/ship/v1/shipments/cancel",
+			{ accountNumber: { value: ACCOUNT() }, trackingNumber },
+			true,
+		),
+		"cancel",
+	);
+	if (!reply.output.cancelledShipment) {
+		throw new Error(`FedEx did not cancel shipment ${trackingNumber}`);
+	}
+}
+
+/**
+ * Fetch the merged label and keep a private copy.
+ *
+ * Only from a `*.fedex.com` host, because the request carries our bearer
+ * token and the URL comes out of a reply. Failure is swallowed for GDEX's
+ * reason: the shipment and the collection already exist, so throwing here
+ * would report as failed a booking that succeeded.
+ */
+async function storeLabel(
+	trackingNumber: string,
+	source: string | null,
+): Promise<boolean> {
+	if (source === null) return false;
+	try {
+		const host = new URL(source).hostname;
+		if (host !== "fedex.com" && !host.endsWith(".fedex.com")) {
+			trace("fedex.label", { trackingNumber, refused: host });
+			return false;
+		}
+		const response = await fetch(source, {
+			headers: { authorization: `Bearer ${await accessToken()}` },
+			signal: AbortSignal.timeout(10_000),
+		});
+		if (!response.ok) {
+			trace("fedex.label", { trackingNumber, status: response.status });
+			return false;
+		}
+		await put(labelPathname("fedex", trackingNumber), await response.blob(), {
+			access: "private",
+			addRandomSuffix: false,
+			contentType: "application/pdf",
+			allowOverwrite: true,
+		});
+		return true;
+	} catch (error) {
+		trace("fedex.label", { trackingNumber, error: String(error) });
+		return false;
+	}
+}
+
+/**
+ * Shipment, then collection — all or nothing.
+ *
+ * The shipment call is never retried: a second create is a second shipment
+ * and a second charge. If the collection cannot be booked, the shipment is
+ * cancelled and the booking throws with FedEx's reason, so the row stays
+ * unbooked and the admin sees why. A shipment with no collection is never
+ * reported as booked; if even the cancel fails, the error names the tracking
+ * number so someone can void it by hand.
+ */
+export async function fedexBook(
+	job: DeliveryJob,
+	quote: CarrierQuote,
+): Promise<CarrierBooking> {
+	const account = ACCOUNT();
+	// Both bodies before any call, so every refusal lands before FedEx is dialled.
+	const shipment = shipBody(job, account, quote.quoteRef ?? SERVICE);
+	const collection = pickupBody(job, account);
+	const date = pickupDate(job);
+	trace("fedex.book", { deliveryId: job.id });
+
+	const [created] = readReply(
+		shipSchema,
+		await call("POST", "/ship/v1/shipments", shipment),
+		"shipment",
+	).output.transactionShipments;
+	const trackingNumber =
+		created.masterTrackingNumber ?? created.pieceResponses?.[0]?.trackingNumber;
+	if (!trackingNumber) {
+		throw new Error(
+			"FedEx created a shipment but returned no tracking number — check FedEx Ship Manager before booking again",
+		);
+	}
+
+	let ref: PickupRef;
+	try {
+		const reply = readReply(
+			pickupSchema,
+			await call("POST", "/pickup/v1/pickups", collection),
+			"pickup",
+		);
+		ref = {
+			code: reply.output.pickupConfirmationCode,
+			date,
+			location: reply.output.location ?? null,
+		};
+	} catch (error) {
+		const why = (error as Error).message;
+		try {
+			await cancelShipment(trackingNumber);
+		} catch (undo) {
+			trace("fedex.orphan", { trackingNumber, error: String(undo) });
+			throw new Error(
+				`FedEx would not book the collection (${why}), and shipment ${trackingNumber} could not be cancelled (${(undo as Error).message}) — void it in FedEx Ship Manager`,
+			);
+		}
+		throw new Error(
+			`FedEx would not book the collection, so the shipment was cancelled: ${why}`,
+		);
+	}
+
+	const labelSource =
+		created.shipmentDocuments?.find(
+			(d) => d.contentType === "MERGED_LABELS_ONLY",
+		)?.url ??
+		created.pieceResponses?.[0]?.packageDocuments?.[0]?.url ??
+		null;
+	const stored = await storeLabel(trackingNumber, labelSource);
+
+	return {
+		carrierOrderId: trackingNumber,
+		trackingUrl: trackingUrlFor(trackingNumber),
+		labelUrl: stored ? `/api/admin/deliveries/${job.id}/label` : null,
+		pickupRef: JSON.stringify(ref),
+		note: `FedEx collection ${ref.code} on ${ref.date}`,
 	};
 }

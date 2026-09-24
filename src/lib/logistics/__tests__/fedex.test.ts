@@ -13,16 +13,21 @@ vi.mock("@/lib/catalogue/db", () => ({
 import {
 	chooseRate,
 	FedexNotDeliverable,
+	fedexBook,
 	fedexConfigured,
 	fedexQuote,
 	forgetFedexToken,
 	MAX_LINE_ITEMS,
 	packagesOf,
+	pickupBody,
 	pickupDate,
 	pickupPlaceOf,
 	rateBody,
 	SANDBOX,
+	shipBody,
 	sitePlaceOf,
+	streetLines,
+	trackingUrlFor,
 } from "../adapters/fedex";
 import { WORKSHOP_ADDRESS } from "../carriers";
 import {
@@ -31,10 +36,13 @@ import {
 	type DeliveryJob,
 } from "../types";
 import {
+	cancelShipmentReply,
+	pickupReply,
 	rateReply,
 	rateReplyEmpty,
 	rateReplyInUsd,
 	rateReplyWithoutPriority,
+	shipReply,
 	tokenReply,
 	unauthorised,
 } from "./fixtures/fedex";
@@ -356,6 +364,224 @@ describe("fedexQuote", () => {
 
 		await expect(
 			fedexQuote(job({ items: [{ ...handles, weightKg: null }] })),
+		).rejects.toBeInstanceOf(FedexNotDeliverable);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+});
+
+describe("streetLines", () => {
+	it("wraps an address into lines of at most 35 characters", () => {
+		const lines = streetLines(
+			"No. 45, Persiaran Mahsuri 1/3, 11950 Bayan Baru, Pulau Pinang",
+		);
+		expect(lines).toEqual([
+			"No. 45, Persiaran Mahsuri 1/3,",
+			"11950 Bayan Baru, Pulau Pinang",
+		]);
+		for (const line of lines) expect(line.length).toBeLessThanOrEqual(35);
+	});
+
+	it("keeps three lines at most, which is all FedEx reads", () => {
+		const long =
+			"Lot 1234, Jalan Perindustrian Bukit Minyak 7, Kawasan Perindustrian Bukit Minyak, Mukim 13, 14100 Simpang Ampat, Seberang Perai Tengah, Pulau Pinang";
+		expect(streetLines(long)).toHaveLength(3);
+	});
+});
+
+describe("shipBody", () => {
+	it("books the priced service, paid by us, labels merged into one PDF", () => {
+		const body = shipBody(job(), "740561073", "FEDEX_PRIORITY");
+
+		expect(body.accountNumber).toEqual({ value: "740561073" });
+		expect(body.labelResponseOptions).toBe("URL_ONLY");
+		expect(body.mergeLabelDocOption).toBe("LABELS_ONLY");
+		const shipment = body.requestedShipment;
+		expect(shipment.serviceType).toBe("FEDEX_PRIORITY");
+		expect(shipment.pickupType).toBe("CONTACT_FEDEX_TO_SCHEDULE");
+		expect(shipment.packagingType).toBe("YOUR_PACKAGING");
+		expect(shipment.shippingChargesPayment).toEqual({ paymentType: "SENDER" });
+		expect(shipment.labelSpecification).toEqual({
+			imageType: "PDF",
+			labelStockType: "PAPER_4X6",
+		});
+		expect(shipment.shipDatestamp).toBe("2026-09-24");
+		expect(shipment.totalWeight).toBe(3);
+		expect(shipment.recipients[0]).toEqual({
+			contact: { personName: "Chan Kin Kong", phoneNumber: "60123456789" },
+			address: {
+				streetLines: [
+					"No. 45, Persiaran Mahsuri 1/3,",
+					"11950 Bayan Baru, Pulau Pinang",
+				],
+				postalCode: "11950",
+				city: "Bayan Baru",
+				countryCode: "MY",
+			},
+		});
+		expect(shipment.shipper.contact.companyName).toBe("EzCabinet Sdn Bhd");
+	});
+
+	it("refuses a customer number FedEx cannot ring", () => {
+		expect(() =>
+			shipBody(
+				job({ customerPhone: "+65 6123 4567" }),
+				"740561073",
+				"FEDEX_PRIORITY",
+			),
+		).toThrow(/not a Malaysian number FedEx can call/);
+	});
+});
+
+describe("pickupBody", () => {
+	it("asks FedEx Express to collect from the workshop at the scheduled time", () => {
+		expect(pickupBody(job(), "740561073")).toEqual({
+			associatedAccountNumber: { value: "740561073" },
+			originDetail: {
+				pickupLocation: {
+					contact: {
+						companyName: "EzCabinet Sdn Bhd",
+						phoneNumber: "60312345678",
+					},
+					address: {
+						streetLines: ["EzCabinet Sdn Bhd, Klang Valley,", "Selangor"],
+						postalCode: "43800",
+						city: "Dengkil",
+						countryCode: "MY",
+					},
+				},
+				readyDateTimestamp: "2026-09-24T01:00:00.000Z",
+				customerCloseTime: "18:00:00",
+			},
+			carrierCode: "FDXE",
+		});
+	});
+});
+
+describe("fedexBook", () => {
+	const quote = {
+		carrierId: "fedex",
+		priceRm: 38.4,
+		etaMinutes: null,
+		quoteRef: "FEDEX_PRIORITY",
+	};
+	const pdf = () => ({ status: 200, body: "%PDF-1.4" });
+
+	it("creates the shipment, books the collection and keeps the label", async () => {
+		const fetchMock = stubFetch(
+			ok(tokenReply),
+			ok(shipReply),
+			ok(pickupReply),
+			pdf(),
+		);
+
+		const booking = await fedexBook(job(), quote);
+
+		expect(fetchMock.mock.calls[1][0]).toBe(`${SANDBOX}/ship/v1/shipments`);
+		expect(fetchMock.mock.calls[2][0]).toBe(`${SANDBOX}/pickup/v1/pickups`);
+		expect(fetchMock.mock.calls[3][0]).toBe(
+			"https://wwwtest.fedex.com/document/v1/cache/merged.pdf",
+		);
+		expect(put.mock.calls[0][0]).toBe("logistics/fedex/794953535000.pdf");
+		expect(put.mock.calls[0][2]).toMatchObject({ access: "private" });
+		expect(booking).toEqual({
+			carrierOrderId: "794953535000",
+			trackingUrl: trackingUrlFor("794953535000"),
+			labelUrl: "/api/admin/deliveries/dlv_1/label",
+			pickupRef: JSON.stringify({
+				code: "3001",
+				date: "2026-09-24",
+				location: "KULA",
+			}),
+			note: "FedEx collection 3001 on 2026-09-24",
+		});
+	});
+
+	it("never sends the shipment twice, even on FedEx's own 500", async () => {
+		const fetchMock = stubFetch(ok(tokenReply), {
+			status: 500,
+			body: { errors: [{ code: "INTERNAL.SERVER.ERROR" }] },
+		});
+
+		await expect(fedexBook(job(), quote)).rejects.toThrow(/500/);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("cancels the shipment when the collection cannot be booked", async () => {
+		const fetchMock = stubFetch(
+			ok(tokenReply),
+			ok(shipReply),
+			{
+				status: 400,
+				body: {
+					errors: [
+						{
+							code: "PICKUP.DATE.INVALID",
+							message: "Pickup date is not available",
+						},
+					],
+				},
+			},
+			ok(cancelShipmentReply),
+		);
+
+		await expect(fedexBook(job(), quote)).rejects.toThrow(
+			/so the shipment was cancelled: .*Pickup date is not available/,
+		);
+		expect(fetchMock.mock.calls[3][0]).toBe(
+			`${SANDBOX}/ship/v1/shipments/cancel`,
+		);
+		expect(sent(fetchMock, 3)).toEqual({
+			accountNumber: { value: "740561073" },
+			trackingNumber: "794953535000",
+		});
+	});
+
+	it("names the tracking number when neither the pickup nor the undo worked", async () => {
+		stubFetch(
+			ok(tokenReply),
+			ok(shipReply),
+			{ status: 400, body: { errors: [{ code: "PICKUP.X", message: "no" }] } },
+			{
+				status: 400,
+				body: { errors: [{ code: "SHIPMENT.X", message: "no" }] },
+			},
+		);
+
+		await expect(fedexBook(job(), quote)).rejects.toThrow(
+			/shipment 794953535000 could not be cancelled .* void it in FedEx Ship Manager/,
+		);
+	});
+
+	it("still books when the label cannot be fetched", async () => {
+		stubFetch(ok(tokenReply), ok(shipReply), ok(pickupReply), {
+			status: 404,
+			body: {},
+		});
+
+		const booking = await fedexBook(job(), quote);
+
+		expect(booking.carrierOrderId).toBe("794953535000");
+		expect(booking.labelUrl).toBeNull();
+		expect(put).not.toHaveBeenCalled();
+	});
+
+	it("never sends our token to a label link off FedEx's domain", async () => {
+		const foreign = structuredClone(shipReply);
+		foreign.output.transactionShipments[0].shipmentDocuments[0].url =
+			"https://example.com/label.pdf";
+		const fetchMock = stubFetch(ok(tokenReply), ok(foreign), ok(pickupReply));
+
+		const booking = await fedexBook(job(), quote);
+
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(booking.labelUrl).toBeNull();
+	});
+
+	it("refuses an unbookable job before creating anything", async () => {
+		const fetchMock = stubFetch(ok(tokenReply));
+
+		await expect(
+			fedexBook(job({ scheduledAt: null }), quote),
 		).rejects.toBeInstanceOf(FedexNotDeliverable);
 		expect(fetchMock).not.toHaveBeenCalled();
 	});

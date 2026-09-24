@@ -147,3 +147,14 @@ export function pickupPlace(address: string, stored: Place): Place | null {
  * cannot reach anyone — see the open question in CLAUDE.md.
  */
 export const WORKSHOP_PHONE = "03-1234 5678";
+
+/**
+ * When the workshop stops handing parcels over, as FedEx's pickup request
+ * wants it (`customerCloseTime`, `HH:MM:SS`, Malaysian local time).
+ *
+ * ponytail: a placeholder until the client confirms their hours — the same
+ * open question as `WORKSHOP_ADDRESS` and `WORKSHOP_PHONE`. Too early and
+ * FedEx refuses a late-afternoon collection; too late and a courier arrives
+ * to a locked gate.
+ */
+export const WORKSHOP_CLOSE_TIME = "18:00:00";
