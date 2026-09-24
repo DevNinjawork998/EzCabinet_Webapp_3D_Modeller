@@ -38,7 +38,7 @@ export const GET = withAuth<{ params: Promise<{ id: string }> }>(
 		if (
 			!delivery ||
 			delivery.carrierId === null ||
-			!(delivery.carrierId in LABEL_FALLBACK) ||
+			!Object.hasOwn(LABEL_FALLBACK, delivery.carrierId) ||
 			delivery.carrierOrderId === null
 		) {
 			return NextResponse.json({ error: "not_found" }, { status: 404 });

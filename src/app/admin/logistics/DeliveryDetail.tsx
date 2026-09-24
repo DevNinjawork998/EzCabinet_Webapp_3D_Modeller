@@ -1286,7 +1286,7 @@ export function DeliveryDetail({
 									)}
 
 									{delivery.carrierId !== null &&
-										delivery.carrierId in LABEL_FALLBACK &&
+										Object.hasOwn(LABEL_FALLBACK, delivery.carrierId) &&
 										delivery.labelUrl === null && (
 											<p className={`${WARN} text-[12px] leading-[18px]`}>
 												The consignment note was not captured when this job was

@@ -36,7 +36,10 @@ import { kualaLumpur } from "./gdex";
  *   documented example comes back `SERVICE.PACKAGECOMBINATION.INVALID`, and
  *   its Malaysian prices are USD. Tests prove our reading of the reply
  *   shapes, not that FedEx accepts our bodies; `scripts/fedex-ping.mjs`
- *   against production is what checks that.
+ *   against production checks the token, rate and track calls only — it
+ *   never ships. Ship, pickup, both cancels and the label fetch are first
+ *   exercised by the first real booking: watch it with FedEx Ship Manager
+ *   open, and cancel it there if anything looks wrong.
  */
 
 /**
@@ -503,13 +506,18 @@ export function shipBody(
 }
 
 /**
- * The collection. `readyDateTimestamp` is the scheduled instant as ISO — the
- * format FedEx's own example uses — and `customerCloseTime` the workshop's
- * wall-clock closing time. `FDXE` because `FEDEX_PRIORITY` is an Express
+ * The collection. `readyDateTimestamp` is sent as Malaysian wall-clock time
+ * with no offset — `${date}T${time}` from `kualaLumpur` — to match
+ * `customerCloseTime`, `shipDatestamp` and the stored `ref.date`, which are
+ * all local. FedEx's own example shows a `Z`-suffixed UTC timestamp for this
+ * field, but the sandbox cannot tell us which one FedEx actually reads; this
+ * is the self-consistent choice, to confirm on the first live booking (see
+ * `fedex-ping.mjs`'s docblock). `FDXE` because `FEDEX_PRIORITY` is an Express
  * service.
  */
 export function pickupBody(job: DeliveryJob, account: string) {
 	pickupDate(job);
+	const { date, time } = kualaLumpur(job.scheduledAt as Date);
 	return {
 		associatedAccountNumber: { value: account },
 		originDetail: {
@@ -523,7 +531,7 @@ export function pickupBody(job: DeliveryJob, account: string) {
 					...addressOf(pickupPlaceOf(job)),
 				},
 			},
-			readyDateTimestamp: (job.scheduledAt as Date).toISOString(),
+			readyDateTimestamp: `${date}T${time}`,
 			customerCloseTime: WORKSHOP_CLOSE_TIME,
 		},
 		carrierCode: "FDXE",
@@ -603,10 +611,12 @@ export async function cancelShipment(trackingNumber: string): Promise<void> {
 /**
  * Fetch the merged label and keep a private copy.
  *
- * Only from a `*.fedex.com` host, because the request carries our bearer
- * token and the URL comes out of a reply. Failure is swallowed for GDEX's
- * reason: the shipment and the collection already exist, so throwing here
- * would report as failed a booking that succeeded.
+ * Only from an https `*.fedex.com` host, because the request carries our
+ * bearer token and the URL comes out of a reply. `redirect: "error"` for the
+ * same reason: a redirect could carry that same bearer token to a host we
+ * never checked. Failure is swallowed for GDEX's reason: the shipment and the
+ * collection already exist, so throwing here would report as failed a
+ * booking that succeeded.
  */
 async function storeLabel(
 	trackingNumber: string,
@@ -614,13 +624,17 @@ async function storeLabel(
 ): Promise<boolean> {
 	if (source === null) return false;
 	try {
-		const host = new URL(source).hostname;
-		if (host !== "fedex.com" && !host.endsWith(".fedex.com")) {
-			trace("fedex.label", { trackingNumber, refused: host });
+		const url = new URL(source);
+		if (
+			url.protocol !== "https:" ||
+			(url.hostname !== "fedex.com" && !url.hostname.endsWith(".fedex.com"))
+		) {
+			trace("fedex.label", { trackingNumber, refused: source });
 			return false;
 		}
 		const response = await fetch(source, {
 			headers: { authorization: `Bearer ${await accessToken()}` },
+			redirect: "error",
 			signal: AbortSignal.timeout(10_000),
 		});
 		if (!response.ok) {
@@ -661,11 +675,25 @@ export async function fedexBook(
 	const date = pickupDate(job);
 	trace("fedex.book", { deliveryId: job.id });
 
-	const [created] = readReply(
-		shipSchema,
-		await call("POST", "/ship/v1/shipments", shipment),
-		"shipment",
-	).output.transactionShipments;
+	let created: z.infer<
+		typeof shipSchema
+	>["output"]["transactionShipments"][number];
+	try {
+		[created] = readReply(
+			shipSchema,
+			await call("POST", "/ship/v1/shipments", shipment),
+			"shipment",
+		).output.transactionShipments;
+	} catch (error) {
+		// A 4xx means FedEx refused the request outright: nothing was created, so
+		// the plain carrier error is the right thing for the admin to see. Anything
+		// else — a timeout, a 5xx, an unreadable 200 — leaves us not knowing
+		// whether the shipment exists, so the retry warning is the safe default.
+		if (error instanceof CarrierHttpError && error.status < 500) throw error;
+		throw new Error(
+			`FedEx may have created this shipment (${(error as Error).message}) — check FedEx Ship Manager before booking again`,
+		);
+	}
 	const trackingNumber =
 		created.masterTrackingNumber ?? created.pieceResponses?.[0]?.trackingNumber;
 	if (!trackingNumber) {
@@ -687,6 +715,10 @@ export async function fedexBook(
 			location: reply.output.location ?? null,
 		};
 	} catch (error) {
+		// Same 4xx-vs-everything-else split as the shipment call above, but here
+		// both outcomes still cancel the shipment — the difference is only what
+		// the error tells the admin about whether the collection might exist.
+		const refused = error instanceof CarrierHttpError && error.status < 500;
 		const why = (error as Error).message;
 		try {
 			await cancelShipment(trackingNumber);
@@ -697,7 +729,9 @@ export async function fedexBook(
 			);
 		}
 		throw new Error(
-			`FedEx would not book the collection, so the shipment was cancelled: ${why}`,
+			refused
+				? `FedEx would not book the collection, so the shipment was cancelled: ${why}`
+				: `FedEx did not confirm the collection (${why}), so the shipment was cancelled — the collection may still be booked, so check with FedEx`,
 		);
 	}
 
@@ -833,6 +867,27 @@ async function pickupRefFor(trackingNumber: string): Promise<PickupRef | null> {
 	return null;
 }
 
+/** Wrapped so a broken event log never turns a successful cancel into a failure. */
+async function recordCancelProblem(
+	trackingNumber: string,
+	message: string,
+): Promise<void> {
+	try {
+		await prisma.deliveryEvent.create({
+			data: {
+				delivery: { connect: { carrierOrderId: trackingNumber } },
+				source: "ADMIN",
+				message,
+			},
+		});
+	} catch (error) {
+		trace("fedex.cancel_event_failed", {
+			trackingNumber,
+			error: String(error),
+		});
+	}
+}
+
 /**
  * Collection first, then the shipment.
  *
@@ -842,13 +897,19 @@ async function pickupRefFor(trackingNumber: string): Promise<PickupRef | null> {
  * scanned) is thrown as FedEx worded it, and `advance/route.ts` already turns
  * it into `carrier_refused_cancel`.
  *
- * ponytail: a collection-cancel failure is traced, not surfaced. If couriers
- * start turning up for cancelled jobs, record it as a delivery event instead.
+ * A failed pickup cancel, or no pickup ever recorded, is written to the
+ * delivery's own event log — `trace` is off in production, so that was the
+ * only place a failed collection cancel used to be visible at all — but only
+ * once the shipment cancel has succeeded: if that throws, its error is what
+ * the admin sees, and nothing extra is written.
  */
 export async function fedexCancel(trackingNumber: string): Promise<void> {
 	const ref = await pickupRefFor(trackingNumber);
+	let pickupProblem: string | null = null;
 	if (ref === null) {
 		trace("fedex.no_pickup_ref", { trackingNumber });
+		pickupProblem =
+			"No FedEx collection was recorded for this shipment — if one was booked, phone FedEx to cancel it";
 	} else {
 		try {
 			await call(
@@ -865,9 +926,13 @@ export async function fedexCancel(trackingNumber: string): Promise<void> {
 			);
 		} catch (error) {
 			trace("fedex.pickup_cancel", { trackingNumber, error: String(error) });
+			pickupProblem = `FedEx collection ${ref.code} on ${ref.date} could not be cancelled (${(error as Error).message}) — phone FedEx to stop the courier`;
 		}
 	}
 	await cancelShipment(trackingNumber);
+	if (pickupProblem !== null) {
+		await recordCancelProblem(trackingNumber, pickupProblem);
+	}
 }
 
 /**

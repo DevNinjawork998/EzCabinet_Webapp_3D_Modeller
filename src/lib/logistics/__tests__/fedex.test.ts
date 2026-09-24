@@ -6,8 +6,9 @@ const put = vi.hoisted(() =>
 vi.mock("@vercel/blob", () => ({ put }));
 
 const findMany = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => []));
+const create = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => ({})));
 vi.mock("@/lib/catalogue/db", () => ({
-	prisma: { deliveryEvent: { findMany } },
+	prisma: { deliveryEvent: { findMany, create } },
 }));
 
 import {
@@ -76,6 +77,8 @@ afterEach(() => {
 	put.mockClear();
 	findMany.mockReset();
 	findMany.mockResolvedValue([]);
+	create.mockReset();
+	create.mockResolvedValue({});
 });
 
 const handles: DeliveryItem = {
@@ -130,6 +133,9 @@ function stubFetch(...replies: Array<{ status?: number; body: unknown }>) {
 const ok = (body: unknown) => ({ body });
 const sent = (fetchMock: ReturnType<typeof vi.fn>, call: number) =>
 	JSON.parse(fetchMock.mock.calls[call][1].body as string);
+/** The `data` a mocked `prisma` write was called with, untyped like the mock itself. */
+const dataOf = (mock: ReturnType<typeof vi.fn>, call = 0) =>
+	(mock.mock.calls[call][0] as { data: any }).data;
 
 describe("fedexConfigured", () => {
 	it("needs the key, the password and the account number", () => {
@@ -457,7 +463,7 @@ describe("pickupBody", () => {
 						countryCode: "MY",
 					},
 				},
-				readyDateTimestamp: "2026-09-24T01:00:00.000Z",
+				readyDateTimestamp: "2026-09-24T09:00:00",
 				customerCloseTime: "18:00:00",
 			},
 			carrierCode: "FDXE",
@@ -491,6 +497,7 @@ describe("fedexBook", () => {
 		);
 		expect(put.mock.calls[0][0]).toBe("logistics/fedex/794953535000.pdf");
 		expect(put.mock.calls[0][2]).toMatchObject({ access: "private" });
+		expect(fetchMock.mock.calls[3][1].redirect).toBe("error");
 		expect(booking).toEqual({
 			carrierOrderId: "794953535000",
 			trackingUrl: trackingUrlFor("794953535000"),
@@ -510,8 +517,85 @@ describe("fedexBook", () => {
 			body: { errors: [{ code: "INTERNAL.SERVER.ERROR" }] },
 		});
 
-		await expect(fedexBook(job(), quote)).rejects.toThrow(/500/);
+		await expect(fedexBook(job(), quote)).rejects.toThrow(
+			/may have created this shipment .* check FedEx Ship Manager before booking again/,
+		);
 		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("warns rather than refuses when the ship call times out", async () => {
+		const fetchMock = vi.fn();
+		fetchMock.mockResolvedValueOnce(
+			new Response(JSON.stringify(tokenReply), { status: 200 }),
+		);
+		fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(fedexBook(job(), quote)).rejects.toThrow(
+			/may have created this shipment .* check FedEx Ship Manager before booking again/,
+		);
+	});
+
+	it("rejects plainly, not with the retry warning, when FedEx refuses the ship call outright", async () => {
+		stubFetch(ok(tokenReply), {
+			status: 400,
+			body: { errors: [{ code: "PACKAGE.INVALID" }] },
+		});
+
+		const rejection = await fedexBook(job(), quote).catch((error) => error);
+		expect(rejection.message).toMatch(/fedex responded 400/);
+		expect(rejection.message).not.toMatch(/may have created/);
+	});
+
+	it("warns rather than refuses when the ship reply cannot be read", async () => {
+		stubFetch(ok(tokenReply), ok({ output: {} }));
+
+		await expect(fedexBook(job(), quote)).rejects.toThrow(
+			/may have created this shipment .* check FedEx Ship Manager before booking again/,
+		);
+	});
+
+	it("refuses a shipment with no tracking number at all", async () => {
+		const untracked = structuredClone<Record<string, any>>(shipReply);
+		untracked.output.transactionShipments[0].masterTrackingNumber = null;
+		untracked.output.transactionShipments[0].pieceResponses = [];
+		stubFetch(ok(tokenReply), ok(untracked));
+
+		await expect(fedexBook(job(), quote)).rejects.toThrow(
+			/returned no tracking number — check FedEx Ship Manager/,
+		);
+	});
+
+	it("falls back to the piece tracking number when there is no master one", async () => {
+		const pieceOnly = structuredClone<Record<string, any>>(shipReply);
+		pieceOnly.output.transactionShipments[0].masterTrackingNumber = null;
+		const fetchMock = stubFetch(
+			ok(tokenReply),
+			ok(pieceOnly),
+			ok(pickupReply),
+			pdf(),
+		);
+
+		const booking = await fedexBook(job(), quote);
+
+		expect(booking.carrierOrderId).toBe("794953535000");
+	});
+
+	it("falls back to the piece label when there is no merged-labels document", async () => {
+		const noMerged = structuredClone(shipReply);
+		noMerged.output.transactionShipments[0].shipmentDocuments = [];
+		const fetchMock = stubFetch(
+			ok(tokenReply),
+			ok(noMerged),
+			ok(pickupReply),
+			pdf(),
+		);
+
+		await fedexBook(job(), quote);
+
+		expect(fetchMock.mock.calls[3][0]).toBe(
+			"https://wwwtest.fedex.com/document/v1/cache/piece1.pdf",
+		);
 	});
 
 	it("cancels the shipment when the collection cannot be booked", async () => {
@@ -542,6 +626,22 @@ describe("fedexBook", () => {
 			accountNumber: { value: "740561073" },
 			trackingNumber: "794953535000",
 		});
+	});
+
+	it("says the collection may still be booked when FedEx doesn't confirm it (a 5xx or timeout)", async () => {
+		const fetchMock = stubFetch(
+			ok(tokenReply),
+			ok(shipReply),
+			{ status: 500, body: { errors: [{ code: "INTERNAL.SERVER.ERROR" }] } },
+			ok(cancelShipmentReply),
+		);
+
+		await expect(fedexBook(job(), quote)).rejects.toThrow(
+			/may still be booked/,
+		);
+		expect(fetchMock.mock.calls[3][0]).toBe(
+			`${SANDBOX}/ship/v1/shipments/cancel`,
+		);
 	});
 
 	it("names the tracking number when neither the pickup nor the undo worked", async () => {
@@ -583,6 +683,19 @@ describe("fedexBook", () => {
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
 		expect(booking.labelUrl).toBeNull();
+	});
+
+	it("never sends our token to a label link over plain http", async () => {
+		const insecure = structuredClone(shipReply);
+		insecure.output.transactionShipments[0].shipmentDocuments[0].url =
+			"http://wwwtest.fedex.com/document/v1/cache/merged.pdf";
+		const fetchMock = stubFetch(ok(tokenReply), ok(insecure), ok(pickupReply));
+
+		const booking = await fedexBook(job(), quote);
+
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(booking.labelUrl).toBeNull();
+		expect(put).not.toHaveBeenCalled();
 	});
 
 	it("refuses an unbookable job before creating anything", async () => {
@@ -702,6 +815,7 @@ describe("fedexCancel", () => {
 		expect(fetchMock.mock.calls[2][0]).toBe(
 			`${SANDBOX}/ship/v1/shipments/cancel`,
 		);
+		expect(create).not.toHaveBeenCalled();
 	});
 
 	it("still cancels the shipment when the collection cannot be cancelled", async () => {
@@ -715,6 +829,12 @@ describe("fedexCancel", () => {
 		await fedexCancel("794953535000");
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(create).toHaveBeenCalledTimes(1);
+		expect(dataOf(create).delivery.connect.carrierOrderId).toBe("794953535000");
+		expect(dataOf(create).message).toMatch(
+			/collection 3001 on 2026-09-24 could not be cancelled/,
+		);
+		expect(dataOf(create).source).toBe("ADMIN");
 	});
 
 	it("passes FedEx's refusal up when the parcel is already moving", async () => {
@@ -733,6 +853,7 @@ describe("fedexCancel", () => {
 		await expect(fedexCancel("794953535000")).rejects.toThrow(
 			/Shipment already scanned/,
 		);
+		expect(create).not.toHaveBeenCalled();
 	});
 
 	it("cancels just the shipment when no collection was recorded", async () => {
@@ -743,6 +864,29 @@ describe("fedexCancel", () => {
 		expect(fetchMock.mock.calls[1][0]).toBe(
 			`${SANDBOX}/ship/v1/shipments/cancel`,
 		);
+		expect(dataOf(create).message).toMatch(/No FedEx collection was recorded/);
+	});
+
+	it("does not fail the cancel when writing the event log fails", async () => {
+		create.mockRejectedValue(new Error("db down"));
+		const fetchMock = stubFetch(ok(tokenReply), ok(cancelShipmentReply));
+
+		await expect(fedexCancel("794953535000")).resolves.toBeUndefined();
+		expect(fetchMock.mock.calls[1][0]).toBe(
+			`${SANDBOX}/ship/v1/shipments/cancel`,
+		);
+	});
+
+	it("throws when FedEx says the shipment was not cancelled", async () => {
+		const fetchMock = stubFetch(
+			ok(tokenReply),
+			ok({ output: { cancelledShipment: false } }),
+		);
+
+		await expect(fedexCancel("794953535000")).rejects.toThrow(
+			/FedEx did not cancel shipment 794953535000/,
+		);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 });
 

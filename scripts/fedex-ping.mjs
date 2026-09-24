@@ -7,9 +7,12 @@
  *
  * CI runs `adapters/fedex.ts` against fixtures built from FedEx's documented
  * shapes — our belief about FedEx, not FedEx. This is what notices a renamed
- * field or a refused body. It only reads: a token, one rate for a small parcel
- * between two real Malaysian postcodes, and one tracking lookup. It never
- * creates a shipment.
+ * field or a refused body. It only checks token, rate and track: a token, one
+ * rate for a small parcel between two real Malaysian postcodes, and one
+ * tracking lookup. It never creates a shipment, books a pickup, cancels
+ * either, or fetches a label — those are first exercised by the first real
+ * booking, so watch that one with FedEx Ship Manager open and cancel it
+ * there if anything looks wrong.
  *
  * **Only meaningful against production.** The sandbox answers only its own
  * canned inputs: this rate request comes back SERVICE.PACKAGECOMBINATION.INVALID
