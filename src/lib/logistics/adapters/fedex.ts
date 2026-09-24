@@ -1,16 +1,20 @@
 import "server-only";
 import { put } from "@vercel/blob";
 import { z } from "zod";
+import { prisma } from "@/lib/catalogue/db";
 import { pickupPlace, WORKSHOP_CLOSE_TIME, WORKSHOP_PHONE } from "../carriers";
 import { CarrierHttpError, carrierFetch } from "../http";
 import { labelPathname } from "../label";
 import { toE164 } from "../phone";
+import { mapCarrierStatus } from "../status";
 import { trace } from "../trace";
 import {
+	type CarrierAdapter,
 	type CarrierBooking,
 	CarrierNotConfigured,
 	type CarrierQuote,
 	type DeliveryJob,
+	type TrackingUpdate,
 } from "../types";
 import { kualaLumpur } from "./gdex";
 
@@ -713,3 +717,168 @@ export async function fedexBook(
 		note: `FedEx collection ${ref.code} on ${ref.date}`,
 	};
 }
+
+const trackSchema = z.object({
+	output: z.object({
+		completeTrackResults: z.array(
+			z.object({
+				trackingNumber: z.string(),
+				trackResults: z.array(
+					z.object({
+						latestStatusDetail: z
+							.object({
+								code: z.string().nullish(),
+								derivedCode: z.string().nullish(),
+								description: z.string().nullish(),
+							})
+							.nullish(),
+						error: z
+							.object({ code: z.string(), message: z.string().nullish() })
+							.nullish(),
+					}),
+				),
+			}),
+		),
+	}),
+});
+
+/**
+ * One reading of where a shipment is.
+ *
+ * An unknown number arrives as HTTP 200 with an `error` inside the result, and
+ * is reported as no status rather than whatever an empty row would map to —
+ * the same trap GDEX's `IsValid` is there for.
+ */
+export function readTracking(
+	payload: unknown,
+	trackingNumber: string,
+): TrackingUpdate {
+	const results = readReply(trackSchema, payload, "tracking").output
+		.completeTrackResults;
+	const result = (
+		results.find((r) => r.trackingNumber === trackingNumber) ?? results[0]
+	)?.trackResults[0];
+
+	if (!result || result.error) {
+		const code = result?.error ? ` (${result.error.code})` : "";
+		trace("fedex.unknown_shipment", { trackingNumber });
+		return {
+			status: null,
+			message: `FedEx has no tracking for ${trackingNumber}${code}`,
+			raw: payload,
+		};
+	}
+
+	const latest = result.latestStatusDetail;
+	const code = latest?.derivedCode || latest?.code || "";
+	const described = latest?.description || code || "no status";
+	return {
+		status: code === "" ? null : mapCarrierStatus("fedex", code),
+		message: `FedEx reports ${described}`,
+		raw: payload,
+	};
+}
+
+export async function fedexTrack(
+	trackingNumber: string,
+): Promise<TrackingUpdate> {
+	const payload = await call(
+		"POST",
+		"/track/v1/trackingnumbers",
+		{
+			includeDetailedScans: false,
+			trackingInfo: [{ trackingNumberInfo: { trackingNumber } }],
+		},
+		true,
+	);
+	return readTracking(payload, trackingNumber);
+}
+
+const bookedRawSchema = z.object({
+	booking: z.object({ pickupRef: z.string() }),
+});
+
+/** The collection `fedexBook` recorded, out of a booking event's `raw`; null for anything else. */
+export function readPickupRef(raw: unknown): PickupRef | null {
+	const booked = bookedRawSchema.safeParse(raw);
+	if (!booked.success) return null;
+	try {
+		const ref = pickupRefSchema.safeParse(
+			JSON.parse(booked.data.booking.pickupRef),
+		);
+		return ref.success ? ref.data : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * The newest booking event for this shipment that recorded a collection.
+ *
+ * Read from the event log rather than a column: `book/route.ts` already
+ * writes `raw: { booking, quote }`, so this needs no migration. Promote it to
+ * a column if a second partner ever needs the same thing.
+ */
+async function pickupRefFor(trackingNumber: string): Promise<PickupRef | null> {
+	const events = await prisma.deliveryEvent.findMany({
+		where: { status: "BOOKED", delivery: { carrierOrderId: trackingNumber } },
+		orderBy: { at: "desc" },
+		select: { raw: true },
+		take: 5,
+	});
+	for (const event of events) {
+		const ref = readPickupRef(event.raw);
+		if (ref) return ref;
+	}
+	return null;
+}
+
+/**
+ * Collection first, then the shipment.
+ *
+ * A collection that cannot be cancelled — already done, or the day has passed
+ * — does not stop the shipment cancel: whether the parcel is still ours to
+ * recall is FedEx's answer to *that* call. Its refusal (the parcel has been
+ * scanned) is thrown as FedEx worded it, and `advance/route.ts` already turns
+ * it into `carrier_refused_cancel`.
+ *
+ * ponytail: a collection-cancel failure is traced, not surfaced. If couriers
+ * start turning up for cancelled jobs, record it as a delivery event instead.
+ */
+export async function fedexCancel(trackingNumber: string): Promise<void> {
+	const ref = await pickupRefFor(trackingNumber);
+	if (ref === null) {
+		trace("fedex.no_pickup_ref", { trackingNumber });
+	} else {
+		try {
+			await call(
+				"PUT",
+				"/pickup/v1/pickups/cancel",
+				{
+					associatedAccountNumber: { value: ACCOUNT() },
+					pickupConfirmationCode: ref.code,
+					scheduledDate: ref.date,
+					carrierCode: "FDXE",
+					...(ref.location ? { location: ref.location } : {}),
+				},
+				true,
+			);
+		} catch (error) {
+			trace("fedex.pickup_cancel", { trackingNumber, error: String(error) });
+		}
+	}
+	await cancelShipment(trackingNumber);
+}
+
+/**
+ * No `verifyWebhook`: FedEx's push tracking sits behind a separate programme,
+ * so FedEx is tracked by the cron poll, like GDEX.
+ */
+export const fedexAdapter: CarrierAdapter = {
+	id: "fedex",
+	isConfigured: fedexConfigured,
+	quote: fedexQuote,
+	book: fedexBook,
+	track: fedexTrack,
+	cancel: fedexCancel,
+};

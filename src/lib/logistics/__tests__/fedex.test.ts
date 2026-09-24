@@ -13,9 +13,12 @@ vi.mock("@/lib/catalogue/db", () => ({
 import {
 	chooseRate,
 	FedexNotDeliverable,
+	fedexAdapter,
 	fedexBook,
+	fedexCancel,
 	fedexConfigured,
 	fedexQuote,
+	fedexTrack,
 	forgetFedexToken,
 	MAX_LINE_ITEMS,
 	packagesOf,
@@ -23,6 +26,8 @@ import {
 	pickupDate,
 	pickupPlaceOf,
 	rateBody,
+	readPickupRef,
+	readTracking,
 	SANDBOX,
 	shipBody,
 	sitePlaceOf,
@@ -36,6 +41,7 @@ import {
 	type DeliveryJob,
 } from "../types";
 import {
+	cancelPickupReply,
 	cancelShipmentReply,
 	pickupReply,
 	rateReply,
@@ -44,6 +50,8 @@ import {
 	rateReplyWithoutPriority,
 	shipReply,
 	tokenReply,
+	trackReply,
+	trackReplyNotFound,
 	unauthorised,
 } from "./fixtures/fedex";
 
@@ -584,5 +592,168 @@ describe("fedexBook", () => {
 			fedexBook(job({ scheduledAt: null }), quote),
 		).rejects.toBeInstanceOf(FedexNotDeliverable);
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+});
+
+describe("readTracking", () => {
+	it("maps FedEx's code, not its localised description", () => {
+		expect(
+			readTracking(
+				trackReply("794953535000", "DL", "Entregado"),
+				"794953535000",
+			),
+		).toMatchObject({
+			status: "DELIVERED",
+			message: "FedEx reports Entregado",
+		});
+	});
+
+	it("leaves an exception unmapped, so the row stays where it is", () => {
+		expect(
+			readTracking(trackReply("794953535000", "DE"), "794953535000").status,
+		).toBeNull();
+	});
+
+	it("reports a number FedEx does not know as no status, not as booked", () => {
+		expect(
+			readTracking(trackReplyNotFound("794953535000"), "794953535000"),
+		).toMatchObject({
+			status: null,
+			message:
+				"FedEx has no tracking for 794953535000 (TRACKING.TRACKINGNUMBER.NOTFOUND)",
+		});
+	});
+});
+
+describe("fedexTrack", () => {
+	it("asks for one number, without the scan history", async () => {
+		const fetchMock = stubFetch(
+			ok(tokenReply),
+			ok(trackReply("794953535000", "OD")),
+		);
+
+		const update = await fedexTrack("794953535000");
+
+		expect(fetchMock.mock.calls[1][0]).toBe(
+			`${SANDBOX}/track/v1/trackingnumbers`,
+		);
+		expect(sent(fetchMock, 1)).toEqual({
+			includeDetailedScans: false,
+			trackingInfo: [
+				{ trackingNumberInfo: { trackingNumber: "794953535000" } },
+			],
+		});
+		expect(update.status).toBe("IN_TRANSIT");
+	});
+});
+
+describe("readPickupRef", () => {
+	const ref = { code: "3001", date: "2026-09-24", location: "KULA" };
+
+	it("reads the collection back out of the booking event", () => {
+		expect(
+			readPickupRef({ booking: { pickupRef: JSON.stringify(ref) } }),
+		).toEqual(ref);
+	});
+
+	it("is null for any other event's raw payload", () => {
+		expect(readPickupRef(null)).toBeNull();
+		expect(readPickupRef({ booking: {} })).toBeNull();
+		expect(readPickupRef({ booking: { pickupRef: "not json" } })).toBeNull();
+	});
+});
+
+describe("fedexCancel", () => {
+	const booked = {
+		raw: {
+			booking: {
+				pickupRef: JSON.stringify({
+					code: "3001",
+					date: "2026-09-24",
+					location: "KULA",
+				}),
+			},
+		},
+	};
+
+	it("cancels the collection, then the shipment", async () => {
+		findMany.mockResolvedValue([booked] as never);
+		const fetchMock = stubFetch(
+			ok(tokenReply),
+			ok(cancelPickupReply),
+			ok(cancelShipmentReply),
+		);
+
+		await fedexCancel("794953535000");
+
+		expect(findMany.mock.calls[0][0]).toMatchObject({
+			where: { status: "BOOKED", delivery: { carrierOrderId: "794953535000" } },
+		});
+		expect(fetchMock.mock.calls[1][0]).toBe(
+			`${SANDBOX}/pickup/v1/pickups/cancel`,
+		);
+		expect(sent(fetchMock, 1)).toEqual({
+			associatedAccountNumber: { value: "740561073" },
+			pickupConfirmationCode: "3001",
+			scheduledDate: "2026-09-24",
+			carrierCode: "FDXE",
+			location: "KULA",
+		});
+		expect(fetchMock.mock.calls[2][0]).toBe(
+			`${SANDBOX}/ship/v1/shipments/cancel`,
+		);
+	});
+
+	it("still cancels the shipment when the collection cannot be cancelled", async () => {
+		findMany.mockResolvedValue([booked] as never);
+		const fetchMock = stubFetch(
+			ok(tokenReply),
+			{ status: 400, body: { errors: [{ code: "PICKUP.ALREADY.DONE" }] } },
+			ok(cancelShipmentReply),
+		);
+
+		await fedexCancel("794953535000");
+
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+	});
+
+	it("passes FedEx's refusal up when the parcel is already moving", async () => {
+		stubFetch(ok(tokenReply), {
+			status: 400,
+			body: {
+				errors: [
+					{
+						code: "SHIPMENT.CANCEL.NOTALLOWED",
+						message: "Shipment already scanned",
+					},
+				],
+			},
+		});
+
+		await expect(fedexCancel("794953535000")).rejects.toThrow(
+			/Shipment already scanned/,
+		);
+	});
+
+	it("cancels just the shipment when no collection was recorded", async () => {
+		const fetchMock = stubFetch(ok(tokenReply), ok(cancelShipmentReply));
+
+		await fedexCancel("794953535000");
+
+		expect(fetchMock.mock.calls[1][0]).toBe(
+			`${SANDBOX}/ship/v1/shipments/cancel`,
+		);
+	});
+});
+
+describe("fedexAdapter", () => {
+	it("is the parcel adapter the registry hands out", () => {
+		expect(fedexAdapter.id).toBe("fedex");
+		expect(fedexAdapter.isConfigured()).toBe(true);
+		expect(fedexAdapter.quote).toBe(fedexQuote);
+		expect(fedexAdapter.book).toBe(fedexBook);
+		expect(fedexAdapter.track).toBe(fedexTrack);
+		expect(fedexAdapter.cancel).toBe(fedexCancel);
+		expect(fedexAdapter.verifyWebhook).toBeUndefined();
 	});
 });
