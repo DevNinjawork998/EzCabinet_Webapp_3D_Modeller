@@ -83,8 +83,8 @@ export type NotificationDraft = {
 };
 
 const TEMPLATE: Record<NotificationKind, string> = {
-	ORDER_PLACED: "order_placed",
-	PAYMENT_CONFIRMED: "payment_confirmed",
+	ORDER_PLACED: "order_placed_cabinet",
+	PAYMENT_CONFIRMED: "payment_confirmed_cabinet",
 	STAGE: "production_stage",
 	DELIVERY_BOOKED: "delivery_booked",
 	PICKED_UP: "delivery_picked_up",
