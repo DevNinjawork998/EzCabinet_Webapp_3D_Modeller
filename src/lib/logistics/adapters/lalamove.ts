@@ -306,7 +306,8 @@ const driverSchema = z.object({
  *
  * `.parse()` threw a ZodError whose message is a path list — accurate, and
  * useless on a comparison row. The payload is the only thing that explains a
- * shape we did not expect, so it goes in the error.
+ * shape we did not expect, so it goes in the trace — not the message, which an
+ * admin reads on screen.
  */
 function readReply<T>(schema: z.ZodType<T>, payload: unknown, what: string): T {
 	const parsed = schema.safeParse(payload);
@@ -314,7 +315,7 @@ function readReply<T>(schema: z.ZodType<T>, payload: unknown, what: string): T {
 	const seen = JSON.stringify(payload) ?? String(payload);
 	trace("lalamove.unreadable", { what, payload: seen });
 	throw new Error(
-		`Lalamove's ${what} reply was not the shape we expect: ${seen.slice(0, 200)}`,
+		`Lalamove's ${what} reply could not be read — try again, and tell the developer if it keeps happening.`,
 	);
 }
 

@@ -552,7 +552,7 @@ async function call<T>(
 /**
  * A reply, or a message naming what arrived instead. Same reasoning as
  * `readReply` in `lalamove.ts`: a ZodError's path list is useless on a
- * comparison row, and the payload is the only thing that explains it.
+ * comparison row, and the payload — traced, never shown — explains it.
  */
 function readReply<T>(schema: z.ZodType<T>, payload: unknown, what: string): T {
 	const parsed = schema.safeParse(payload);
@@ -560,7 +560,7 @@ function readReply<T>(schema: z.ZodType<T>, payload: unknown, what: string): T {
 	const seen = JSON.stringify(payload) ?? String(payload);
 	trace("easyparcel.unreadable", { what, payload: seen });
 	throw new Error(
-		`EasyParcel's ${what} reply was not the shape we expect: ${seen.slice(0, 200)}`,
+		`EasyParcel's ${what} reply could not be read — try again, and tell the developer if it keeps happening.`,
 	);
 }
 
