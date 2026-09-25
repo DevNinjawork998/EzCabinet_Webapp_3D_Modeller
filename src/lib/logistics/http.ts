@@ -12,7 +12,9 @@ import { trace } from "./trace";
 
 const TIMEOUT_MS = 10_000;
 
-const nameOf = (carrierId: string) => LABEL[carrierId] ?? carrierId;
+// WhatsApp is not a carrier but sends through here too (`lib/whatsapp/send.ts`).
+const nameOf = (carrierId: string) =>
+	LABEL[carrierId] ?? (carrierId === "whatsapp" ? "WhatsApp" : carrierId);
 
 /**
  * The carrier's own sentence out of an error body, or null.

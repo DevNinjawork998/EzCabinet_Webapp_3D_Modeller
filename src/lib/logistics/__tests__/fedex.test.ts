@@ -413,7 +413,13 @@ describe("shipBody", () => {
 		expect(shipment.serviceType).toBe("FEDEX_PRIORITY");
 		expect(shipment.pickupType).toBe("CONTACT_FEDEX_TO_SCHEDULE");
 		expect(shipment.packagingType).toBe("YOUR_PACKAGING");
-		expect(shipment.shippingChargesPayment).toEqual({ paymentType: "SENDER" });
+		// FedEx refuses SENDER without the payor: ACCOUNT.NUMBER.MISMATCH.
+		expect(shipment.shippingChargesPayment).toEqual({
+			paymentType: "SENDER",
+			payor: {
+				responsibleParty: { accountNumber: { value: "740561073" } },
+			},
+		});
 		expect(shipment.labelSpecification).toEqual({
 			imageType: "PDF",
 			labelStockType: "PAPER_4X6",
