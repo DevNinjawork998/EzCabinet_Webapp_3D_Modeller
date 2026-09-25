@@ -110,7 +110,7 @@ export function readReply<T>(
 	const seen = JSON.stringify(payload) ?? String(payload);
 	trace("fedex.unreadable", { what, payload: seen });
 	throw new Error(
-		`FedEx's ${what} reply was not the shape we expect: ${seen.slice(0, 200)}`,
+		`FedEx's ${what} reply could not be read — try again, and tell the developer if it keeps happening.`,
 	);
 }
 

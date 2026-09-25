@@ -84,7 +84,7 @@ describe("sendMessage", () => {
 		expect(await sendMessage({})).toEqual({
 			ok: false,
 			retryable: true,
-			error: "fetch failed",
+			error: "Could not reach WhatsApp — try again in a moment.",
 		});
 	});
 });

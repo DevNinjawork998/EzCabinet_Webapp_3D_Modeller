@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { carrierFetch } from "./http";
+import { trace } from "./trace";
 
 /**
  * EasyParcel's OAuth 2.0 half that touches no database.
@@ -139,8 +140,9 @@ export async function requestToken(
 		const fields = parsed.error.issues
 			.map((issue) => issue.path.join("."))
 			.join(", ");
+		trace("easyparcel.unreadable", { what: "token", fields });
 		throw new Error(
-			`EasyParcel's token reply was not the shape we expect: ${fields}`,
+			"EasyParcel's sign-in reply could not be read — try again, and tell the developer if it keeps happening.",
 		);
 	}
 	return parsed.data;
