@@ -11,7 +11,7 @@ import { CarrierHttpError, carrierFetch } from "@/lib/logistics/http";
  * ponytail: Graph API version pinned. Meta retires a version about two years
  * after release; bump this when the developer dashboard warns.
  */
-const GRAPH = "https://graph.facebook.com/v23.0";
+export const GRAPH = "https://graph.facebook.com/v23.0";
 
 export const MAX_ATTEMPTS = 5;
 
@@ -20,7 +20,16 @@ export const whatsappConfigured = (): boolean =>
 
 export type SendResult =
 	| { ok: true; messageId: string }
-	| { ok: false; retryable: boolean; error: string };
+	| {
+			ok: false;
+			retryable: boolean;
+			/** Our token is bad: every send will fail until someone replaces it. */
+			blocked?: true;
+			error: string;
+	  };
+
+/** Meta's "access token expired, revoked or invalid". */
+const TOKEN_INVALID_CODE = 190;
 
 /**
  * Meta's throttling codes. They come back as HTTP 400, so the status alone
@@ -31,7 +40,7 @@ const RATE_LIMIT_CODES = new Set([4, 80007, 130429, 131048, 131056]);
 export function classify(
 	status: number,
 	body: string,
-): { retryable: boolean; error: string } {
+): { retryable: boolean; blocked?: true; error: string } {
 	let code: number | undefined;
 	let message = body.trim().slice(0, 300);
 	try {
@@ -42,6 +51,13 @@ export function classify(
 		message = parsed.error?.message ?? message;
 	} catch {
 		// Not JSON — the raw body is the explanation.
+	}
+	const error = `${code ?? status}: ${message}`;
+	// A dead token is our fault, not the message's. Failing the row would lose
+	// the customer's acknowledgement for good; holding it sends it once the
+	// token is replaced.
+	if (status === 401 || code === TOKEN_INVALID_CODE) {
+		return { retryable: true, blocked: true, error };
 	}
 	return {
 		retryable:
@@ -86,6 +102,11 @@ export function nextState(result: SendResult, attempts: number, now: Date) {
 			sentAt: now,
 			lastError: null,
 		};
+	}
+	// The claim already counted this try; give it back, so a token that is dead
+	// for a day does not exhaust the row. The 48 h expiry still bounds it.
+	if (result.blocked) {
+		return { attempts: attempts - 1, lastError: result.error };
 	}
 	if (result.retryable && attempts < MAX_ATTEMPTS) {
 		return { lastError: result.error };

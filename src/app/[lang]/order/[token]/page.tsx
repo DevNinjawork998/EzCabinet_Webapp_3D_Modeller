@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyOrderId } from "@/app/[lang]/track/[token]/CopyOrderId";
+import { CheckoutProgress } from "@/components/planner/CheckoutProgress";
 import { prisma } from "@/lib/catalogue/db";
 import { getDictionary } from "@/lib/copy/dictionary";
 import { fill } from "@/lib/copy/fill";
@@ -87,11 +88,23 @@ export default async function OrderPage({
 				<span className="px-1 py-1.5 font-medium text-[#171717]">
 					{o.breadcrumb}
 				</span>
+				<span className="ml-auto">
+					<CheckoutProgress
+						ariaLabel={t.quote.progressAriaLabel}
+						labels={[
+							t.quote.stepDetails,
+							t.quote.stepPayment,
+							t.quote.stepDone,
+						]}
+						step={order.status === "PAID" ? 2 : 1}
+					/>
+				</span>
 			</header>
 
 			<main className="flex flex-1 justify-center px-6 py-14">
 				<div className="flex w-full max-w-[560px] flex-col gap-6">
 					<div className="flex flex-col items-center gap-3.5 text-center">
+						<StatusIcon status={order.status} />
 						<div>
 							<h1 className="mb-1.5 font-semibold text-[24px]">{heading}</h1>
 							<p className="text-[#5c574e] text-[14px]">{body}</p>
@@ -240,5 +253,37 @@ export default async function OrderPage({
 				</div>
 			</main>
 		</div>
+	);
+}
+
+/** Paid, waiting or cancelled — the checkout design's result mark. */
+function StatusIcon({
+	status,
+}: {
+	status: "AWAITING_PAYMENT" | "PAID" | "CANCELLED";
+}) {
+	const [background, path] =
+		status === "PAID"
+			? ["bg-[#1f5138]", "M5 12.5l4.5 4.5L19 7"]
+			: status === "CANCELLED"
+				? ["bg-[#b42318]", "M8 8l8 8M16 8l-8 8"]
+				: ["bg-[#8a6d1f]", "M12 8.5V12l2.5 1.5"];
+	return (
+		<span
+			className={`flex h-[52px] w-[52px] items-center justify-center rounded-full ${background}`}
+		>
+			<svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+				{status === "AWAITING_PAYMENT" && (
+					<circle cx="12" cy="12" r="7" stroke="#fff" strokeWidth="2" />
+				)}
+				<path
+					d={path}
+					stroke="#fff"
+					strokeWidth="2.2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				/>
+			</svg>
+		</span>
 	);
 }

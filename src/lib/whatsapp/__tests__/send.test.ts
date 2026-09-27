@@ -39,6 +39,15 @@ describe("classify", () => {
 		});
 	});
 
+	it("holds on an expired or revoked token instead of failing", () => {
+		expect(classify(400, metaError(190, "Session has expired"))).toEqual({
+			retryable: true,
+			blocked: true,
+			error: "190: Session has expired",
+		});
+		expect(classify(401, "")).toMatchObject({ retryable: true, blocked: true });
+	});
+
 	it("keeps an unparseable body as the error", () => {
 		expect(classify(400, "nope")).toEqual({
 			retryable: false,
@@ -107,6 +116,19 @@ describe("nextState", () => {
 		expect(nextState(fail, 5, now)).toEqual({
 			status: "FAILED",
 			lastError: "503",
+		});
+	});
+
+	it("a bad token never uses up an attempt, however long it lasts", () => {
+		const blocked = {
+			ok: false as const,
+			retryable: true,
+			blocked: true as const,
+			error: "190: expired",
+		};
+		expect(nextState(blocked, 5, now)).toEqual({
+			attempts: 4,
+			lastError: "190: expired",
 		});
 	});
 

@@ -4,6 +4,7 @@ import { getAdapter } from "@/lib/logistics/registry";
 import { applyTrackingUpdate } from "@/lib/logistics/store";
 import { ACTIVE_STATUSES } from "@/lib/logistics/types";
 import { secretsMatch } from "@/lib/secretsMatch";
+import { reportHealth } from "@/lib/whatsapp/health";
 import { flush } from "@/lib/whatsapp/outbox";
 
 export const runtime = "nodejs";
@@ -83,6 +84,8 @@ export async function GET(request: Request) {
 		console.error("WhatsApp retry failed", (error as Error).message);
 		return null;
 	});
+	// Hourly: is the next order's acknowledgement going to get out?
+	await reportHealth();
 
 	return NextResponse.json({ ok: true, polled, failed, notifications });
 }

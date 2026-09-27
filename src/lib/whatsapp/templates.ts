@@ -93,7 +93,11 @@ const TEMPLATE: Record<NotificationKind, string> = {
 };
 
 /** Meta's language codes for the locales we serve. */
-const LANGUAGE: Record<Locale, string> = { en: "en", zh: "zh_CN", ms: "ms" };
+export const LANGUAGE: Record<Locale, string> = {
+	en: "en",
+	zh: "zh_CN",
+	ms: "ms",
+};
 
 export const localeOf = (value: string): Locale =>
 	isLocale(value) ? value : "en";
