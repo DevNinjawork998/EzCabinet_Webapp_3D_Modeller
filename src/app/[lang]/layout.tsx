@@ -58,6 +58,12 @@ export async function generateMetadata({
 				"x-default": "/en",
 			},
 		},
+		// Meta Business domain verification for jnsnexion.com.my.
+		verification: {
+			other: {
+				"facebook-domain-verification": "93gl9xkhiogje2tfb4hcwh65v213t9",
+			},
+		},
 	};
 }
 

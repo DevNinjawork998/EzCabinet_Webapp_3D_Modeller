@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyOrderId } from "@/app/[lang]/track/[token]/CopyOrderId";
+import { CheckoutProgress } from "@/components/planner/CheckoutProgress";
 import { prisma } from "@/lib/catalogue/db";
 import { getDictionary } from "@/lib/copy/dictionary";
 import { fill } from "@/lib/copy/fill";
@@ -108,6 +109,17 @@ export default async function OrderPage({
 				<span>/</span>
 				<span className="px-1 py-1.5 font-medium text-[#171717]">
 					{o.breadcrumb}
+				</span>
+				<span className="ml-auto">
+					<CheckoutProgress
+						ariaLabel={t.quote.progressAriaLabel}
+						labels={[
+							t.quote.stepDetails,
+							t.quote.stepPayment,
+							t.quote.stepDone,
+						]}
+						step={order.status === "PAID" ? 2 : 1}
+					/>
 				</span>
 			</header>
 
@@ -288,22 +300,25 @@ export default async function OrderPage({
 	);
 }
 
-/** Paid, waiting, or cancelled — the glyph above the heading. */
-function StatusIcon({ status }: { status: string }) {
-	const [bg, path] =
+/** Paid, waiting or cancelled — the checkout design's result mark. */
+function StatusIcon({
+	status,
+}: {
+	status: "AWAITING_PAYMENT" | "PAID" | "CANCELLED";
+}) {
+	const [background, path] =
 		status === "PAID"
 			? ["bg-[#1f5138]", "M5 12.5l4.5 4.5L19 7"]
 			: status === "CANCELLED"
 				? ["bg-[#b42318]", "M8 8l8 8M16 8l-8 8"]
-				: ["bg-[#8a6d1f]", "M12 7.5V12l3 1.8"];
+				: ["bg-[#8a6d1f]", "M12 8.5V12l2.5 1.5"];
 	return (
 		<span
-			aria-hidden
-			className={`flex h-[52px] w-[52px] items-center justify-center rounded-full ${bg}`}
+			className={`flex h-[52px] w-[52px] items-center justify-center rounded-full ${background}`}
 		>
 			<svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
-				{status !== "PAID" && status !== "CANCELLED" && (
-					<circle cx="12" cy="12" r="7.5" stroke="#fff" strokeWidth="2" />
+				{status === "AWAITING_PAYMENT" && (
+					<circle cx="12" cy="12" r="7" stroke="#fff" strokeWidth="2" />
 				)}
 				<path
 					d={path}

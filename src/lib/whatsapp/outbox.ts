@@ -27,6 +27,15 @@ const SETTLE_MS = 60 * 1000;
 const MAX_PER_RUN = 50;
 const AUTO_REPLY_EVERY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Meta refusing the template itself — wrong name, language or parameters.
+ * Every order after this one fails the same way until the template or the code
+ * is fixed, so it is alerted on its own `type`, not buried in send failures.
+ */
+const TEMPLATE_CODES = new Set([132000, 132001, 132012, 132018]);
+/** `classify` writes errors as `<code>: <message>`. */
+const errorCode = (error: string) => Number(error.split(":")[0]);
+
 /** Insert the drafts that are not null; a repeated `dedupeKey` is skipped. */
 export async function enqueue(
 	tx: Prisma.TransactionClient,
@@ -107,17 +116,31 @@ export async function flush(
 		});
 		if (result.ok) {
 			sent++;
-		} else {
-			failed++;
+			continue;
+		}
+		failed++;
+		if (result.blocked) {
+			// Every row behind this one would be refused the same way. They stay
+			// pending and go out on the first run after the token is replaced.
 			console.error(
 				JSON.stringify({
-					type: "WHATSAPP_SEND_FAILED",
-					notificationId: row.id,
-					retryable: result.retryable,
+					type: "WHATSAPP_TOKEN_INVALID",
 					message: result.error,
 				}),
 			);
+			break;
 		}
+		console.error(
+			JSON.stringify({
+				type: TEMPLATE_CODES.has(errorCode(result.error))
+					? "WHATSAPP_TEMPLATE_REJECTED"
+					: "WHATSAPP_SEND_FAILED",
+				notificationId: row.id,
+				template: row.template,
+				retryable: result.retryable,
+				message: result.error,
+			}),
+		);
 	}
 	return { sent, failed };
 }

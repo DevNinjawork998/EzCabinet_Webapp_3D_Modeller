@@ -68,7 +68,14 @@ In Meta Business Suite, under Business settings:
 | --- | --- |
 | The permanent token | `WHATSAPP_TOKEN` |
 | The phone number ID (not the phone number) | `WHATSAPP_PHONE_NUMBER_ID` |
+| The WhatsApp Business Account ID | `WHATSAPP_WABA_ID` |
 | The app secret (App settings → Basic) | `WHATSAPP_APP_SECRET` |
+
+The 24-hour token on the app's API Setup page is for testing only. If it
+reaches production, it expires the next day: messages then wait in the outbox
+(they are held, not lost) and the hourly health check logs
+`WHATSAPP_UNHEALTHY` until the system-user token replaces it. Held messages
+older than 48 hours are dropped.
 
 JNS Nexion then registers the webhook
 (`https://<production domain>/api/whatsapp/webhook`) with a verify token it

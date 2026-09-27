@@ -51,7 +51,7 @@ describe("draftFor", () => {
 	it("payment confirmed", () => {
 		const draft = draftFor({ kind: "PAYMENT_CONFIRMED", order });
 		expect(draft?.dedupeKey).toBe("order:ord1:paid");
-		expect(draft?.template).toBe("payment_confirmed");
+		expect(draft?.template).toBe("payment_confirmed_cabinet");
 		expect(draft?.vars).toEqual({
 			body: ["IC-20260826-014"],
 			button: "tok_order",

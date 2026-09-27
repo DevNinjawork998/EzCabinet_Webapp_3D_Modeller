@@ -13,6 +13,7 @@ import { doorStyleIn, ratesOf, roomTypeIn } from "@/lib/planner/catalogue";
 import { computePlannerPrice } from "@/lib/planner/pricing";
 import type { RoomLayout } from "@/lib/planner/room";
 import { useCatalogue, useRoomEngine } from "./CatalogueContext";
+import { CheckoutProgress } from "./CheckoutProgress";
 import { useCopy, useLocale } from "./CopyContext";
 import { AdminLink, PlannerHeader } from "./PlannerHeader";
 import { priceLineDetail, priceLineLabel } from "./priceLineCopy";
@@ -33,9 +34,13 @@ const PlannerScene = dynamic(() => import("./PlannerScene"), {
 });
 
 const FIELD =
-	"rounded-lg px-3 py-2.5 text-[14px] disabled:bg-neutral-50 aria-invalid:border-[1.5px] aria-invalid:border-[#b42318] border border-neutral-300";
+	"min-h-[42px] rounded-lg bg-white px-3 py-2.5 text-[14px] text-[#171717] placeholder:text-[#a3a3a3] disabled:bg-neutral-50";
+const fieldClass = (error: string | undefined) =>
+	`${FIELD} ${error ? "border-[1.5px] border-[#b42318]" : "border border-[#d4d4d4]"}`;
 
-type FieldKey = "name" | "phone" | "email" | "siteAddress" | "remeasure";
+type FieldErrors = Partial<
+	Record<"name" | "phone" | "email" | "siteAddress" | "remeasure", string>
+>;
 
 /**
  * Checkout, on one page. The customer's details and the design go to
@@ -107,9 +112,7 @@ export function QuoteScreen({
 	const [error, setError] = useState<string | null>(null);
 	// Per-field, shown under the field, so a customer on a phone sees which
 	// box to fix rather than the browser's own bubble over the first one.
-	const [fieldErrors, setFieldErrors] = useState<
-		Partial<Record<FieldKey, string>>
-	>({});
+	const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 	// Stripe's own message ("Your card was declined.") under the banner.
 	const [paymentFailed, setPaymentFailed] = useState<string | null>(null);
 
@@ -151,8 +154,9 @@ export function QuoteScreen({
 	async function placeOrder(form: HTMLFormElement) {
 		const field = (key: string) =>
 			String(new FormData(form).get(key) ?? "").trim();
-		// The server re-checks all of this; these are only the messages.
-		const errors: Partial<Record<FieldKey, string>> = {};
+		// Checked here rather than by the browser so every problem shows at once,
+		// in our words, next to its field. The server re-checks all of it.
+		const errors: FieldErrors = {};
 		if (!field("name")) errors.name = t.quote.errorNameRequired;
 		if (!field("phone")) errors.phone = t.quote.errorPhoneRequired;
 		// Paying online sends a receipt, so the email stops being optional.
@@ -165,6 +169,7 @@ export function QuoteScreen({
 		if (field("remeasure") !== "on") errors.remeasure = t.quote.errorRemeasure;
 		setFieldErrors(errors);
 		if (Object.keys(errors).length > 0) return;
+
 		setBusy(true);
 		setError(null);
 		setPaymentFailed(null);
@@ -264,8 +269,23 @@ export function QuoteScreen({
 		setPaymentFailed(message);
 	}
 
+	const total = formatRm(totalRm);
+	const clearError = (key: keyof FieldErrors) =>
+		setFieldErrors((current) =>
+			current[key] ? { ...current, [key]: undefined } : current,
+		);
+	const errorText = (key: keyof FieldErrors) =>
+		fieldErrors[key] && (
+			<p id={`err-${key}`} role="alert" className="text-[#b42318] text-[12px]">
+				{fieldErrors[key]}
+			</p>
+		);
+	const describedBy = (key: keyof FieldErrors) =>
+		fieldErrors[key] ? `err-${key}` : undefined;
+	const LABEL = "font-medium text-[#404040] text-[12px]";
+
 	return (
-		<main className="flex h-[calc(100dvh-2.25rem)] flex-col bg-[#e9e7e3] text-neutral-900">
+		<main className="flex h-[calc(100dvh-2.25rem)] flex-col bg-[#e9e7e3] text-[#171717]">
 			<PlannerHeader
 				trail={[
 					{ label: t.common.brand, href: "/" },
@@ -273,320 +293,319 @@ export function QuoteScreen({
 					{ label: t.planner.crumbs.quote },
 				]}
 			>
+				<CheckoutProgress
+					ariaLabel={t.quote.progressAriaLabel}
+					labels={[t.quote.stepDetails, t.quote.stepPayment, t.quote.stepDone]}
+					step={0}
+				/>
 				<button
 					type="button"
 					onClick={onBackToStudioAction}
-					className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-[12px] hover:border-neutral-400"
+					className="flex min-h-9 items-center gap-1.5 rounded-lg border border-[#d4d4d4] bg-white px-3 font-medium text-[12px] hover:border-[#a3a3a3] hover:bg-[#faf9f7]"
 				>
+					<svg
+						width="12"
+						height="12"
+						viewBox="0 0 12 12"
+						fill="none"
+						aria-hidden
+					>
+						<path
+							d="M7.5 2.5 4 6l3.5 3.5"
+							stroke="currentColor"
+							strokeWidth="1.4"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						/>
+					</svg>
 					{t.quote.backToEditing}
 				</button>
 				<AdminLink />
 			</PlannerHeader>
 
-			<div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-				<div className="flex flex-1 flex-col overflow-y-auto p-8">
-					<form
-						noValidate
-						className="flex max-w-[560px] flex-col gap-7"
-						aria-describedby={error ? "order-error" : undefined}
-						onChange={(e) => {
-							const key = (e.target as { name?: string }).name as FieldKey;
-							if (fieldErrors[key])
-								setFieldErrors((current) => ({ ...current, [key]: undefined }));
-						}}
-						onSubmit={(e) => {
-							e.preventDefault();
-							placeOrder(e.currentTarget);
-						}}
-					>
+			<div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-4 pt-10 pb-14 sm:px-7">
+				<div className="flex w-full max-w-[1040px] flex-wrap items-start gap-8">
+					<div className="min-w-0 flex-[1_1_440px]">
+						<h2 className="mb-1.5 font-semibold text-[22px]">
+							{fill(t.quote.heading, { room: room.label.toLowerCase() })}
+						</h2>
+						<p className="mb-[22px] max-w-[480px] text-[#5c574e] text-[14px] leading-5">
+							{stripeClient ? t.quote.descriptionOnline : t.quote.description}
+						</p>
+
+						<form
+							noValidate
+							className="flex max-w-[480px] flex-col gap-7"
+							aria-describedby={error ? "order-error" : undefined}
+							onChange={(e) =>
+								clearError(
+									(e.target as { name?: string }).name as keyof FieldErrors,
+								)
+							}
+							onSubmit={(e) => {
+								e.preventDefault();
+								placeOrder(e.currentTarget);
+							}}
+						>
+							{paymentFailed !== null && (
+								<div
+									role="alert"
+									className="flex gap-2.5 rounded-[10px] border border-[#f0b4ae] bg-[#fdf1ef] px-3.5 py-3 text-[#3d3a34] text-[13px] leading-[18px]"
+								>
+									<div>
+										<p className="mb-0.5 font-semibold">
+											{t.quote.paymentFailedTitle}
+										</p>
+										<p>{t.quote.paymentFailedBody}</p>
+										{paymentFailed && (
+											<p className="mt-1 text-[#5c574e] text-[12px]">
+												{paymentFailed}
+											</p>
+										)}
+									</div>
+								</div>
+							)}
+
+							<fieldset className="flex flex-col gap-3" disabled={busy}>
+								<legend className="mb-3 font-semibold text-[15px]">
+									{t.quote.sectionContact}
+								</legend>
+								<label className="flex flex-col gap-1.5">
+									<span className={LABEL}>{t.quote.fullName}</span>
+									<input
+										name="name"
+										type="text"
+										autoComplete="name"
+										className={fieldClass(fieldErrors.name)}
+										aria-invalid={!!fieldErrors.name}
+										aria-describedby={describedBy("name")}
+										placeholder="Nur Aisyah binti Kamal"
+										value={name}
+										onChange={(e) => setName(e.target.value)}
+									/>
+									{errorText("name")}
+								</label>
+								<label className="flex flex-col gap-1.5">
+									<span className={LABEL}>{t.quote.phone}</span>
+									<input
+										name="phone"
+										type="tel"
+										autoComplete="tel"
+										className={fieldClass(fieldErrors.phone)}
+										aria-invalid={!!fieldErrors.phone}
+										aria-describedby={describedBy("phone")}
+										placeholder="+60 12-345 6789"
+									/>
+									{errorText("phone")}
+								</label>
+								<label className="flex flex-col gap-1.5">
+									<span className={LABEL}>{t.quote.email}</span>
+									<input
+										name="email"
+										type="email"
+										autoComplete="email"
+										className={fieldClass(fieldErrors.email)}
+										aria-invalid={!!fieldErrors.email}
+										aria-describedby={describedBy("email")}
+										placeholder="you@example.com"
+										value={email}
+										onChange={(e) => setEmail(e.target.value)}
+									/>
+									{errorText("email")}
+								</label>
+								<label className="flex min-h-9 cursor-pointer items-start gap-[9px]">
+									<input
+										name="whatsappOptIn"
+										type="checkbox"
+										className="mt-px h-4 w-4 shrink-0 accent-[#171717]"
+									/>
+									<span className="text-[#5c574e] text-[12px] leading-[17px]">
+										{t.quote.whatsappOptIn}
+									</span>
+								</label>
+							</fieldset>
+
+							<fieldset className="flex flex-col gap-3" disabled={busy}>
+								<legend className="mb-3 font-semibold text-[15px]">
+									{t.quote.sectionDelivery}
+								</legend>
+								<label className="flex flex-col gap-1.5">
+									<span className={LABEL}>{t.quote.siteAddress}</span>
+									<textarea
+										name="siteAddress"
+										autoComplete="street-address"
+										rows={2}
+										className={`${fieldClass(fieldErrors.siteAddress)} min-h-16 resize-y`}
+										aria-invalid={!!fieldErrors.siteAddress}
+										aria-describedby={describedBy("siteAddress")}
+										placeholder="12 Jalan Meranti 4, 47120 Puchong, Selangor"
+									/>
+									{errorText("siteAddress")}
+								</label>
+								<label className="flex flex-col gap-1.5">
+									<span className={LABEL}>{t.quote.addressNotes}</span>
+									<input
+										name="addressNotes"
+										type="text"
+										className={fieldClass(undefined)}
+									/>
+								</label>
+							</fieldset>
+
+							{stripeClient && (
+								<fieldset className="flex flex-col gap-2.5">
+									<legend className="mb-3 font-semibold text-[15px]">
+										{t.quote.sectionPayment}
+									</legend>
+									<StripePayment
+										publishableKey={stripeClient.publishableKey}
+										amountSen={Math.round(totalRm * 100)}
+										apiRef={payApi}
+									/>
+									<p className="text-[#5c574e] text-[12px]">
+										{t.quote.paymentSecure}
+									</p>
+								</fieldset>
+							)}
+
+							<div className="flex flex-col gap-3 border-[#d9d6d0] border-t pt-5">
+								<label className="flex min-h-9 cursor-pointer items-start gap-[9px]">
+									<input
+										name="remeasure"
+										type="checkbox"
+										disabled={busy}
+										aria-invalid={!!fieldErrors.remeasure}
+										aria-describedby={describedBy("remeasure")}
+										className="mt-px h-4 w-4 shrink-0 accent-[#171717]"
+									/>
+									<span className="text-[#5c574e] text-[12px] leading-[17px]">
+										{t.quote.remeasureNote}
+									</span>
+								</label>
+								{fieldErrors.remeasure && (
+									<p
+										id="err-remeasure"
+										role="alert"
+										className="-mt-1.5 ml-[25px] text-[#b42318] text-[12px]"
+									>
+										{fieldErrors.remeasure}
+									</p>
+								)}
+								{error && (
+									<p
+										id="order-error"
+										role="alert"
+										className="rounded-lg border border-[#fca5a5] bg-[#fef2f2] px-3 py-2 text-[#7f1d1d] text-[13px]"
+									>
+										{error}
+									</p>
+								)}
+								<button
+									type="submit"
+									disabled={busy || payClient === undefined}
+									className="mt-1 flex min-h-12 items-center justify-center gap-2.5 rounded-[10px] bg-[#171717] px-3 font-medium text-[14px] text-white transition hover:bg-[#262626] active:bg-[#0a0a0a] disabled:cursor-not-allowed disabled:opacity-50"
+								>
+									{busy ? (
+										stripeClient ? (
+											t.quote.paying
+										) : (
+											t.quote.submitting
+										)
+									) : stripeClient ? (
+										<span className="font-semibold tabular-nums">
+											{fill(t.quote.payCta, { amount: total })}
+										</span>
+									) : (
+										<>
+											{t.quote.submitCta}
+											<span className="font-semibold tabular-nums">
+												{total}
+											</span>
+										</>
+									)}
+								</button>
+							</div>
+						</form>
+					</div>
+
+					<aside className="flex min-w-[300px] flex-[0_1_380px] flex-col gap-4 rounded-[14px] border border-[#e5e5e5] bg-[#f7f6f4] p-[22px] lg:sticky lg:top-0">
+						<div className="relative h-[180px] overflow-hidden rounded-[10px] border border-[#e5e5e5] bg-[#efeeeb]">
+							<PlannerScene
+								layout={layout}
+								finish={finish}
+								finishTextures={finishTextures}
+								selectedIds={new Set()}
+								doorTargetId={null}
+								targetRun={0}
+								frameWholeRoom
+								showPanPuck={false}
+								onLayoutChangeAction={() => {}}
+								onSelectAction={() => {}}
+								pickerRef={pickerRef}
+								hitTestRef={hitTestRef}
+							/>
+						</div>
 						<div>
-							<h2 className="mb-1 font-semibold text-[22px]">
-								{fill(t.quote.heading, { room: room.label.toLowerCase() })}
-							</h2>
-							<p className="text-[14px] text-neutral-500 leading-5">
-								{stripeClient ? t.quote.descriptionOnline : t.quote.description}
+							<p className="mb-[3px] font-semibold text-[13px]">
+								{fill(t.quote.summary, {
+									room: room.label,
+									// Every wall with a run, as the studio reads it.
+									runs:
+										runExtentsMm(layout)
+											.map((mm) => `${(mm / 1000).toFixed(2)} m`)
+											.join(" + ") || "0.00 m",
+									count: placed.length,
+									unit: placed.length === 1 ? t.planner.unit : t.planner.units,
+								})}
+							</p>
+							<p className="text-[#5c574e] text-[12px]">
+								{finishLabel} · {frontLabel}
 							</p>
 						</div>
-
-						{paymentFailed !== null && (
-							<div
-								role="alert"
-								className="flex gap-2.5 rounded-[10px] border border-[#f0b4ae] bg-[#fdf1ef] px-3.5 py-3 text-[#3d3a34] text-[13px] leading-[18px]"
-							>
-								<div>
-									<p className="mb-0.5 font-semibold">
-										{t.quote.paymentFailedTitle}
-									</p>
-									<p>{t.quote.paymentFailedBody}</p>
-									{paymentFailed && (
-										<p className="mt-1 text-[#5c574e] text-[12px]">
-											{paymentFailed}
-										</p>
-									)}
-								</div>
-							</div>
-						)}
-
-						<fieldset className="flex flex-col gap-3" disabled={busy}>
-							<legend className="mb-3 font-semibold text-[15px]">
-								{t.quote.sectionContact}
-							</legend>
-							<label className="flex flex-col gap-1.5">
-								<span className="font-medium text-[12px] text-neutral-700">
-									{t.quote.fullName}
-								</span>
-								<input
-									name="name"
-									type="text"
-									autoComplete="name"
-									required
-									aria-invalid={!!fieldErrors.name}
-									aria-describedby="err-name"
-									className={FIELD}
-									placeholder="Nur Aisyah binti Kamal"
-									value={name}
-									onChange={(e) => setName(e.target.value)}
-								/>
-								<FieldError id="err-name" message={fieldErrors.name} />
-							</label>
-							<label className="flex flex-col gap-1.5">
-								<span className="font-medium text-[12px] text-neutral-700">
-									{t.quote.phone}
-								</span>
-								<input
-									name="phone"
-									type="tel"
-									autoComplete="tel"
-									required
-									aria-invalid={!!fieldErrors.phone}
-									aria-describedby="err-phone"
-									className={FIELD}
-									placeholder="+60 12-345 6789"
-								/>
-								<FieldError id="err-phone" message={fieldErrors.phone} />
-							</label>
-							<label className="flex flex-col gap-1.5">
-								<span className="font-medium text-[12px] text-neutral-700">
-									{t.quote.email}
-								</span>
-								<input
-									name="email"
-									type="email"
-									autoComplete="email"
-									required={!!stripeClient}
-									aria-invalid={!!fieldErrors.email}
-									aria-describedby="err-email"
-									className={FIELD}
-									placeholder="you@example.com"
-									value={email}
-									onChange={(e) => setEmail(e.target.value)}
-								/>
-								<FieldError id="err-email" message={fieldErrors.email} />
-							</label>
-							<label className="flex items-start gap-2">
-								<input
-									name="whatsappOptIn"
-									type="checkbox"
-									className="mt-0.5"
-								/>
-								<span className="text-[12px] text-neutral-500 leading-4">
-									{t.quote.whatsappOptIn}
-								</span>
-							</label>
-						</fieldset>
-
-						<fieldset className="flex flex-col gap-3" disabled={busy}>
-							<legend className="mb-3 font-semibold text-[15px]">
-								{t.quote.sectionDelivery}
-							</legend>
-							<label className="flex flex-col gap-1.5">
-								<span className="font-medium text-[12px] text-neutral-700">
-									{t.quote.siteAddress}
-								</span>
-								<textarea
-									name="siteAddress"
-									autoComplete="street-address"
-									required
-									minLength={5}
-									rows={2}
-									aria-invalid={!!fieldErrors.siteAddress}
-									aria-describedby="err-siteAddress"
-									className={FIELD}
-									placeholder="12 Jalan Meranti 4, 47120 Puchong, Selangor"
-								/>
-								<FieldError
-									id="err-siteAddress"
-									message={fieldErrors.siteAddress}
-								/>
-							</label>
-							<label className="flex flex-col gap-1.5">
-								<span className="font-medium text-[12px] text-neutral-700">
-									{t.quote.addressNotes}
-								</span>
-								<input name="addressNotes" type="text" className={FIELD} />
-							</label>
-						</fieldset>
-
-						{stripeClient && (
-							<fieldset className="flex flex-col gap-2.5">
-								<legend className="mb-3 font-semibold text-[15px]">
-									{t.quote.sectionPayment}
-								</legend>
-								<StripePayment
-									publishableKey={stripeClient.publishableKey}
-									amountSen={Math.round(totalRm * 100)}
-									apiRef={payApi}
-								/>
-								<p className="text-[12px] text-neutral-500">
-									{t.quote.paymentSecure}
-								</p>
-							</fieldset>
-						)}
-
-						<div className="flex flex-col gap-3 border-[#d9d6d0] border-t pt-5">
-							<label className="flex items-start gap-2">
-								<input
-									name="remeasure"
-									type="checkbox"
-									required
-									aria-invalid={!!fieldErrors.remeasure}
-									aria-describedby="err-remeasure"
-									disabled={busy}
-									className="mt-0.5"
-								/>
-								<span className="text-[12px] text-neutral-500 leading-4">
-									{t.quote.remeasureNote}
-								</span>
-							</label>
-							<FieldError
-								id="err-remeasure"
-								message={fieldErrors.remeasure}
-								className="-mt-1.5 ml-5"
-							/>
-							{error && (
-								<p
-									id="order-error"
-									role="alert"
-									className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700"
+						<ul className="flex flex-col gap-1.5 border-[#e5e5e5] border-t pt-3">
+							{price.categories.map((line) => (
+								<li
+									key={line.id}
+									className="flex items-baseline justify-between gap-2.5 text-[12px]"
 								>
-									{error}
-								</p>
-							)}
-							<button
-								type="submit"
-								disabled={busy || payClient === undefined}
-								className="flex min-h-[50px] items-center justify-center gap-2.5 rounded-[10px] bg-neutral-900 px-3 font-semibold text-[15px] text-white tabular-nums transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-							>
-								{busy
-									? stripeClient
-										? t.quote.paying
-										: t.quote.submitting
-									: stripeClient
-										? fill(t.quote.payCta, { amount: formatRm(totalRm) })
-										: `${t.quote.submitCta} · ${formatRm(totalRm)}`}
-							</button>
-						</div>
-					</form>
-				</div>
-
-				<aside className="flex w-full shrink-0 flex-col gap-4 border-neutral-200 border-t bg-[#f7f6f4] p-6 lg:h-full lg:w-[360px] lg:border-t-0 lg:border-l">
-					<div className="relative h-[180px] overflow-hidden rounded-lg border border-neutral-200">
-						<PlannerScene
-							layout={layout}
-							finish={finish}
-							finishTextures={finishTextures}
-							selectedIds={new Set()}
-							doorTargetId={null}
-							targetRun={0}
-							frameWholeRoom
-							showPanPuck={false}
-							onLayoutChangeAction={() => {}}
-							onSelectAction={() => {}}
-							pickerRef={pickerRef}
-							hitTestRef={hitTestRef}
-						/>
-					</div>
-					<div>
-						<p className="font-semibold text-[13px]">
-							{fill(t.quote.summary, {
-								room: room.label,
-								// Every wall with a run, as the studio reads it.
-								runs:
-									runExtentsMm(layout)
-										.map((mm) => `${(mm / 1000).toFixed(2)} m`)
-										.join(" + ") || "0.00 m",
-								count: placed.length,
-								unit: placed.length === 1 ? t.planner.unit : t.planner.units,
-							})}
-						</p>
-						<p className="mt-0.5 text-[12px] text-neutral-500">
-							{finishLabel} · {frontLabel}
-						</p>
-					</div>
-					<ul className="flex flex-col gap-1 border-neutral-200 border-t pt-3">
-						{price.categories.map((line) => (
-							<li
-								key={line.id}
-								className="flex items-baseline justify-between gap-2 text-[12px]"
-							>
-								<span className="min-w-0 text-neutral-600">
-									{priceLineLabel(t, line)}{" "}
-									<span className="text-[11px] text-neutral-400">
-										{priceLineDetail(t, line)}
+									<span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-[5px] text-[#525252]">
+										<span>{priceLineLabel(t, line)}</span>
+										<span className="text-[#8a857c] text-[11px]">
+											{priceLineDetail(t, line)}
+										</span>
 									</span>
-								</span>
-								<span className="shrink-0 tabular-nums">
-									{new Intl.NumberFormat(htmlLang(locale), {
-										minimumFractionDigits: 2,
-										maximumFractionDigits: 2,
-									}).format(line.amountRm)}
-								</span>
-							</li>
-						))}
-					</ul>
+									<span className="shrink-0 tabular-nums">
+										{new Intl.NumberFormat(htmlLang(locale), {
+											minimumFractionDigits: 2,
+											maximumFractionDigits: 2,
+										}).format(line.amountRm)}
+									</span>
+								</li>
+							))}
+						</ul>
 
-					<div className="flex flex-col gap-1 border-neutral-200 border-t pt-3 text-[13px]">
-						<div className="flex items-baseline justify-between text-neutral-500">
-							<span>{t.quote.subtotal}</span>
-							<span className="tabular-nums">{formatRm(price.totalRm)}</span>
+						<div className="flex flex-col gap-[5px] border-[#e5e5e5] border-t pt-3 text-[13px]">
+							<div className="flex justify-between text-[#5c574e]">
+								<span>{t.quote.subtotal}</span>
+								<span className="tabular-nums">{formatRm(price.totalRm)}</span>
+							</div>
+							<div className="flex justify-between text-[#5c574e]">
+								<span>{t.quote.delivery}</span>
+								<span className="tabular-nums">{formatRm(deliveryRm)}</span>
+							</div>
+							<div className="mt-1 flex items-baseline justify-between">
+								<span className="font-medium">{t.quote.total}</span>
+								<span className="font-semibold text-[20px] tabular-nums">
+									{total}
+								</span>
+							</div>
+							<p className="mt-0.5 text-[#5c574e] text-[12px]">
+								{t.quote.oneOffPayment}
+							</p>
 						</div>
-						<div className="flex items-baseline justify-between text-neutral-500">
-							<span>{t.quote.delivery}</span>
-							<span className="tabular-nums">{formatRm(deliveryRm)}</span>
-						</div>
-						<div className="mt-1 flex items-baseline justify-between">
-							<span className="font-medium">{t.quote.total}</span>
-							<span className="font-semibold text-xl tabular-nums">
-								{formatRm(totalRm)}
-							</span>
-						</div>
-						<p className="mt-0.5 text-[12px] text-neutral-500">
-							{t.quote.oneOffPayment}
-						</p>
-					</div>
-				</aside>
+					</aside>
+				</div>
 			</div>
 		</main>
-	);
-}
-
-function FieldError({
-	id,
-	message,
-	className = "",
-}: {
-	id: string;
-	message?: string;
-	className?: string;
-}) {
-	if (!message) return null;
-	return (
-		<p
-			id={id}
-			role="alert"
-			className={`text-[#b42318] text-[12px] ${className}`}
-		>
-			{message}
-		</p>
 	);
 }
