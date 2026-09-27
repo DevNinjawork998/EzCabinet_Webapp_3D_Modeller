@@ -129,11 +129,11 @@ describe("requestToken", () => {
 		expect(token.expires_in).toBe(36000);
 	});
 
-	it("names the payload when the reply is not the shape we expect", async () => {
+	it("says it could not read the reply, without the payload", async () => {
 		stubResponses({ status_code: 401, message: "Unauthorized access" });
 
 		await expect(requestToken({ grant_type: "refresh_token" })).rejects.toThrow(
-			/not the shape we expect/,
+			/could not be read/,
 		);
 	});
 });

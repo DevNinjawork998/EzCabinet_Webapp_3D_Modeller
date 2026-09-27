@@ -6,6 +6,8 @@ import type { NextConfig } from "next";
  * planner, a tutorial video, an admin upload and a label preview with no
  * violations in the console. The third-party hosts are the ones the browser
  * talks to directly: Mux for video and uploads, Blob for admin client uploads.
+ * Stripe.js and its API for the checkout Payment Element; `payment` in the
+ * Permissions-Policy lets its iframe offer Apple Pay and Google Pay.
  * PostHog, Vercel Analytics and BotID are same-origin rewrites. `frame-src`
  * is `https:` because the delivery panel previews a carrier's label, whose
  * host is theirs to choose.
@@ -15,12 +17,12 @@ import type { NextConfig } from "next";
  */
 const csp = [
 	"default-src 'self'",
-	`script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
+	`script-src 'self' 'unsafe-inline' https://js.stripe.com https://*.js.stripe.com${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
 	"style-src 'self' 'unsafe-inline'",
 	"img-src 'self' data: blob: https://image.mux.com",
 	"font-src 'self' data:",
 	"media-src 'self' blob: https://stream.mux.com",
-	"connect-src 'self' https://stream.mux.com https://*.litix.io https://storage.googleapis.com https://vercel.com https://*.blob.vercel-storage.com",
+	"connect-src 'self' https://api.stripe.com https://stream.mux.com https://*.litix.io https://storage.googleapis.com https://vercel.com https://*.blob.vercel-storage.com",
 	"worker-src 'self' blob:",
 	"frame-src 'self' https:",
 	"frame-ancestors 'self'",
@@ -38,7 +40,8 @@ const securityHeaders = [
 	{ key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
 	{
 		key: "Permissions-Policy",
-		value: "camera=(), microphone=(), geolocation=(), payment=()",
+		value:
+			'camera=(), microphone=(), geolocation=(), payment=(self "https://js.stripe.com")',
 	},
 	// No `preload`: that is a commitment for every subdomain of the custom
 	// domain, which is EzCabinet's call once it exists.

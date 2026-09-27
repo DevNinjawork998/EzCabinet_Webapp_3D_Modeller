@@ -84,7 +84,7 @@ export type NotificationDraft = {
 
 const TEMPLATE: Record<NotificationKind, string> = {
 	ORDER_PLACED: "order_placed",
-	PAYMENT_CONFIRMED: "payment_confirmed",
+	PAYMENT_CONFIRMED: "payment_confirmed_cabinet",
 	STAGE: "production_stage",
 	DELIVERY_BOOKED: "delivery_booked",
 	PICKED_UP: "delivery_picked_up",
@@ -93,7 +93,11 @@ const TEMPLATE: Record<NotificationKind, string> = {
 };
 
 /** Meta's language codes for the locales we serve. */
-const LANGUAGE: Record<Locale, string> = { en: "en", zh: "zh_CN", ms: "ms" };
+export const LANGUAGE: Record<Locale, string> = {
+	en: "en",
+	zh: "zh_CN",
+	ms: "ms",
+};
 
 export const localeOf = (value: string): Locale =>
 	isLocale(value) ? value : "en";

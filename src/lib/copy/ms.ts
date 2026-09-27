@@ -22,6 +22,7 @@ export const ms: Dictionary = {
 			finishes: "Kemasan",
 			faq: "Soalan lazim",
 			tutorials: "Tutorial",
+			myOrders: "Pesanan saya",
 			menu: "Menu",
 			startPlanning: "Mula reka bentuk",
 			admin: "Pentadbir",
@@ -387,8 +388,31 @@ export const ms: Dictionary = {
 			"Saya faham pereka bentuk akan mengukur semula di tapak sebelum pengeluaran dan akan menghubungi saya jika reka bentuk perlu diubah.",
 		whatsappOptIn: "Hantar kemas kini pesanan ke nombor ini melalui WhatsApp",
 		saved: "Disimpan",
-		submitCta: "Buat pesanan",
+		submitCta: "Teruskan ke pembayaran",
+		progressAriaLabel: "Kemajuan pembayaran",
+		stepDetails: "Butiran",
+		stepPayment: "Bayaran",
+		stepDone: "Selesai",
+		errorNameRequired: "Masukkan nama penuh anda.",
+		errorPhoneRequired: "Masukkan nombor telefon yang boleh kami hubungi.",
+		errorAddressRequired: "Masukkan alamat penghantaran.",
+		errorAddressShort: "Alamat itu kelihatan terlalu pendek.",
+		errorRemeasure: "Tandakan ini untuk meneruskan.",
 		submitting: "Sedang membuat pesanan…",
+		descriptionOnline:
+			"Pereka akan mengukur semula di tapak sebelum apa-apa dibina.",
+		sectionContact: "Hubungan",
+		sectionDelivery: "Penghantaran",
+		sectionPayment: "Pembayaran",
+		payCta: "Bayar · {amount}",
+		paying: "Memproses pembayaran…",
+		paymentSecure:
+			"Pembayaran diproses oleh Stripe. Kami tidak pernah melihat kad atau log masuk bank anda.",
+		paymentFailedTitle: "Pembayaran tidak berjaya",
+		paymentFailedBody:
+			"Tiada caj dikenakan. Butiran anda telah disimpan. Cuba lagi atau pilih cara pembayaran lain.",
+		errorEmailRequired: "Masukkan e-mel untuk resit anda.",
+		oneOffPayment: "Bayaran sekali sahaja",
 		errorGeneric: "Pesanan anda tidak dapat dibuat. Sila cuba lagi.",
 		errorPhone:
 			"Nombor telefon itu kelihatan tidak betul. Sertakan kod kawasan, contohnya 012-345 6789.",
@@ -433,6 +457,19 @@ export const ms: Dictionary = {
 	},
 	order: {
 		breadcrumb: "Pengesahan pesanan",
+		myOrders: "Pesanan saya",
+		headingConfirming: "Mengesahkan pembayaran anda",
+		bodyConfirming:
+			"Terima kasih — kami sedang menunggu pengesahan daripada penyedia pembayaran. Biasanya ini mengambil beberapa saat; muat semula halaman ini untuk menyemak. Anda tidak perlu membayar lagi.",
+		headingProcessing: "Menunggu bank anda",
+		bodyProcessing:
+			"Bank anda belum mengesahkan. Jika wang telah keluar dari akaun anda, ia akan dipaparkan di sini sebaik sahaja disahkan, biasanya dalam masa 30 minit. Anda tidak perlu membayar lagi.",
+		bodyAwaitingOnline:
+			"Terima kasih, pesanan anda telah disimpan. Bayar jumlah di bawah untuk mengesahkannya.",
+		payOnlineHeading: "Bayar dalam talian",
+		payOnlineCta: "Bayar {amount}",
+		payOnlineError:
+			"Kami tidak dapat memuatkan borang pembayaran. Muat semula halaman untuk mencuba lagi.",
 		headingAwaiting: "Pesanan dibuat — menunggu bayaran",
 		bodyAwaiting:
 			"Terima kasih, pesanan anda telah disimpan. Pindahkan jumlah di bawah untuk mengesahkannya.",
@@ -563,6 +600,17 @@ export const ms: Dictionary = {
 	whatsapp: {
 		autoReply:
 			"Nombor ini hanya menghantar kemas kini pesanan EzCabinet. Untuk berbual dengan pasukan kami, hantar mesej ke {number}",
+	},
+	orders: {
+		breadcrumb: "Pesanan saya",
+		heading: "Pesanan saya",
+		empty: "Belum ada pesanan",
+		emptyBody: "Reka bilik dan buat pesanan — ia akan dipaparkan di sini.",
+		startPlanning: "Mula reka bentuk",
+		placedOn: "Dibuat {date}",
+		statusAwaiting: "Menunggu bayaran",
+		statusPaid: "Dibayar",
+		statusCancelled: "Dibatalkan",
 	},
 	signIn: {
 		heading: "Log masuk",

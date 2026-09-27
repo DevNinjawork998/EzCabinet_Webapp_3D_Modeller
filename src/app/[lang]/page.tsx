@@ -222,6 +222,9 @@ export default async function Home({
 						<Link href={`/${lang}/tutorials`} className={navLink}>
 							{t.landing.nav.tutorials}
 						</Link>
+						<Link href={`/${lang}/orders`} className={navLink}>
+							{t.landing.nav.myOrders}
+						</Link>
 					</nav>
 					<div className="flex shrink-0 items-center gap-4">
 						{/* Inline here rather than the strip above the bar: one row of
@@ -283,6 +286,9 @@ export default async function Home({
 								))}
 								<Link href={`/${lang}/tutorials`} className={navLink}>
 									{t.landing.nav.tutorials}
+								</Link>
+								<Link href={`/${lang}/orders`} className={navLink}>
+									{t.landing.nav.myOrders}
 								</Link>
 								<div
 									className="mt-1 border-t px-2.5 pt-2 pb-1"

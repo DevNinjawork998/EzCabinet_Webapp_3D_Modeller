@@ -372,14 +372,17 @@ model Order {
   deliveries Delivery[]
   notifications Notification[]
 
-  /// Null on a pre-cutover or anonymous order. `publicToken` still opens it.
-  userId       String?
-  user         User?   @relation("OrderCustomer", fields: [userId], references: [id])
+  /// The account that placed it — the only customer who may see it
+  /// (`lib/orders/access.ts`). Restrict: an order is a money record and
+  /// outlives any attempt to delete the account.
+  userId       String
+  user         User    @relation("OrderCustomer", fields: [userId], references: [id], onDelete: Restrict)
   /// Null on a pre-cutover order marked paid before accounts existed.
   paidByUserId String?
   paidByUser   User?   @relation("OrderPaidBy", fields: [paidByUserId], references: [id])
 
   @@index([status, createdAt])
+  @@index([userId, createdAt])
 }
 
 enum OrderStatus {

@@ -9,10 +9,11 @@ export const metadata = { robots: { index: false, follow: false } };
 
 /**
  * Checkout's one hard stop. Browsing, planning and pricing stay anonymous —
- * the conversion decision in CLAUDE.md — so this page is only ever reached
- * from a 401 at `POST /api/orders`, and `?next=` is where it sends the
- * customer back to. The design itself is already safe in `plannerDraft`'s
- * localStorage, not carried through this redirect.
+ * the conversion decision in CLAUDE.md — so this page is reached from a 401
+ * at `POST /api/orders`, and also wherever the order, tracking or My-orders
+ * pages send a signed-out visitor; `?next=` is where it sends the customer
+ * back to in every case. The design itself is already safe in
+ * `plannerDraft`'s localStorage, not carried through this redirect.
  *
  * Google only. Facebook is deferred — it needs EzCabinet's business
  * verification — and lands as one more button here plus one more block in

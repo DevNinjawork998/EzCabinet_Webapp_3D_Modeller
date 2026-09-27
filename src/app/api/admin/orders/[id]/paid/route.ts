@@ -3,8 +3,7 @@ import { z } from "zod";
 import { BYPASS_USER } from "@/lib/auth/requireAuth";
 import { withAuth } from "@/lib/auth/route";
 import { prisma } from "@/lib/catalogue/db";
-import { enqueue, flushSoon } from "@/lib/whatsapp/outbox";
-import { draftFor, NOTIFY_ORDER_SELECT } from "@/lib/whatsapp/templates";
+import { markOrderPaid } from "@/lib/orders/markPaid";
 
 export const runtime = "nodejs";
 
@@ -15,8 +14,8 @@ const bodySchema = z.object({
 /**
  * Manual payment: an admin confirms the bank transfer arrived.
  *
- * A conditional update rather than read-then-write, so two admins pressing at
- * once cannot both mark it, and a cancelled order cannot be revived as paid.
+ * `markOrderPaid` is conditional, so two admins pressing at once cannot both
+ * mark it, and a cancelled order cannot be revived as paid.
  *
  * `BYPASS_USER.id` is not a real row, so it must not go into a foreign key —
  * a bypass admin marking an order paid still leaves `paidByUserId` null.
@@ -33,27 +32,11 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
 			);
 		}
 
-		const notificationIds = await prisma.$transaction(async (tx) => {
-			const { count } = await tx.order.updateMany({
-				where: { id, status: "AWAITING_PAYMENT" },
-				data: {
-					status: "PAID",
-					paidAt: new Date(),
-					paidByUserId: user.id === BYPASS_USER.id ? null : user.id,
-					paymentRef: parsed.data.paymentRef,
-				},
-			});
-			if (count !== 1) return null;
-			const order = await tx.order.findUniqueOrThrow({
-				where: { id },
-				select: NOTIFY_ORDER_SELECT,
-			});
-			return enqueue(tx, [draftFor({ kind: "PAYMENT_CONFIRMED", order })]);
+		const marked = await markOrderPaid(id, {
+			paidByUserId: user.id === BYPASS_USER.id ? null : user.id,
+			paymentRef: parsed.data.paymentRef,
 		});
-		if (notificationIds) {
-			flushSoon(notificationIds);
-			return NextResponse.json({ ok: true });
-		}
+		if (marked) return NextResponse.json({ ok: true });
 
 		const exists = await prisma.order.findUnique({
 			where: { id },

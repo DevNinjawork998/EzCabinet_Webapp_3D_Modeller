@@ -298,7 +298,7 @@ describe("chooseRate", () => {
 
 	it("names the shape it could not read", () => {
 		expect(() => chooseRate({ nope: true })).toThrow(
-			/FedEx's rate reply was not the shape we expect/,
+			/FedEx's rate reply could not be read/,
 		);
 	});
 });
@@ -549,7 +549,7 @@ describe("fedexBook", () => {
 		});
 
 		const rejection = await fedexBook(job(), quote).catch((error) => error);
-		expect(rejection.message).toMatch(/fedex responded 400/);
+		expect(rejection.message).toMatch(/FedEx turned this request down/);
 		expect(rejection.message).not.toMatch(/may have created/);
 	});
 

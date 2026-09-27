@@ -536,7 +536,7 @@ function readReply<T>(schema: z.ZodType<T>, payload: unknown, what: string): T {
 	const seen = JSON.stringify(payload) ?? String(payload);
 	trace("gdex.unreadable", { what, payload: seen });
 	throw new Error(
-		`GDEX's ${what} reply was not the shape we expect: ${seen.slice(0, 200)}`,
+		`GDEX's ${what} reply could not be read — try again, and tell the developer if it keeps happening.`,
 	);
 }
 
