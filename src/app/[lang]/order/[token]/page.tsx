@@ -90,6 +90,13 @@ export default async function OrderPage({
 					{t.common.brand}
 				</Link>
 				<span>/</span>
+				<Link
+					href={`/${lang}/orders`}
+					className="px-1 py-1.5 hover:text-neutral-600"
+				>
+					{o.myOrders}
+				</Link>
+				<span>/</span>
 				<span className="px-1 py-1.5 font-medium text-[#171717]">
 					{o.breadcrumb}
 				</span>

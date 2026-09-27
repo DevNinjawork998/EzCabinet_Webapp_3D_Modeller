@@ -22,6 +22,7 @@ export const ms: Dictionary = {
 			finishes: "Kemasan",
 			faq: "Soalan lazim",
 			tutorials: "Tutorial",
+			myOrders: "Pesanan saya",
 			menu: "Menu",
 			startPlanning: "Mula reka bentuk",
 			admin: "Pentadbir",
@@ -442,6 +443,7 @@ export const ms: Dictionary = {
 	},
 	order: {
 		breadcrumb: "Pengesahan pesanan",
+		myOrders: "Pesanan saya",
 		headingAwaiting: "Pesanan dibuat — menunggu bayaran",
 		bodyAwaiting:
 			"Terima kasih, pesanan anda telah disimpan. Pindahkan jumlah di bawah untuk mengesahkannya.",
@@ -572,6 +574,17 @@ export const ms: Dictionary = {
 	whatsapp: {
 		autoReply:
 			"Nombor ini hanya menghantar kemas kini pesanan EzCabinet. Untuk berbual dengan pasukan kami, hantar mesej ke {number}",
+	},
+	orders: {
+		breadcrumb: "Pesanan saya",
+		heading: "Pesanan saya",
+		empty: "Belum ada pesanan",
+		emptyBody: "Reka bilik dan buat pesanan — ia akan dipaparkan di sini.",
+		startPlanning: "Mula merancang",
+		placedOn: "Dibuat {date}",
+		statusAwaiting: "Menunggu bayaran",
+		statusPaid: "Dibayar",
+		statusCancelled: "Dibatalkan",
 	},
 	signIn: {
 		heading: "Log masuk",

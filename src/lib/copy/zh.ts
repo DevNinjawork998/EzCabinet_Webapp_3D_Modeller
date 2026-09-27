@@ -23,6 +23,7 @@ export const zh: Dictionary = {
 			finishes: "板材选择",
 			faq: "常见问题",
 			tutorials: "教学视频",
+			myOrders: "我的订单",
 			menu: "菜单",
 			startPlanning: "开始设计",
 			admin: "管理员",
@@ -417,6 +418,7 @@ export const zh: Dictionary = {
 	},
 	order: {
 		breadcrumb: "订单确认",
+		myOrders: "我的订单",
 		headingAwaiting: "订单已提交——等待付款",
 		bodyAwaiting: "谢谢，您的订单已保存。请转账以下总额以确认订单。",
 		headingPaid: "订单已确认",
@@ -538,6 +540,17 @@ export const zh: Dictionary = {
 	whatsapp: {
 		autoReply:
 			"此号码仅用于发送 EzCabinet 订单通知。如需与我们的团队联系，请发送信息至 {number}",
+	},
+	orders: {
+		breadcrumb: "我的订单",
+		heading: "我的订单",
+		empty: "暂无订单",
+		emptyBody: "规划房间并下单后，订单会显示在这里。",
+		startPlanning: "开始规划",
+		placedOn: "下单于 {date}",
+		statusAwaiting: "待付款",
+		statusPaid: "已付款",
+		statusCancelled: "已取消",
 	},
 	signIn: {
 		heading: "登录",

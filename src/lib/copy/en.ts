@@ -27,6 +27,7 @@ export const en = {
 			finishes: "Finishes",
 			faq: "FAQ",
 			tutorials: "Tutorials",
+			myOrders: "My orders",
 			menu: "Menu",
 			startPlanning: "Start planning",
 			admin: "Admin",
@@ -438,6 +439,7 @@ export const en = {
 	/** The page a customer lands on after checkout, reached by its public token. */
 	order: {
 		breadcrumb: "Order confirmation",
+		myOrders: "My orders",
 		headingAwaiting: "Order placed — awaiting payment",
 		bodyAwaiting:
 			"Thanks, your order is saved. Transfer the total below to confirm it.",
@@ -582,6 +584,17 @@ export const en = {
 	whatsapp: {
 		autoReply:
 			"This number only sends EzCabinet order updates. To chat with our team, message us at {number}",
+	},
+	orders: {
+		breadcrumb: "My orders",
+		heading: "My orders",
+		empty: "No orders yet",
+		emptyBody: "Plan a room and place an order — it will show up here.",
+		startPlanning: "Start planning",
+		placedOn: "Placed {date}",
+		statusAwaiting: "Awaiting payment",
+		statusPaid: "Paid",
+		statusCancelled: "Cancelled",
 	},
 	/** The one hard stop before checkout — see CLAUDE.md's conversion decision. */
 	signIn: {
