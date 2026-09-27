@@ -1,9 +1,10 @@
 /**
  * The one reader of AUTH_ENABLED.
  *
- * Off, the admin surface opens and checkout accepts an anonymous order —
- * today's behaviour minus the password prompt, so the planner can be worked on
- * without signing in.
+ * Off, the admin surface opens and a developer can open any customer order
+ * page without signing in. Checkout still requires a real signed-in user in
+ * every environment — the flag never lets `POST /api/orders` take an
+ * anonymous order.
  *
  * The production guard is not a convenience. A misdeployed environment
  * variable must not be able to unlock the admin surface or the orders API, so

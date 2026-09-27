@@ -546,7 +546,7 @@ export const zh: Dictionary = {
 		heading: "我的订单",
 		empty: "暂无订单",
 		emptyBody: "规划房间并下单后，订单会显示在这里。",
-		startPlanning: "开始规划",
+		startPlanning: "开始设计",
 		placedOn: "下单于 {date}",
 		statusAwaiting: "待付款",
 		statusPaid: "已付款",

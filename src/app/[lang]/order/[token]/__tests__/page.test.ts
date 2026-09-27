@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthUser } from "@/lib/auth/session";
 
 const currentUser = vi.hoisted(() => vi.fn<() => Promise<AuthUser | null>>());
@@ -44,6 +44,8 @@ const ORDER = {
 
 const open = (token = "tok") =>
 	OrderPage({ params: Promise.resolve({ lang: "en", token }) });
+
+afterEach(() => vi.unstubAllEnvs());
 
 beforeEach(() => {
 	vi.stubEnv("VERCEL_ENV", undefined);

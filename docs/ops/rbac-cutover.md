@@ -151,8 +151,10 @@ and none of them fail loudly at deploy time.
    fallback on `/admin/login` is what gets a staff member into `/admin/users`
    to fix whatever is wrong.
 
-Existing orders keep `userId = null` and stay reachable by `publicToken`.
-Nothing is back-filled by the migration itself.
+Ownerless orders are removed by migration `20260927000000_order_owner_required`,
+which must not be applied to a database until its ownerless orders have been
+checked by status (see that migration). Every order now belongs to an
+account, and its page opens only for the owner or staff (`lib/orders/access.ts`).
 
 ## Rollback
 

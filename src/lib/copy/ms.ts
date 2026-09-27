@@ -580,7 +580,7 @@ export const ms: Dictionary = {
 		heading: "Pesanan saya",
 		empty: "Belum ada pesanan",
 		emptyBody: "Reka bilik dan buat pesanan — ia akan dipaparkan di sini.",
-		startPlanning: "Mula merancang",
+		startPlanning: "Mula reka bentuk",
 		placedOn: "Dibuat {date}",
 		statusAwaiting: "Menunggu bayaran",
 		statusPaid: "Dibayar",
