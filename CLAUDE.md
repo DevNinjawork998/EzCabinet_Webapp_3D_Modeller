@@ -531,7 +531,9 @@ colleague's work address is the assertion that it is theirs.
 
 `AUTH_ENABLED=false` opens the admin surface and lets you open any customer
 order page, for local work. It never lets checkout take an anonymous order —
-every order needs an owner, so local checkout needs a Google sign-in.
+every order needs an owner, so local checkout needs a Google sign-in. It is
+ignored whenever `VERCEL_ENV` is set — preview included, since a preview is a
+public URL with real carrier credentials behind it.
 
 Public password sign-up is closed (`disabledPaths: ["/sign-up/email"]` in
 `lib/auth.ts`); invites and the seed call `auth.api.signUpEmail` server-side,
