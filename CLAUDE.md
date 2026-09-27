@@ -539,9 +539,9 @@ colleague's work address is the assertion that it is theirs.
 order page, for local work. It never lets checkout take an anonymous order —
 every order needs an owner, so local checkout needs a Google sign-in. It is
 ignored whenever `VERCEL_ENV` is set — preview included, since a preview is a
-public URL with real carrier credentials behind it. Local My orders is empty
-in that mode — the viewer is the bypass user, not the Google account that
-placed the order.
+public URL with real carrier credentials behind it. On customer order pages a
+real Google session still wins over the bypass user, so local My orders lists
+the signed-in account's orders.
 
 Public password sign-up is closed (`disabledPaths: ["/sign-up/email"]` in
 `lib/auth.ts`); invites and the seed call `auth.api.signUpEmail` server-side,

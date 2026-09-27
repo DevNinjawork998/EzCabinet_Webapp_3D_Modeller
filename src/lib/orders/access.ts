@@ -25,11 +25,13 @@ export function canViewOrder(
 /**
  * The signed-in viewer of a customer page, or a trip through Google sign-in
  * that lands back on `path`. With AUTH_ENABLED off (local only) the viewer is
- * the bypass superadmin, as on the admin surface.
+ * the signed-in account if there is one, else the bypass superadmin.
  */
 export async function viewerOf(lang: string, path: string): Promise<AuthUser> {
-	if (!authEnabled()) return BYPASS_USER;
 	const user = await currentUser();
+	// Local only. A real session still wins: checkout always needs one, so
+	// that is whose orders these are.
+	if (!authEnabled()) return user ?? BYPASS_USER;
 	if (user === null) {
 		redirect(`/${lang}/sign-in?next=${encodeURIComponent(path)}`);
 	}

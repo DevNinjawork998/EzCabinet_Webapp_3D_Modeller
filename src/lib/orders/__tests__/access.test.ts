@@ -74,9 +74,20 @@ describe("viewerOf", () => {
 		await expect(viewerOf("en", "/en/orders")).rejects.toThrow(/REDIRECT/);
 	});
 
-	it("is the bypass superadmin when AUTH_ENABLED is off locally", async () => {
+	it("is the bypass superadmin when AUTH_ENABLED is off and nobody is signed in", async () => {
 		vi.stubEnv("AUTH_ENABLED", "false");
+		currentUser.mockResolvedValue(null);
 		await expect(viewerOf("en", "/en/orders")).resolves.toBe(BYPASS_USER);
-		expect(currentUser).not.toHaveBeenCalled();
+		expect(redirect).not.toHaveBeenCalled();
+	});
+
+	// Checkout always needs a real account, so local orders belong to it. With
+	// the bypass winning, local My orders was always empty.
+	it("is the signed-in account when AUTH_ENABLED is off and someone is signed in", async () => {
+		vi.stubEnv("AUTH_ENABLED", "false");
+		currentUser.mockResolvedValue(user({ id: "owner" }));
+		await expect(viewerOf("en", "/en/orders")).resolves.toMatchObject({
+			id: "owner",
+		});
 	});
 });
