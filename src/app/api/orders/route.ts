@@ -1,7 +1,6 @@
 import { checkBotId } from "botid/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authEnabled } from "@/lib/auth/enabled";
 import { currentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/catalogue/db";
 import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
@@ -56,8 +55,11 @@ export async function POST(request: Request) {
 
 	// Checkout is the one hard stop. Everything before it — browsing, planning,
 	// pricing — stays anonymous, which is the conversion decision in CLAUDE.md.
-	const user = authEnabled() ? await currentUser() : null;
-	if (authEnabled() && !user) {
+	// Every order belongs to an account, in every environment: AUTH_ENABLED=false
+	// opens the admin surface but never lets an ownerless order in, because
+	// an order nobody owns is an order nobody can be shown.
+	const user = await currentUser();
+	if (!user) {
 		return NextResponse.json({ error: "sign_in_required" }, { status: 401 });
 	}
 
@@ -114,7 +116,7 @@ export async function POST(request: Request) {
 				deliveryRm: price.deliveryRm,
 				totalRm: price.totalRm,
 				paymentProvider: PAYMENT_PROVIDER,
-				userId: user?.id ?? null,
+				userId: user.id,
 				whatsappOptIn,
 				whatsappOptInAt: whatsappOptIn ? new Date() : null,
 				locale,
