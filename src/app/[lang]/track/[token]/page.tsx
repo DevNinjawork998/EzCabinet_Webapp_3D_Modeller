@@ -12,6 +12,7 @@ import {
 	shipmentBooked,
 	trackingTone,
 } from "@/lib/logistics/publicTracking";
+import { canViewOrder, viewerOf } from "@/lib/orders/access";
 import { CopyOrderId } from "./CopyOrderId";
 
 /**
@@ -26,6 +27,10 @@ import { CopyOrderId } from "./CopyOrderId";
  * A server component with no client fetch: it is one query, it must be right in
  * the first paint on a phone on mobile data, and everything moving on it moves
  * at courier speed rather than at render speed.
+ *
+ * A delivery that belongs to an order is locked like the order page
+ * (`lib/orders/access.ts`); a standalone admin-booked one stays link-access,
+ * since its recipient has no account.
  */
 
 /**
@@ -94,11 +99,16 @@ export default async function TrackPage({
 					orderBy: { at: "desc" },
 					select: { id: true, at: true, status: true },
 				},
+				order: { select: { userId: true } },
 			},
 		}),
 		getDictionary(lang),
 	]);
 	if (delivery === null) notFound();
+	if (delivery.order !== null) {
+		const viewer = await viewerOf(lang, `/${lang}/track/${token}`);
+		if (!canViewOrder(viewer, delivery.order)) notFound();
+	}
 
 	const booked = shipmentBooked(delivery.status);
 	const tone = trackingTone(delivery.status);

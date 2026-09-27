@@ -6,6 +6,7 @@ import { prisma } from "@/lib/catalogue/db";
 import { getDictionary } from "@/lib/copy/dictionary";
 import { fill } from "@/lib/copy/fill";
 import { isLocale } from "@/lib/copy/locales";
+import { canViewOrder, viewerOf } from "@/lib/orders/access";
 import { paymentInstructions } from "@/lib/orders/payment";
 import { orderRef } from "@/lib/orders/ref";
 import { STAGES, stageReached } from "@/lib/orders/stage";
@@ -15,8 +16,10 @@ import { summaryLines } from "@/lib/orders/summary";
  * The page a customer lands on after checkout: what they ordered, what it
  * cost, how to pay, and — once logistics has a job — a link to follow it.
  *
- * Reached by the order's unguessable `publicToken`, never its number, and
- * never indexed: it carries a home address.
+ * Addressed by the order's `publicToken`, never its number, and never
+ * indexed: it carries a home address. The token is an address, not a key —
+ * only the account that placed the order, or staff, may open it
+ * (`lib/orders/access.ts`). Anyone else gets the same 404 as a made-up token.
  */
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -38,6 +41,7 @@ export default async function OrderPage({
 }) {
 	const { lang, token } = await params;
 	if (!isLocale(lang)) notFound();
+	const viewer = await viewerOf(lang, `/${lang}/order/${token}`);
 
 	const [order, t] = await Promise.all([
 		prisma.order.findUnique({
@@ -45,6 +49,7 @@ export default async function OrderPage({
 			// Short on purpose: the row also holds the phone number, the email and
 			// who marked it paid, none of which this page shows.
 			select: {
+				userId: true,
 				number: true,
 				createdAt: true,
 				status: true,
@@ -63,7 +68,7 @@ export default async function OrderPage({
 		}),
 		getDictionary(lang),
 	]);
-	if (order === null) notFound();
+	if (order === null || !canViewOrder(viewer, order)) notFound();
 
 	const o = t.order;
 	const ref = orderRef(order.number, order.createdAt);
