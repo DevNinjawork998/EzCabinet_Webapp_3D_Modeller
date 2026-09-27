@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyOrderId } from "@/app/[lang]/track/[token]/CopyOrderId";
+import {
+	priceLineDetail,
+	priceLineLabel,
+} from "@/components/planner/priceLineCopy";
 import { prisma } from "@/lib/catalogue/db";
 import { getDictionary } from "@/lib/copy/dictionary";
 import { fill } from "@/lib/copy/fill";
@@ -9,7 +13,7 @@ import { canViewOrder, viewerOf } from "@/lib/orders/access";
 import { paymentInstructions } from "@/lib/orders/payment";
 import { orderRef } from "@/lib/orders/ref";
 import { STAGES, stageReached } from "@/lib/orders/stage";
-import { summaryLines } from "@/lib/orders/summary";
+import { summaryExtras, summaryLines } from "@/lib/orders/summary";
 import { activeGateway } from "@/lib/payments/registry";
 import { OnlinePayment } from "./OnlinePayment";
 import { RefreshWhileSettling } from "./RefreshWhileSettling";
@@ -81,6 +85,7 @@ export default async function OrderPage({
 	const o = t.order;
 	const ref = orderRef(order.number, order.createdAt);
 	const lines = summaryLines(order.breakdown);
+	const extras = summaryExtras(order.breakdown);
 	const delivery = order.deliveries[0] ?? null;
 	const awaiting = order.status === "AWAITING_PAYMENT";
 	// Paid at the gateway, webhook not landed yet — or the bank still deciding.
@@ -157,6 +162,24 @@ export default async function OrderPage({
 									<p className="mb-0.5 font-medium text-[13px]">{line.name}</p>
 									<p className="text-[#8a857c] text-[12px]">
 										{fill(o.qty, { count: line.qty })}
+									</p>
+								</div>
+								<span className="shrink-0 font-medium text-[13px] tabular-nums">
+									{rm(line.amountRm)}
+								</span>
+							</div>
+						))}
+						{extras.map((line) => (
+							<div
+								key={line.id}
+								className="flex items-start justify-between gap-3 border-[#f1f0ed] border-b py-2.5"
+							>
+								<div>
+									<p className="mb-0.5 font-medium text-[13px]">
+										{priceLineLabel(t, line)}
+									</p>
+									<p className="text-[#8a857c] text-[12px]">
+										{priceLineDetail(t, line)}
 									</p>
 								</div>
 								<span className="shrink-0 font-medium text-[13px] tabular-nums">

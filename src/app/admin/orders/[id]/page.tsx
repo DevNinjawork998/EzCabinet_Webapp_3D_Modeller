@@ -1,10 +1,15 @@
 import { notFound } from "next/navigation";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import {
+	priceLineDetail,
+	priceLineLabel,
+} from "@/components/planner/priceLineCopy";
 import { requirePage } from "@/lib/auth/page";
 import { prisma } from "@/lib/catalogue/db";
 import { readPublishedPlannerCatalogue } from "@/lib/catalogue/store";
+import { en } from "@/lib/copy/en";
 import { orderRef } from "@/lib/orders/ref";
-import { summaryLines } from "@/lib/orders/summary";
+import { summaryExtras, summaryLines } from "@/lib/orders/summary";
 import { OrderDetail } from "./OrderDetail";
 
 export default async function OrderAdminPage({
@@ -69,7 +74,15 @@ export default async function OrderAdminPage({
 					addressNotes: order.addressNotes,
 					roomLabel,
 					finishLabel,
-					lines: summaryLines(order.breakdown),
+					lines: [
+						...summaryLines(order.breakdown),
+						// Worktop, trim, kick board, end panels: charged, so listed.
+						...summaryExtras(order.breakdown).map((line) => ({
+							name: `${priceLineLabel(en, line)} (${priceLineDetail(en, line)})`,
+							qty: 1,
+							amountRm: line.amountRm,
+						})),
+					],
 					cabinetsRm: order.cabinetsRm,
 					deliveryRm: order.deliveryRm,
 					totalRm: order.totalRm,
