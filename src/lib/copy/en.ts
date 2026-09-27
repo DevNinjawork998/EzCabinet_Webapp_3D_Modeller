@@ -456,7 +456,7 @@ export const en = {
 		myOrders: "My orders",
 		headingConfirming: "Confirming your payment",
 		bodyConfirming:
-			"Thanks — we're waiting for the payment provider to confirm. This usually takes a few seconds; refresh this page to check. You don't need to pay again.",
+			"Thanks — we're waiting for the payment provider to confirm. This usually takes a few seconds, and this page updates by itself. You don't need to pay again.",
 		headingProcessing: "Waiting for your bank",
 		bodyProcessing:
 			"Your bank hasn't confirmed yet. If money left your account it will show here once they do, usually within 30 minutes. You don't need to pay again.",

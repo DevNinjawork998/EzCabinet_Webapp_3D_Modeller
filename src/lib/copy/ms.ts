@@ -460,7 +460,7 @@ export const ms: Dictionary = {
 		myOrders: "Pesanan saya",
 		headingConfirming: "Mengesahkan pembayaran anda",
 		bodyConfirming:
-			"Terima kasih — kami sedang menunggu pengesahan daripada penyedia pembayaran. Biasanya ini mengambil beberapa saat; muat semula halaman ini untuk menyemak. Anda tidak perlu membayar lagi.",
+			"Terima kasih — kami sedang menunggu pengesahan daripada penyedia pembayaran. Biasanya ini mengambil beberapa saat, dan halaman ini akan dikemas kini sendiri. Anda tidak perlu membayar lagi.",
 		headingProcessing: "Menunggu bank anda",
 		bodyProcessing:
 			"Bank anda belum mengesahkan. Jika wang telah keluar dari akaun anda, ia akan dipaparkan di sini sebaik sahaja disahkan, biasanya dalam masa 30 minit. Anda tidak perlu membayar lagi.",

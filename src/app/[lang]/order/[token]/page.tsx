@@ -13,6 +13,7 @@ import { STAGES, stageReached } from "@/lib/orders/stage";
 import { summaryLines } from "@/lib/orders/summary";
 import { activeGateway } from "@/lib/payments/registry";
 import { OnlinePayment } from "./OnlinePayment";
+import { RefreshWhileSettling } from "./RefreshWhileSettling";
 
 /**
  * The page a customer lands on after checkout: what they ordered, what it
@@ -135,6 +136,7 @@ export default async function OrderPage({
 				</span>
 			</header>
 
+			{settling && <RefreshWhileSettling />}
 			<main className="flex flex-1 justify-center px-6 py-14">
 				<div className="flex w-full max-w-[560px] flex-col gap-6">
 					<div className="flex flex-col items-center gap-3.5 text-center">

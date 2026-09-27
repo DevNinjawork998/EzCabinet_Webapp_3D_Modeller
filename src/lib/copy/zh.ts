@@ -433,7 +433,7 @@ export const zh: Dictionary = {
 		myOrders: "我的订单",
 		headingConfirming: "正在确认您的付款",
 		bodyConfirming:
-			"谢谢——我们正在等待支付服务商确认，通常只需几秒钟；请刷新此页面查看。您无需再次付款。",
+			"谢谢——我们正在等待支付服务商确认，通常只需几秒钟，此页面会自动更新。您无需再次付款。",
 		headingProcessing: "正在等待银行确认",
 		bodyProcessing:
 			"您的银行尚未确认。如果款项已从您的账户扣除，确认后会显示在这里，通常在 30 分钟内。您无需再次付款。",
