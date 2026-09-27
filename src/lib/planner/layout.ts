@@ -285,10 +285,12 @@ function overlapsAnything(
 	return spans.some((span) => xMm < span.endMm && xMm + widthMm > span.startMm);
 }
 
-let counter = 0;
-/** ponytail: a counter is enough for a client-side planner; swap for nanoid
- * when layouts start being saved and merged. */
-export const newId = () => `m${++counter}`;
+/**
+ * Random, not a counter: a design outlives the page (the autosaved draft, a
+ * stored order), and a counter restarting at 1 after a reload re-issued ids
+ * the restored cabinets already had — two cabinets answering to one id.
+ */
+export const newId = () => `m-${crypto.randomUUID()}`;
 
 const find = (
 	layout: PlannerLayout,
