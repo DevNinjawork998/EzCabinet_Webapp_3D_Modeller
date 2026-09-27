@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyOrderId } from "@/app/[lang]/track/[token]/CopyOrderId";
-import { CheckoutProgress } from "@/components/planner/CheckoutProgress";
 import { prisma } from "@/lib/catalogue/db";
 import { getDictionary } from "@/lib/copy/dictionary";
 import { fill } from "@/lib/copy/fill";
@@ -122,17 +121,6 @@ export default async function OrderPage({
 				<span>/</span>
 				<span className="px-1 py-1.5 font-medium text-[#171717]">
 					{o.breadcrumb}
-				</span>
-				<span className="ml-auto">
-					<CheckoutProgress
-						ariaLabel={t.quote.progressAriaLabel}
-						labels={[
-							t.quote.stepDetails,
-							t.quote.stepPayment,
-							t.quote.stepDone,
-						]}
-						step={order.status === "PAID" ? 2 : 1}
-					/>
 				</span>
 			</header>
 

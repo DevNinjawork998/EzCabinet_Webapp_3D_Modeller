@@ -1,103 +1,108 @@
 # Stripe integration — remaining steps
 
-Stripe is the **sandbox-test gateway**. EzCabinet may replace it with Fiuu
-(a Malaysian gateway, account in progress), so Stripe is built as one
-adapter behind a gateway contract — see [Swapping gateways](#swapping-gateways--adding-fiuu).
+Stripe is the **sandbox-test gateway**, taking payment through the **Payment
+Element** on a one-page checkout. EzCabinet may replace it with Fiuu (a
+Malaysian gateway, account in progress), so Stripe is one adapter behind a
+gateway contract, chosen by a Vercel feature flag — see
+[Swapping gateways](#swapping-gateways--adding-fiuu).
+
+It replaced an embedded Stripe **Checkout Session** (the Checkout Studio
+parameters that used to be listed here). Checkout Sessions always draw their
+own contact and shipping blocks, so the customer typed their name and address
+twice. The Payment Element draws only the payment method.
 
 ## Values to Replace
 
-The following values must be set before testing. **None of the Checkout
-Session parameters are placeholders** — see the note under the table.
+No placeholders remain in code. Set these per environment.
 
 **Files containing placeholders:**
-- [.env.example](.env.example) — copy the names into `.env.local` (local) and the Vercel project (Preview/Production)
+- [.env.example](.env.example): copy the names into `.env.local` (local) and the Vercel project (Preview/Production)
 
 | Field | Current Value | What to Set |
 |-------|--------------|-------------|
 | `STRIPE_SECRET_KEY` | *(empty)* | `sk_test_…` from https://dashboard.stripe.com/test/apikeys. Server only. |
-| `STRIPE_PUBLISHABLE_KEY` | *(empty)* | `pk_test_…` from the same page. Passed to the browser at runtime, so no `NEXT_PUBLIC_` prefix. |
-| `STRIPE_WEBHOOK_SECRET` | *(empty)* | `whsec_…` for the endpoint `/api/webhooks/payment/stripe` (Dashboard → Workbench → Webhooks), or from `stripe listen` locally. |
+| `STRIPE_PUBLISHABLE_KEY` | *(empty)* | `pk_test_…`. Served to the browser by `GET /api/payments/config`, so no `NEXT_PUBLIC_` prefix is needed. |
+| `STRIPE_WEBHOOK_SECRET` | *(empty)* | `whsec_…` from `stripe listen` locally, or from the Dashboard destination for a deployed URL. |
 
-**`mode` and `line_items` are not placeholders.**
-- **`mode`** is `"payment"`, because an order is a one-time charge. So `payment_method_collection` is left out; it only applies to subscriptions.
-- **`line_items`** does not use a `price_…` Price ID. The total differs for every design, so it uses `price_data`: one line, MYR, `unit_amount` = the order's stored `totalRm` in sen. `POST /api/orders` priced that total on the server. A fixed Price ID would charge the wrong amount, so do not replace it.
+`mode`/`line_items` no longer exist. The PaymentIntent's amount is the
+order's stored `totalRm` in sen, priced on the server by `POST /api/orders`.
 
 ## Configured Parameters
 
-These parameters were configured in Checkout Studio and are already set correctly.
-
 **Files containing these parameters:**
-- [src/lib/payments/stripe.ts](src/lib/payments/stripe.ts): session parameters and API version
-- [src/app/[lang]/order/[token]/StripeForm.tsx](src/app/[lang]/order/[token]/StripeForm.tsx): Stripe.js, beta flag, appearance
+- [src/lib/payments/stripe.ts](src/lib/payments/stripe.ts): the PaymentIntent
+- [src/components/planner/StripePayment.tsx](src/components/planner/StripePayment.tsx): Elements and the Payment Element
 
 | Parameter | Value |
 |-----------|-------|
-| ui_mode | `form` (stripe-node 22.6.2 ≥ 21.0.0) |
-| billing_address_collection | `auto` |
-| phone_number_collection | `{ enabled: false }` |
-| automatic_tax | `{ enabled: false }` |
-| submit_type | `auto` |
-| shipping_address_collection | `{ allowed_countries: ["MY"] }` |
-| name_collection | `{ individual: { enabled: true } }` |
-| saved_payment_method_options | `{ payment_method_save: "enabled" }` |
-| integration_identifier | `custom_embedded_web_0001` |
-| API version | `2026-03-25.dahlia; custom_checkout_payment_form_preview=v1` |
-| Stripe.js | `https://js.stripe.com/dahlia/stripe.js`, `betas: ["custom_checkout_payment_form_1"]` |
-| appearance | `stripe` theme, spaced inputs, PT Serif, `#0570de` primary |
-
-The code also sets `client_reference_id`, `metadata.orderId` / `orderRef`, `customer_email` (pre-filled from the order) and `return_url`.
+| PaymentIntent `currency` | `myr` |
+| `payment_method_types` | `fpx`, `grabpay`, `card`. Listed in both files above and must match. |
+| `metadata` | `orderId`, `orderRef`. The webhook finds the order by `orderId`. |
+| `receipt_email` | the order's email (required on the form when paying online) |
+| Payment Element layout | accordion, radios `always` |
+| `fields.billingDetails` | `never` on checkout (name, email, phone and address are passed from our form in `confirmPayment`), `auto` on the order-page retry |
+| `wallets` | Apple Pay / Google Pay `auto`, **Link `never`**, because Link asks for the email and phone again |
+| appearance | `flat`, Geist, `#171717` primary, `#d4d4d4` borders |
 
 ## Setup
 
-1. Stripe test account → enable **FPX**, **cards** and **GrabPay** under Settings → Payment methods. The form shows whatever is enabled there; the code lists no methods.
-2. Which gateway is live is the **`payment-gateway` Vercel flag**, not an env var — see [Gateway feature flag](#gateway-feature-flag). `.env.local` holds only keys:
+1. **Stripe Dashboard → Settings → Payment methods:** activate **FPX** (Stripe warns it is shown in test mode but hidden in live mode until activated), **GrabPay** and **Cards**. Alipay and Link can stay on; the code excludes them.
+2. **Which gateway is live** is the `payment-gateway` Vercel flag, not an env var. See [Gateway feature flag](#gateway-feature-flag).
+3. **Local webhooks:**
    ```
-   STRIPE_SECRET_KEY=sk_test_...
-   STRIPE_PUBLISHABLE_KEY=pk_test_...
-   STRIPE_WEBHOOK_SECRET=whsec_...
+   stripe listen --events payment_intent.succeeded,payment_intent.processing,payment_intent.payment_failed --forward-to localhost:3000/api/webhooks/payment/stripe
    ```
-3. Local webhooks: `stripe listen --forward-to localhost:3000/api/webhooks/payment/stripe`. It prints the `whsec_…` to use.
-4. Vercel: add the same four variables to **Preview** only while testing, and register a webhook endpoint for the preview URL. Deployment protection blocks Stripe's webhook, so add a protection bypass for that path or test locally.
-5. Dependency already installed: `stripe@22.6.2`.
+   Put the printed `whsec_…` in `STRIPE_WEBHOOK_SECRET` and restart the dev server.
+4. **Deployed URL:** in the Dashboard, create an event destination → Webhook endpoint → `https://<host>/api/webhooks/payment/stripe`. Select exactly those three `payment_intent.*` events, and put its signing secret in that environment's `STRIPE_WEBHOOK_SECRET`. On a preview URL, deployment protection blocks Stripe's calls unless you add a bypass.
+5. Dependencies: `stripe`, `@stripe/stripe-js`, `@stripe/react-stripe-js`.
 
 ## Project structure
 
 ```
+src/flags.ts                        payment-gateway flag (Vercel Flags)
 src/lib/payments/
-  types.ts        the PaymentGateway contract: start() / verify() / ack()
-  registry.ts     payment-gateway flag → adapter; gatewayById for webhooks
-src/flags.ts      the payment-gateway flag (Vercel Flags)
-src/app/.well-known/vercel/flags/route.ts   Flags Explorer discovery
-  stripe.ts       the Stripe adapter (only file importing the stripe SDK)
-src/lib/orders/markPaid.ts                   the one AWAITING_PAYMENT → PAID write (+ WhatsApp)
-src/app/api/orders/[token]/pay/route.ts      start paying: gateway.start(order)
-src/app/api/webhooks/payment/[gateway]/route.ts  verify → amount check → markOrderPaid
-src/app/[lang]/order/[token]/OnlinePayment.tsx   gateway-neutral: embedded form or hosted-page redirect
-src/app/[lang]/order/[token]/StripeForm.tsx      Stripe's iframe form only
+  types.ts        the PaymentGateway contract: client / start / verify / ack
+  registry.ts     flag → adapter; gatewayById keeps old gateways' webhooks alive
+  start.ts        start or resume paying for an order; records paymentProvider + paymentRef
+  stripe.ts       the Stripe adapter: PaymentIntent, webhook events
+src/lib/orders/markPaid.ts                        the one AWAITING_PAYMENT → PAID write (+ WhatsApp)
+src/app/api/payments/config/route.ts              which payment step to draw, before an order exists
+src/app/api/orders/route.ts                       creates the order, then starts its payment
+src/app/api/orders/[token]/pay/route.ts           retry from the order page (resumes the same intent)
+src/app/api/webhooks/payment/[gateway]/route.ts   verify → amount check → markOrderPaid
+src/components/planner/StripePayment.tsx          Elements + Payment Element (Stripe-only)
+src/components/planner/QuoteScreen.tsx            one-page checkout
+src/app/[lang]/order/[token]/OnlinePayment.tsx    order-page retry
 ```
-
-The admin **Mark paid** button (`/api/admin/orders/[id]/paid`) now calls the same `markOrderPaid`.
-`next.config.ts` CSP allows `js.stripe.com` / `api.stripe.com`, and
-`Permissions-Policy: payment` lets Stripe's iframe offer wallets.
 
 ## How it works
 
-1. The customer places an order (`POST /api/orders`). It is priced on the server and stored as `AWAITING_PAYMENT`. They land on `/[lang]/order/[token]`.
-2. If the `payment-gateway` flag serves a gateway whose keys are set, the page shows **Pay online** instead of the bank transfer details. `OnlinePayment` calls `POST /api/orders/[token]/pay`. That route builds a Checkout Session from the stored total and returns `{ kind: "stripe-form", publishableKey, clientSecret }`.
-3. `StripeForm` mounts Stripe's form. On confirm, Stripe redirects back to the order page with `?paid=1`. That flag only changes the wording to "Confirming your payment".
-4. Stripe calls `/api/webhooks/payment/stripe`. The route checks the signature, checks the amount equals the order total in MYR, and calls `markOrderPaid`. That sets PAID, `paymentProvider = "stripe"` and `paymentRef = pi_…`, and queues the WhatsApp message in the same transaction. A mismatch is logged and never marked paid. A retry is a no-op.
+1. The quote page asks `GET /api/payments/config`, and the flag answers `stripe-elements` + publishable key. The page mounts the Payment Element in **deferred mode**, built from the amount; no intent exists yet.
+2. On **Pay**:
+   - our fields and the re-measure box are validated;
+   - `elements.submit()` validates Stripe's fields;
+   - `POST /api/orders` re-prices the design, creates the order (`AWAITING_PAYMENT`), and opens a PaymentIntent for the stored total. It returns `{ token, payment: { clientSecret, … } }`;
+   - `stripe.confirmPayment` runs with our name/email/phone/address as billing and shipping details.
+3. **Card:** 3-D Secure opens over the page. **FPX / GrabPay:** the customer goes to the bank or Grab and comes back. Either way success lands on `/[lang]/order/[token]?redirect_status=succeeded` ("Confirming your payment").
+4. **Declined or cancelled:** the customer stays on the quote page with every field kept, under the "Payment didn't go through" banner. Pay again resumes the **same** order and intent.
+5. `/api/webhooks/payment/stripe` is the source of truth:
+   - `payment_intent.succeeded` → amount checked against the order → `PAID`, `paymentRef = pi_…`, WhatsApp queued;
+   - `processing` and `payment_failed` change nothing.
+6. **Order page:**
+   - `redirect_status=processing` → "Waiting for your bank";
+   - `failed` → the banner plus a retry form;
+   - no gateway → bank transfer details.
 
-**The browser return never marks anything paid.** Only the verified webhook does.
+**One intent per order.** `start.ts` stores the intent id on the order, and a retry resumes it. An intent already `processing` or `succeeded` refuses a new one (409 `payment_in_progress`), so two presses or two tabs can never charge twice.
 
 ## Testing
 
-- Card `4242 4242 4242 4242`, any future expiry, any CVC → paid.
-- Card `4000 0025 0000 3155` → 3-D Secure challenge.
-- Card `4000 0000 0000 9995` → declined; the order stays awaiting.
-- FPX in test mode → pick any bank, then authorise or fail on Stripe's test page.
-- Refresh the order page after paying. It should read "Order confirmed", and `/admin/orders` should show it paid.
+- `4242 4242 4242 4242`, any future expiry, any CVC → paid.
+- `4000 0025 0000 3155` → 3-D Secure challenge.
+- `4000 0000 0000 0002` → declined; the banner shows, nothing is charged, and Pay again works on the same intent.
+- FPX / GrabPay in test mode → Stripe's test authorise/fail page.
 - `pnpm exec vitest run src/app/api/webhooks/payment` covers forged signature, amount mismatch, matching payment and an unknown gateway.
-- **Check first:** `saved_payment_method_options.payment_method_save` may require a Stripe Customer on the session. If session creation errors on it, add `customer_creation: "always"` in `stripe.ts`.
+- Verified in a browser on 2026-09-27: the order-page retry path (decline, then 4242 on the same intent → webhook → "Order confirmed"). **Not yet exercised: Pay on the quote page itself**, which needs a signed-in session. It is the only path with `billingDetails: "never"`, where the address parts we don't collect (city, postcode, state) are sent blank. If Stripe rejects that, the error shows in the banner.
 
 ## Gateway feature flag
 
@@ -110,44 +115,50 @@ The admin **Mark paid** button (`/api/admin/orders/[id]/paid`) now calls the sam
 | production | `manual` (bank transfer) |
 
 - **Switch with no redeploy:** `vercel flags set payment-gateway --environment production --variant stripe`, or from the dashboard.
-- **Try before customers:** a team member can override the flag in their own browser from Flags Explorer (Vercel Toolbar on a preview deployment). This lets you test Fiuu on a deployment while customers still get Stripe.
-- **Safe defaults:**
-  - If Vercel Flags cannot answer, the flag serves `manual`.
-  - A variant with no adapter, or an adapter without keys, also falls back to bank transfer. Checkout never breaks on a flag.
-- **The flag only chooses where new payments start.** Keys stay in env vars, and webhooks ignore the flag (`gatewayById`), so payments begun before a switch still get confirmed.
-- **Local:** evaluated with `VERCEL_OIDC_TOKEN` from `.env.local`. It expires; re-pull if the flag starts serving `manual` unexpectedly. **Do not `vercel env pull` straight into `.env.local`**, which overwrites your local-only secrets. Pull to another file and copy the lines across.
-- **Toolbar in production:** Flags Explorer works on previews out of the box. Production would need `<VercelToolbar />` in the layout, which is left out so the public bundle doesn't grow.
+- **Try before customers:** a team member can override the flag in their own browser from Flags Explorer on a preview deployment.
+- **Safe defaults:** if Vercel Flags cannot answer, the flag serves `manual`. A variant with no adapter, or without keys, also falls back to bank transfer: the quote page shows **Place order** and the order page shows bank details.
+- **The flag only picks where new payments start.** Webhooks ignore it (`gatewayById`), so payments begun before a switch still land.
+- **Local:** evaluated with `VERCEL_OIDC_TOKEN` from `.env.local`, which expires after about 12 hours; a stale one silently serves `manual`. Refresh it by pulling to another file and copying that one line. **Never `vercel env pull` straight into `.env.local`**, because it overwrites local-only secrets.
 
 ## Swapping gateways / adding Fiuu
 
-Every gateway is one adapter implementing `PaymentGateway` (`lib/payments/types.ts`). The adapter owns only what differs between gateways: how to start, how to verify, how to acknowledge. The rules that must not differ live outside any adapter, in the webhook route: amount must match, one write path, idempotent, return URL never trusted.
+Every gateway is one adapter implementing `PaymentGateway`. It owns only what differs between gateways:
+- `client`: what the checkout draws;
+- `start`;
+- `verify`;
+- `ack`.
+
+The rules that must not differ live in the webhook route:
+- the amount must match;
+- one write path;
+- idempotent;
+- the return URL is never trusted.
 
 **Adding Fiuu** (once the merchant account exists):
 
-1. `src/lib/payments/fiuu.ts`, with `fiuuGateway(): PaymentGateway | null`, reading `FIUU_MERCHANT_ID`, `FIUU_VERIFY_KEY`, `FIUU_SECRET_KEY` and `FIUU_SANDBOX`.
-   - **`start`** returns `{ kind: "redirect", method: "POST", url: <hosted payment page>, fields }`. The fields are amount, `orderid` = order.id, bill_name / bill_email / bill_mobile, `currency: "MYR"`, `returnurl`, `callbackurl` = `notifyUrl`, and `vcode`. `OnlinePayment` already renders that as a form. Nothing client-side is Fiuu-specific.
-   - **`verify`**: Fiuu posts `x-www-form-urlencoded`, so parse `rawBody` with `URLSearchParams`. Recompute `skey`; a mismatch throws `BadSignature`. Map status `00` → paid, `11` → failed, `22` → pending.
-   - **`ack`**: Fiuu's IPN wants an acknowledgement and retries every 15 minutes, 4 times max, until it gets one.
-   - Take the exact `vcode` / `skey` formulas, the sandbox/production URLs and the ACK format **from Fiuu's merchant docs when the account is issued**. Do not copy them from memory or from this file.
-2. Add one line in `registry.ts`: `fiuu: fiuuGateway`.
-3. Add a return route. Fiuu's return URL is a **browser POST**, and a Next page only answers GET. Add `src/app/api/orders/[token]/return/route.ts` answering POST (and GET) with a 303 to `/[lang]/order/[token]?paid=1`, and pass that as `returnUrl` from `pay/route.ts`.
-4. CSP: add Fiuu's payment host to `form-action` in `next.config.ts`, or the browser blocks the redirect form.
-5. Fiuu sandbox needs **IP whitelisting** with their support before demo banks work.
+1. `src/lib/payments/fiuu.ts`: `fiuuGateway()` with `client: { kind: "redirect" }`.
+   - **`start`** returns `{ kind: "redirect", ref, url, method: "POST", fields }`. The fields are amount, `orderid` = order.id, bill_name / bill_email / bill_mobile, `currency: "MYR"`, `returnurl`, `callbackurl` = `notifyUrl`, and `vcode`. The quote page then shows **Place order** and hands over to the order page, whose `OnlinePayment` renders the signed form. Nothing client-side is Fiuu-specific.
+   - **`verify`**: parse the `x-www-form-urlencoded` body. Recompute `skey`; a mismatch throws `BadSignature`. Map status `00` → paid, `11` → failed, `22` → pending.
+   - **`ack`**: Fiuu's IPN retries every 15 minutes, 4 times max, until acknowledged.
+   - Take the exact `vcode` / `skey` formulas, URLs and ACK format **from Fiuu's merchant docs**, not from memory.
+2. One line in `registry.ts`: `fiuu: fiuuGateway`. Add a `fiuu` variant to the flag (`vercel flags update payment-gateway`) and to `options` in `src/flags.ts`.
+3. **Return route:** Fiuu's return URL is a browser **POST**, and a page answers only GET. Add `src/app/api/orders/[token]/return/route.ts` answering POST/GET with a 303 to `/[lang]/order/[token]?redirect_status=succeeded|processing|failed`, mapped from Fiuu's status. The order page already reads that parameter.
+4. CSP: add Fiuu's payment host to `form-action` in `next.config.ts`.
+5. Fiuu sandbox needs **IP whitelisting** with their support.
 6. Write a test like `route.test.ts` against a Fiuu-signed body.
-7. Add a `fiuu` variant (`vercel flags update payment-gateway`) and to the `options` in `src/flags.ts`, try it with a Flags Explorer override, then `vercel flags set payment-gateway --environment production --variant fiuu`. Leave Stripe's keys in place until in-flight Stripe payments have settled: its webhook keeps working through `gatewayById` while the Fiuu page takes new payments.
+7. Try it with a Flags Explorer override, then `vercel flags set payment-gateway --environment production --variant fiuu`. Keep Stripe's keys until in-flight Stripe payments have settled.
 
 **Removing Stripe:**
 1. Delete `lib/payments/stripe.ts` and its line in `registry.ts`.
-2. Delete `StripeForm.tsx` and its branch in `OnlinePayment.tsx`, plus the `stripe-form` member of `PaymentStart`.
+2. Delete `StripePayment.tsx` and the `stripe-elements` branches in `QuoteScreen.tsx` and `OnlinePayment.tsx`.
 3. Delete the Stripe hosts in `next.config.ts` and the `STRIPE_*` variables.
-4. Run `pnpm remove stripe`.
-
-No order, admin or delivery code changes. `Order.paymentProvider` keeps the history of which gateway took each payment.
+4. Run `pnpm remove stripe @stripe/stripe-js @stripe/react-stripe-js`.
 
 ## Next steps
 
-- Refunds: none yet, in the app or at the gateway. The re-measure question in CLAUDE.md ("What happens when a paid design changes?") becomes a refund question once money is taken online.
-- The order page's "Confirming your payment" wording relies on the customer refreshing the page. Add polling if webhooks prove slow.
+- Refunds: none yet, in the app or at the gateway.
+- Fields edited after a failed attempt reach Stripe but not the stored order (a `ponytail:` note in `QuoteScreen.tsx`).
+- "Confirming your payment" relies on the customer refreshing the page; add polling if webhooks prove slow.
 - `lib/orders/payment.ts` `BANK_TRANSFER` is still a placeholder; it remains the fallback whenever no gateway is set.
 
 ## Resources
