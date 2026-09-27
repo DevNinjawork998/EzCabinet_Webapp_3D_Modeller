@@ -106,4 +106,31 @@ describe("plannerDraft", () => {
 		);
 		expect(loadDraft()).toBeNull();
 	});
+
+	// Drafts saved before ids were random can hold two cabinets sharing one.
+	it("gives a repeated cabinet id a fresh one, keeping the first", () => {
+		const cab = (id: string, xMm: number) => ({ id, familyId: "bc", xMm });
+		saveDraft({
+			...draft,
+			rooms: {
+				kitchen: {
+					runs: [
+						{ floor: [cab("m1", 0), cab("m2", 600)], wall: [cab("m1", 0)] },
+					],
+					free: [cab("m2", 900)],
+				},
+			},
+		});
+		const kitchen = loadDraft()?.rooms.kitchen as {
+			runs: { floor: { id: string }[]; wall: { id: string }[] }[];
+			free: { id: string }[];
+		};
+		const ids = [
+			...kitchen.runs[0].floor,
+			...kitchen.runs[0].wall,
+			...kitchen.free,
+		].map((m) => m.id);
+		expect(ids.slice(0, 2)).toEqual(["m1", "m2"]);
+		expect(new Set(ids).size).toBe(ids.length);
+	});
 });

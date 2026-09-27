@@ -15,6 +15,8 @@
  * is the correct outcome there, not a crash.
  */
 
+import { newId } from "@/lib/planner/layout";
+
 const KEY = "ezcabinet.planner.draft";
 const VERSION = 1;
 
@@ -45,10 +47,32 @@ export function loadDraft(): PlannerDraft | null {
 		if (typeof parsed.roomId !== "string") return null;
 		if (typeof parsed.finishId !== "string") return null;
 		if (!parsed.rooms || typeof parsed.rooms !== "object") return null;
+		uniqueIds(parsed.rooms, new Set());
 		return parsed as PlannerDraft;
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Ids were a counter that restarted at m1 on every page load, so a draft saved
+ * then can hold two cabinets sharing an id — which selects, moves and deletes
+ * both. Keep each id's first cabinet and re-id the repeats, in place. A
+ * cabinet is any object with both an `id` and a `familyId`.
+ */
+function uniqueIds(node: unknown, seen: Set<string>): void {
+	if (Array.isArray(node)) {
+		for (const item of node) uniqueIds(item, seen);
+		return;
+	}
+	if (!node || typeof node !== "object") return;
+	const record = node as Record<string, unknown>;
+	if (typeof record.id === "string" && typeof record.familyId === "string") {
+		const id = seen.has(record.id) ? newId() : record.id;
+		record.id = id;
+		seen.add(id);
+	}
+	for (const value of Object.values(record)) uniqueIds(value, seen);
 }
 
 export function clearDraft(): void {
