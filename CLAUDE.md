@@ -461,6 +461,15 @@ Three screens. Rooms open on an **empty wall**: there is no invented starter run
 
 **No login to configure — but checkout now requires an account.** Browsing, planning and pricing stay anonymous; `POST /api/orders` is the one hard stop — signed out, placing an order bounces to `/[lang]/sign-in?next=…` and back to the same quote, the design intact via the autosaved draft (`lib/plannerDraft.ts`). A separate, earlier email/WhatsApp gate at **"save & share"** — for the customer who has sunk time into a design and will trade a phone number to keep it — is designed but **not yet built**; see Status and Phasing.
 
+**An order is its owner's.** Every order carries the account that placed it
+(`Order.userId`, `NOT NULL`). `/[lang]/orders` lists the signed-in customer's
+own orders; `/[lang]/order/[token]` and — for a delivery that belongs to an
+order — `/[lang]/track/[token]` open only for that account or staff with
+`orders:read` (`lib/orders/access.ts`). The token in the URL is an address,
+not a key: signed out, it bounces through Google sign-in and back; signed in
+as anyone else, it is the same 404 as a made-up token. A standalone
+admin-booked delivery keeps link access — its recipient has no account.
+
 **Not yet built.** Save writes the layout to Postgres under a `nanoid` slug, returns a short URL, creates the lead record, and attaches the screenshot. Then a `wa.me` deep link with the design URL prefilled.
 
 Ship 8–10 **preset designs** as their own indexable routes ("2.4m 3-door kitchen run", etc). Each is an SEO landing page and an entry point into the planner — solves the blank-canvas problem and the traffic problem together.
@@ -520,10 +529,9 @@ unverified, and this app deliberately runs no email vendor, so without it no
 staff member could ever use the Google button. The superadmin typing a
 colleague's work address is the assertion that it is theirs.
 
-`AUTH_ENABLED=false` opens the admin surface and lets checkout take an
-anonymous order, for local work. It is ignored whenever `VERCEL_ENV` is set —
-preview included, since a preview is a public URL with real carrier
-credentials behind it.
+`AUTH_ENABLED=false` opens the admin surface and lets you open any customer
+order page, for local work. It never lets checkout take an anonymous order —
+every order needs an owner, so local checkout needs a Google sign-in.
 
 Public password sign-up is closed (`disabledPaths: ["/sign-up/email"]` in
 `lib/auth.ts`); invites and the seed call `auth.api.signUpEmail` server-side,
