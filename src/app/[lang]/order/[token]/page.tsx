@@ -9,6 +9,8 @@ import { paymentInstructions } from "@/lib/orders/payment";
 import { orderRef } from "@/lib/orders/ref";
 import { STAGES, stageReached } from "@/lib/orders/stage";
 import { summaryLines } from "@/lib/orders/summary";
+import { activeGateway } from "@/lib/payments/registry";
+import { OnlinePayment } from "./OnlinePayment";
 
 /**
  * The page a customer lands on after checkout: what they ordered, what it
@@ -32,10 +34,16 @@ const rm = (amount: number) =>
 
 export default async function OrderPage({
 	params,
+	searchParams,
 }: {
 	params: Promise<{ lang: string; token: string }>;
+	searchParams: Promise<{ redirect_status?: string }>;
 }) {
 	const { lang, token } = await params;
+	// Back from the gateway — Stripe appends `redirect_status` to the return
+	// URL (a Fiuu return route would map its status to the same). Only ever
+	// changes wording and what is offered: PAID comes from the webhook alone.
+	const returned = (await searchParams).redirect_status;
 	if (!isLocale(lang)) notFound();
 
 	const [order, t] = await Promise.all([
@@ -68,14 +76,28 @@ export default async function OrderPage({
 	const ref = orderRef(order.number, order.createdAt);
 	const lines = summaryLines(order.breakdown);
 	const delivery = order.deliveries[0] ?? null;
+	const awaiting = order.status === "AWAITING_PAYMENT";
+	// Paid at the gateway, webhook not landed yet — or the bank still deciding.
+	const confirming = awaiting && returned === "succeeded";
+	const processing = awaiting && returned === "processing";
+	const failed = awaiting && returned === "failed";
+	const settling = confirming || processing;
+	// The active gateway when there is one, bank transfer when there is not.
+	const payOnline = awaiting && !settling && (await activeGateway()) !== null;
 	const pay =
-		order.status === "AWAITING_PAYMENT" ? paymentInstructions(order) : null;
+		awaiting && !settling && !payOnline ? paymentInstructions(order) : null;
 	const [heading, body] =
 		order.status === "PAID"
 			? [o.headingPaid, o.bodyPaid]
 			: order.status === "CANCELLED"
 				? [o.headingCancelled, o.bodyCancelled]
-				: [o.headingAwaiting, o.bodyAwaiting];
+				: confirming
+					? [o.headingConfirming, o.bodyConfirming]
+					: processing
+						? [o.headingProcessing, o.bodyProcessing]
+						: payOnline
+							? [o.headingAwaiting, o.bodyAwaitingOnline]
+							: [o.headingAwaiting, o.bodyAwaiting];
 
 	return (
 		<div className="flex min-h-screen flex-col bg-[#f4f3f1] text-[#171717]">
@@ -92,6 +114,7 @@ export default async function OrderPage({
 			<main className="flex flex-1 justify-center px-6 py-14">
 				<div className="flex w-full max-w-[560px] flex-col gap-6">
 					<div className="flex flex-col items-center gap-3.5 text-center">
+						<StatusIcon status={order.status} />
 						<div>
 							<h1 className="mb-1.5 font-semibold text-[24px]">{heading}</h1>
 							<p className="text-[#5c574e] text-[14px]">{body}</p>
@@ -147,6 +170,28 @@ export default async function OrderPage({
 							{order.siteAddress}
 						</p>
 					</section>
+
+					{payOnline && (
+						<section className={CARD}>
+							{failed && (
+								<div
+									role="alert"
+									className="mb-4 rounded-[10px] border border-[#f0b4ae] bg-[#fdf1ef] px-3.5 py-3 text-[#3d3a34] text-[13px] leading-[18px]"
+								>
+									<p className="mb-0.5 font-semibold">
+										{t.quote.paymentFailedTitle}
+									</p>
+									<p>{t.quote.paymentFailedBody}</p>
+								</div>
+							)}
+							<h2 className={`${CARD_HEADING} mb-3.5`}>{o.payOnlineHeading}</h2>
+							<OnlinePayment
+								token={token}
+								payLabel={fill(o.payOnlineCta, { amount: rm(order.totalRm) })}
+								errorText={o.payOnlineError}
+							/>
+						</section>
+					)}
 
 					{pay && (
 						<section className={CARD}>
@@ -240,5 +285,34 @@ export default async function OrderPage({
 				</div>
 			</main>
 		</div>
+	);
+}
+
+/** Paid, waiting, or cancelled — the glyph above the heading. */
+function StatusIcon({ status }: { status: string }) {
+	const [bg, path] =
+		status === "PAID"
+			? ["bg-[#1f5138]", "M5 12.5l4.5 4.5L19 7"]
+			: status === "CANCELLED"
+				? ["bg-[#b42318]", "M8 8l8 8M16 8l-8 8"]
+				: ["bg-[#8a6d1f]", "M12 7.5V12l3 1.8"];
+	return (
+		<span
+			aria-hidden
+			className={`flex h-[52px] w-[52px] items-center justify-center rounded-full ${bg}`}
+		>
+			<svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+				{status !== "PAID" && status !== "CANCELLED" && (
+					<circle cx="12" cy="12" r="7.5" stroke="#fff" strokeWidth="2" />
+				)}
+				<path
+					d={path}
+					stroke="#fff"
+					strokeWidth="2.2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				/>
+			</svg>
+		</span>
 	);
 }

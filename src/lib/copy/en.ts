@@ -385,6 +385,25 @@ export const en = {
 		saved: "Saved",
 		submitCta: "Place order",
 		submitting: "Placing your order…",
+		errorNameRequired: "Enter your full name.",
+		errorPhoneRequired: "Enter a phone number we can reach you on.",
+		errorAddressRequired: "Enter the delivery address.",
+		errorAddressShort: "That address looks too short.",
+		errorRemeasure: "Tick this to continue.",
+		descriptionOnline:
+			"A designer re-measures on site before anything is built.",
+		sectionContact: "Contact",
+		sectionDelivery: "Delivery",
+		sectionPayment: "Payment",
+		payCta: "Pay · {amount}",
+		paying: "Processing payment…",
+		paymentSecure:
+			"Payments are processed by Stripe. We never see your card or bank login.",
+		paymentFailedTitle: "Payment didn't go through",
+		paymentFailedBody:
+			"Nothing was charged. Your details are saved. Try again or choose another way to pay.",
+		errorEmailRequired: "Enter an email for your receipt.",
+		oneOffPayment: "One-off payment",
 		errorGeneric: "We couldn't place your order. Please try again.",
 		errorPhone:
 			"That phone number doesn't look right. Include the area code, like 012-345 6789.",
@@ -429,6 +448,18 @@ export const en = {
 	/** The page a customer lands on after checkout, reached by its public token. */
 	order: {
 		breadcrumb: "Order confirmation",
+		headingConfirming: "Confirming your payment",
+		bodyConfirming:
+			"Thanks — we're waiting for the payment provider to confirm. This usually takes a few seconds; refresh this page to check. You don't need to pay again.",
+		headingProcessing: "Waiting for your bank",
+		bodyProcessing:
+			"Your bank hasn't confirmed yet. If money left your account it will show here once they do, usually within 30 minutes. You don't need to pay again.",
+		bodyAwaitingOnline:
+			"Thanks, your order is saved. Pay the total below to confirm it.",
+		payOnlineHeading: "Pay online",
+		payOnlineCta: "Pay {amount}",
+		payOnlineError:
+			"We couldn't load the payment form. Refresh the page to try again.",
 		headingAwaiting: "Order placed — awaiting payment",
 		bodyAwaiting:
 			"Thanks, your order is saved. Transfer the total below to confirm it.",
