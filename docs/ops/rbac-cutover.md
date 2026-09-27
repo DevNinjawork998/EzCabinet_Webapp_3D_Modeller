@@ -151,10 +151,11 @@ and none of them fail loudly at deploy time.
    fallback on `/admin/login` is what gets a staff member into `/admin/users`
    to fix whatever is wrong.
 
-Ownerless orders are removed by migration `20260927000000_order_owner_required`,
-which must not be applied to a database until its ownerless orders have been
-checked by status (see that migration). Every order now belongs to an
-account, and its page opens only for the owner or staff (`lib/orders/access.ts`).
+The migration (`20260927000000_order_owner_required`) refuses to run while
+any ownerless order is PAID or has a delivery — those need an owner assigned
+by hand first. The rest, unpaid and without a delivery, are deleted. Every
+order now belongs to an account, and its page opens only for the owner or
+staff (`lib/orders/access.ts`).
 
 ## Rollback
 

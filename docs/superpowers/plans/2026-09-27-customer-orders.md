@@ -1038,9 +1038,9 @@ Record the result (pass/fail per step) in the final report. If step 3 shows anyt
 The migration deletes ownerless orders and cannot be undone. Do **not** run it against preview or production. Give the user this query to run against each of those databases and report the counts before deploying:
 
 ```sql
-SELECT count(*) AS ownerless,
-       count(*) FILTER (WHERE status = 'PAID') AS ownerless_paid
-FROM "Order" WHERE "userId" IS NULL;
+SELECT o.status, count(*) AS ownerless, count(d.id) AS with_delivery
+FROM "Order" o LEFT JOIN "Delivery" d ON d."orderId" = o.id
+WHERE o."userId" IS NULL GROUP BY o.status;
 ```
 
-Any non-zero `ownerless_paid` is a real customer's money and must be resolved by hand before the migration runs there.
+Any PAID row or any with_delivery > 0 makes the migration refuse; assign those orders an owner by hand first.
