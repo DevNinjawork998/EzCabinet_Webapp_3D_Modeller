@@ -197,6 +197,8 @@ src/
   lib/payments/          ← online payment gateways, one adapter each (Stripe; Fiuu next)
     types.ts             ← the PaymentGateway contract: start / verify / ack
     registry.ts          ← `payment-gateway` flag → adapter; old gateways' webhooks stay live
+    start.ts             ← start or resume an order's payment: one intent per order, never two charges
+    stripe.ts            ← PaymentIntent + Payment Element; our form sends the billing details
   lib/whatsapp/          ← customer WhatsApp updates via Meta's Cloud API
     templates.ts         ← event → template name, variables, payload; pure
     send.ts              ← one API call; retryable or not
@@ -459,7 +461,7 @@ Three screens. Rooms open on an **empty wall**: there is no invented starter run
 
 1. **Start** — pick a room; a room with no designs yet is shown as coming soon and cannot be picked
 2. **Studio** — drag cabinets in from a menu grouped by category, choose door style and finish, measure. A placed cabinet always wears a door style — its price includes the door
-3. **Checkout** — price breakdown and delivery fee, place the order → `/[lang]/order/[token]`, which shows bank transfer details until an admin marks it paid
+3. **Checkout** — one page: contact, delivery, and (with a gateway live) Stripe's Payment Element drawing only the payment method, then one **Pay** button that creates the order and confirms its payment → `/[lang]/order/[token]`. With no gateway (`payment-gateway` flag on `manual`) it is **Place order**, and the order page shows bank transfer details until an admin marks it paid
 
 **An order is priced on the server, never by the client.** `POST /api/orders` (public, guarded by BotID) runs `validateOrder` — the engine forgives an unknown family or an off-ladder width silently, which is fine on a canvas and wrong for a payment — then `priceOrder` against the published catalogue, and stores the design as `{ schemaVersion, layout }` with the catalogue version it was priced against. A paid order's **Create delivery** (`/admin/logistics?fromOrder=`) fills the delivery form with one row per cabinet at its designed size and the design row's weight; the delivery create route refuses an order that is not paid.
 

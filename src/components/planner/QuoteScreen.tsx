@@ -13,7 +13,6 @@ import { doorStyleIn, ratesOf, roomTypeIn } from "@/lib/planner/catalogue";
 import { computePlannerPrice } from "@/lib/planner/pricing";
 import type { RoomLayout } from "@/lib/planner/room";
 import { useCatalogue, useRoomEngine } from "./CatalogueContext";
-import { CheckoutProgress } from "./CheckoutProgress";
 import { useCopy, useLocale } from "./CopyContext";
 import { AdminLink, PlannerHeader } from "./PlannerHeader";
 import { priceLineDetail, priceLineLabel } from "./priceLineCopy";
@@ -152,8 +151,11 @@ export function QuoteScreen({
 	const totalRm = price.totalRm + deliveryRm;
 
 	async function placeOrder(form: HTMLFormElement) {
-		const field = (key: string) =>
-			String(new FormData(form).get(key) ?? "").trim();
+		// Read once, now. `setBusy` below disables the fieldsets, and a disabled
+		// control is left out of FormData — read after any await, every field
+		// comes back empty and the server answers 400.
+		const data = new FormData(form);
+		const field = (key: string) => String(data.get(key) ?? "").trim();
 		// Checked here rather than by the browser so every problem shows at once,
 		// in our words, next to its field. The server re-checks all of it.
 		const errors: FieldErrors = {};
@@ -203,7 +205,7 @@ export function QuoteScreen({
 						addressNotes: field("addressNotes") || null,
 					},
 					remeasureAccepted: true,
-					whatsappOptIn: new FormData(form).get("whatsappOptIn") === "on",
+					whatsappOptIn: field("whatsappOptIn") === "on",
 					locale,
 				}),
 			}).catch(() => null);
@@ -293,11 +295,6 @@ export function QuoteScreen({
 					{ label: t.planner.crumbs.quote },
 				]}
 			>
-				<CheckoutProgress
-					ariaLabel={t.quote.progressAriaLabel}
-					labels={[t.quote.stepDetails, t.quote.stepPayment, t.quote.stepDone]}
-					step={0}
-				/>
 				<button
 					type="button"
 					onClick={onBackToStudioAction}
@@ -376,6 +373,7 @@ export function QuoteScreen({
 										name="name"
 										type="text"
 										autoComplete="name"
+										required
 										className={fieldClass(fieldErrors.name)}
 										aria-invalid={!!fieldErrors.name}
 										aria-describedby={describedBy("name")}
@@ -391,6 +389,7 @@ export function QuoteScreen({
 										name="phone"
 										type="tel"
 										autoComplete="tel"
+										required
 										className={fieldClass(fieldErrors.phone)}
 										aria-invalid={!!fieldErrors.phone}
 										aria-describedby={describedBy("phone")}
@@ -404,6 +403,7 @@ export function QuoteScreen({
 										name="email"
 										type="email"
 										autoComplete="email"
+										required={!!stripeClient}
 										className={fieldClass(fieldErrors.email)}
 										aria-invalid={!!fieldErrors.email}
 										aria-describedby={describedBy("email")}
@@ -434,6 +434,8 @@ export function QuoteScreen({
 									<textarea
 										name="siteAddress"
 										autoComplete="street-address"
+										required
+										minLength={5}
 										rows={2}
 										className={`${fieldClass(fieldErrors.siteAddress)} min-h-16 resize-y`}
 										aria-invalid={!!fieldErrors.siteAddress}
@@ -473,6 +475,7 @@ export function QuoteScreen({
 									<input
 										name="remeasure"
 										type="checkbox"
+										required
 										disabled={busy}
 										aria-invalid={!!fieldErrors.remeasure}
 										aria-describedby={describedBy("remeasure")}

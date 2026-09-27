@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyOrderId } from "@/app/[lang]/track/[token]/CopyOrderId";
-import { CheckoutProgress } from "@/components/planner/CheckoutProgress";
 import { prisma } from "@/lib/catalogue/db";
 import { getDictionary } from "@/lib/copy/dictionary";
 import { fill } from "@/lib/copy/fill";
@@ -13,6 +12,7 @@ import { STAGES, stageReached } from "@/lib/orders/stage";
 import { summaryLines } from "@/lib/orders/summary";
 import { activeGateway } from "@/lib/payments/registry";
 import { OnlinePayment } from "./OnlinePayment";
+import { RefreshWhileSettling } from "./RefreshWhileSettling";
 
 /**
  * The page a customer lands on after checkout: what they ordered, what it
@@ -122,19 +122,9 @@ export default async function OrderPage({
 				<span className="px-1 py-1.5 font-medium text-[#171717]">
 					{o.breadcrumb}
 				</span>
-				<span className="ml-auto">
-					<CheckoutProgress
-						ariaLabel={t.quote.progressAriaLabel}
-						labels={[
-							t.quote.stepDetails,
-							t.quote.stepPayment,
-							t.quote.stepDone,
-						]}
-						step={order.status === "PAID" ? 2 : 1}
-					/>
-				</span>
 			</header>
 
+			{settling && <RefreshWhileSettling />}
 			<main className="flex flex-1 justify-center px-6 py-14">
 				<div className="flex w-full max-w-[560px] flex-col gap-6">
 					<div className="flex flex-col items-center gap-3.5 text-center">
