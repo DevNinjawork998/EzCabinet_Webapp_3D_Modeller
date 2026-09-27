@@ -376,6 +376,7 @@ export function QuoteScreen({
 										name="name"
 										type="text"
 										autoComplete="name"
+										required
 										className={fieldClass(fieldErrors.name)}
 										aria-invalid={!!fieldErrors.name}
 										aria-describedby={describedBy("name")}
@@ -391,6 +392,7 @@ export function QuoteScreen({
 										name="phone"
 										type="tel"
 										autoComplete="tel"
+										required
 										className={fieldClass(fieldErrors.phone)}
 										aria-invalid={!!fieldErrors.phone}
 										aria-describedby={describedBy("phone")}
@@ -404,6 +406,7 @@ export function QuoteScreen({
 										name="email"
 										type="email"
 										autoComplete="email"
+										required={!!stripeClient}
 										className={fieldClass(fieldErrors.email)}
 										aria-invalid={!!fieldErrors.email}
 										aria-describedby={describedBy("email")}
@@ -434,6 +437,8 @@ export function QuoteScreen({
 									<textarea
 										name="siteAddress"
 										autoComplete="street-address"
+										required
+										minLength={5}
 										rows={2}
 										className={`${fieldClass(fieldErrors.siteAddress)} min-h-16 resize-y`}
 										aria-invalid={!!fieldErrors.siteAddress}
@@ -473,6 +478,7 @@ export function QuoteScreen({
 									<input
 										name="remeasure"
 										type="checkbox"
+										required
 										disabled={busy}
 										aria-invalid={!!fieldErrors.remeasure}
 										aria-describedby={describedBy("remeasure")}
