@@ -43,7 +43,10 @@ const ORDER = {
 };
 
 const open = (token = "tok") =>
-	OrderPage({ params: Promise.resolve({ lang: "en", token }) });
+	OrderPage({
+		params: Promise.resolve({ lang: "en", token }),
+		searchParams: Promise.resolve({}),
+	});
 
 afterEach(() => vi.unstubAllEnvs());
 

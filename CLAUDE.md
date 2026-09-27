@@ -191,8 +191,12 @@ src/
     validate.ts          ← can this design be sold as it stands — every rule explicit
     price.ts             ← the planner's price + the flat delivery fee, server-side
     items.ts             ← order → delivery rows: box from the design, weight from its row
-    payment.ts           ← manual bank transfer; the seam a gateway plugs into
+    payment.ts           ← manual bank transfer, the fallback when no gateway is set
+    markPaid.ts          ← the one AWAITING_PAYMENT → PAID write, admin and webhook alike
     stage.ts             ← production stages, forward-only, one at a time
+  lib/payments/          ← online payment gateways, one adapter each (Stripe; Fiuu next)
+    types.ts             ← the PaymentGateway contract: start / verify / ack
+    registry.ts          ← `payment-gateway` flag → adapter; old gateways' webhooks stay live
   lib/whatsapp/          ← customer WhatsApp updates via Meta's Cloud API
     templates.ts         ← event → template name, variables, payload; pure
     send.ts              ← one API call; retryable or not
@@ -630,7 +634,7 @@ Recorded rather than fixed. Do not paper over them; fix them deliberately.
 - Does EzCabinet have an EasyParcel account, and who tops up the wallet? `submit_orders` deducts at booking time and a shipment cannot be booked against an empty wallet.
 - **City-Link: a live host, credentials, and whether a rate API exists.** The guide we hold documents only the test server (`devsvr2019a.citylinkexpress.com:21145`) and its credentials page is blank — ask for the company code, account number and meter number, the live URL, and whether anything prices a shipment. Without a rate call an admin compares City-Link blind on price.
 - **WhatsApp go-live is waiting on EzCabinet.** Meta Business verification, a dedicated number, a system-user token, a payment method, 21 template approvals, the factory's real stage names, the sales number and counsel's privacy sign-off. Checklist and template copy: `docs/ops/whatsapp-ezcabinet-setup.md`.
-- **Which Malaysian payment gateway?** Orders take payment by manual bank transfer until one is chosen (Billplz, Curlec, senangPay, iPay88, …). `BANK_TRANSFER` in `lib/orders/payment.ts` is a placeholder account, and the confirmation page shows it to customers — fill it in before checkout goes live.
+- **Which Malaysian payment gateway?** Stripe is wired as the sandbox-test gateway, chosen by the `payment-gateway` Vercel flag (`src/flags.ts`: Stripe on development and preview, manual on production); Fiuu is the likely production one, account in progress. Both are adapters behind `lib/payments` — swap plan in `STRIPE_INTEGRATION_TODO.md`. Only the verified webhook marks an order paid, never the customer's return. With no gateway set, orders fall back to manual bank transfer, and `BANK_TRANSFER` in `lib/orders/payment.ts` is still a placeholder account the confirmation page shows customers.
 - **The delivery fee.** `RATES.deliveryFlatRm` is `85`, the figure from the client's Order Confirmation design; set the real one in the catalogue settings. It is flat — one fee whatever the load or the distance.
 - **What happens when a paid design changes at re-measure?** The customer pays full price up front; there is no refund or top-up flow, so a re-measure that changes the cabinets is handled outside the app today.
 - **Weights.** Parcel partners price by the kilogram. A design row's optional weight pre-fills its delivery rows; every design without one leaves the admin typing it per delivery.

@@ -13,6 +13,7 @@ import {
 import { PAYMENT_PROVIDER } from "@/lib/orders/payment";
 import { priceOrder } from "@/lib/orders/price";
 import { validateOrder } from "@/lib/orders/validate";
+import { startPayment } from "@/lib/payments/start";
 import { enqueue, flushSoon } from "@/lib/whatsapp/outbox";
 import { draftFor, NOTIFY_ORDER_SELECT } from "@/lib/whatsapp/templates";
 
@@ -130,5 +131,22 @@ export async function POST(request: Request) {
 	});
 	flushSoon(notificationIds);
 
-	return NextResponse.json({ token: order.publicToken }, { status: 201 });
+	// Open the payment in the same request, so a one-page checkout confirms
+	// straight away. Null — no gateway, or the gateway failed — sends the
+	// customer to the order page, which shows bank transfer or a retry. The
+	// order stands either way.
+	const payment = await startPayment(
+		order.publicToken,
+		new URL(request.url).origin,
+	)
+		.then((result) => (result.ok ? result.start : null))
+		.catch((error) => {
+			console.error("checkout: payment start failed", error);
+			return null;
+		});
+
+	return NextResponse.json(
+		{ token: order.publicToken, payment },
+		{ status: 201 },
+	);
 }

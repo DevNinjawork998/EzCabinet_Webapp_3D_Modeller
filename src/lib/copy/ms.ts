@@ -399,6 +399,20 @@ export const ms: Dictionary = {
 		errorAddressShort: "Alamat itu kelihatan terlalu pendek.",
 		errorRemeasure: "Tandakan ini untuk meneruskan.",
 		submitting: "Sedang membuat pesanan…",
+		descriptionOnline:
+			"Pereka akan mengukur semula di tapak sebelum apa-apa dibina.",
+		sectionContact: "Hubungan",
+		sectionDelivery: "Penghantaran",
+		sectionPayment: "Pembayaran",
+		payCta: "Bayar · {amount}",
+		paying: "Memproses pembayaran…",
+		paymentSecure:
+			"Pembayaran diproses oleh Stripe. Kami tidak pernah melihat kad atau log masuk bank anda.",
+		paymentFailedTitle: "Pembayaran tidak berjaya",
+		paymentFailedBody:
+			"Tiada caj dikenakan. Butiran anda telah disimpan. Cuba lagi atau pilih cara pembayaran lain.",
+		errorEmailRequired: "Masukkan e-mel untuk resit anda.",
+		oneOffPayment: "Bayaran sekali sahaja",
 		errorGeneric: "Pesanan anda tidak dapat dibuat. Sila cuba lagi.",
 		errorPhone:
 			"Nombor telefon itu kelihatan tidak betul. Sertakan kod kawasan, contohnya 012-345 6789.",
@@ -444,6 +458,18 @@ export const ms: Dictionary = {
 	order: {
 		breadcrumb: "Pengesahan pesanan",
 		myOrders: "Pesanan saya",
+		headingConfirming: "Mengesahkan pembayaran anda",
+		bodyConfirming:
+			"Terima kasih — kami sedang menunggu pengesahan daripada penyedia pembayaran. Biasanya ini mengambil beberapa saat; muat semula halaman ini untuk menyemak. Anda tidak perlu membayar lagi.",
+		headingProcessing: "Menunggu bank anda",
+		bodyProcessing:
+			"Bank anda belum mengesahkan. Jika wang telah keluar dari akaun anda, ia akan dipaparkan di sini sebaik sahaja disahkan, biasanya dalam masa 30 minit. Anda tidak perlu membayar lagi.",
+		bodyAwaitingOnline:
+			"Terima kasih, pesanan anda telah disimpan. Bayar jumlah di bawah untuk mengesahkannya.",
+		payOnlineHeading: "Bayar dalam talian",
+		payOnlineCta: "Bayar {amount}",
+		payOnlineError:
+			"Kami tidak dapat memuatkan borang pembayaran. Muat semula halaman untuk mencuba lagi.",
 		headingAwaiting: "Pesanan dibuat — menunggu bayaran",
 		bodyAwaiting:
 			"Terima kasih, pesanan anda telah disimpan. Pindahkan jumlah di bawah untuk mengesahkannya.",
