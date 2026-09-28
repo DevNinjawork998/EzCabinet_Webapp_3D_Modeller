@@ -447,8 +447,6 @@ export const en = {
 	},
 	/** The page a customer lands on after checkout, reached by its public token. */
 	order: {
-		breadcrumb: "Order confirmation",
-		myOrders: "My orders",
 		headingConfirming: "Confirming your payment",
 		bodyConfirming:
 			"Thanks — we're waiting for the payment provider to confirm. This usually takes a few seconds, and this page updates by itself. You don't need to pay again.",
@@ -469,14 +467,12 @@ export const en = {
 		headingCancelled: "Order cancelled",
 		bodyCancelled:
 			"This order was cancelled. Get in touch if that isn't what you expected.",
-		orderId: "Order ID",
 		copyOrderId: "Copy order ID",
 		copied: "Copied",
 		summaryHeading: "Order summary",
 		qty: "Qty {count}",
 		subtotal: "Subtotal",
 		delivery: "Delivery",
-		total: "Total",
 		totalPaid: "Total paid",
 		addressHeading: "Delivery address",
 		payHeading: "Pay by bank transfer",
@@ -487,7 +483,6 @@ export const en = {
 		payAmount: "Amount",
 		payNote:
 			"Use your order ID as the transfer reference so we can match your payment. We'll contact you once it arrives, usually within one working day.",
-		nextHeading: "What happens next",
 		stagePaid: "Payment received",
 		stageMeasureDetail:
 			"A designer confirms your measurements before production.",
@@ -504,8 +499,6 @@ export const en = {
 		trackDelivery: "Track your delivery",
 		progressHeading: "Progress",
 		totalDue: "Total due",
-		backToPlanner: "Back to planner",
-		backHome: "Back to home",
 	},
 	/**
 	 * The delivery tracking page a customer reaches from their link.
@@ -516,7 +509,6 @@ export const en = {
 	 * the locale on the one screen a customer opens more than once.
 	 */
 	track: {
-		breadcrumb: "Order confirmation",
 		headingPlaced: "Order placed",
 		bodyPlaced: "Thanks — we've got your order and we're getting it ready.",
 		headingDelivered: "Delivered",
@@ -617,13 +609,11 @@ export const en = {
 		menuLabel: "Account menu",
 	},
 	orders: {
-		breadcrumb: "My orders",
 		heading: "My orders",
 		empty: "No orders yet",
 		emptyBody:
 			"When you order a design, it shows up here with its payment, production and delivery status.",
 		startPlanning: "Start planning",
-		placedOn: "Placed {date}",
 		statusAwaiting: "Awaiting payment",
 		statusPaid: "Paid",
 		statusCancelled: "Cancelled",

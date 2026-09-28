@@ -424,8 +424,6 @@ export const zh: Dictionary = {
 		},
 	},
 	order: {
-		breadcrumb: "订单确认",
-		myOrders: "我的订单",
 		headingConfirming: "正在确认您的付款",
 		bodyConfirming:
 			"谢谢——我们正在等待支付服务商确认，通常只需几秒钟，此页面会自动更新。您无需再次付款。",
@@ -442,14 +440,12 @@ export const zh: Dictionary = {
 		bodyPaid: "已收到付款，您的橱柜即将进入生产。",
 		headingCancelled: "订单已取消",
 		bodyCancelled: "此订单已取消。如非您预期，请与我们联系。",
-		orderId: "订单编号",
 		copyOrderId: "复制订单编号",
 		copied: "已复制",
 		summaryHeading: "订单摘要",
 		qty: "数量 {count}",
 		subtotal: "小计",
 		delivery: "运费",
-		total: "总计",
 		totalPaid: "已付总额",
 		addressHeading: "送货地址",
 		payHeading: "银行转账付款",
@@ -460,7 +456,6 @@ export const zh: Dictionary = {
 		payAmount: "金额",
 		payNote:
 			"请以订单编号作为转账备注，方便我们核对付款。款项到账后我们会联系您，通常在一个工作日内。",
-		nextHeading: "接下来的步骤",
 		stagePaid: "已收到付款",
 		stageMeasureDetail: "设计师会在制作前核实您的尺寸。",
 		stages: {
@@ -475,11 +470,8 @@ export const zh: Dictionary = {
 		trackDelivery: "追踪您的配送",
 		progressHeading: "进度",
 		totalDue: "应付总额",
-		backToPlanner: "返回设计工具",
-		backHome: "返回主页",
 	},
 	track: {
-		breadcrumb: "订单确认",
 		headingPlaced: "订单已确认",
 		bodyPlaced: "感谢您的订购，我们已收到订单并正在备货。",
 		headingDelivered: "已送达",
@@ -569,12 +561,10 @@ export const zh: Dictionary = {
 		menuLabel: "账户菜单",
 	},
 	orders: {
-		breadcrumb: "我的订单",
 		heading: "我的订单",
 		empty: "暂无订单",
 		emptyBody: "订购设计后，订单会显示在这里，并附上付款、生产和配送状态。",
 		startPlanning: "开始设计",
-		placedOn: "下单于 {date}",
 		statusAwaiting: "待付款",
 		statusPaid: "已付款",
 		statusCancelled: "已取消",

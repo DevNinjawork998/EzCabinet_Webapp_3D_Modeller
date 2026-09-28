@@ -451,8 +451,6 @@ export const ms: Dictionary = {
 		},
 	},
 	order: {
-		breadcrumb: "Pengesahan pesanan",
-		myOrders: "Pesanan saya",
 		headingConfirming: "Mengesahkan pembayaran anda",
 		bodyConfirming:
 			"Terima kasih — kami sedang menunggu pengesahan daripada penyedia pembayaran. Biasanya ini mengambil beberapa saat, dan halaman ini akan dikemas kini sendiri. Anda tidak perlu membayar lagi.",
@@ -473,14 +471,12 @@ export const ms: Dictionary = {
 		headingCancelled: "Pesanan dibatalkan",
 		bodyCancelled:
 			"Pesanan ini telah dibatalkan. Hubungi kami jika ini di luar jangkaan anda.",
-		orderId: "ID pesanan",
 		copyOrderId: "Salin ID pesanan",
 		copied: "Disalin",
 		summaryHeading: "Ringkasan pesanan",
 		qty: "Kuantiti {count}",
 		subtotal: "Subjumlah",
 		delivery: "Penghantaran",
-		total: "Jumlah",
 		totalPaid: "Jumlah dibayar",
 		addressHeading: "Alamat penghantaran",
 		payHeading: "Bayar melalui pindahan bank",
@@ -491,7 +487,6 @@ export const ms: Dictionary = {
 		payAmount: "Amaun",
 		payNote:
 			"Gunakan ID pesanan anda sebagai rujukan pindahan supaya kami dapat memadankan bayaran anda. Kami akan menghubungi anda sebaik ia diterima, lazimnya dalam satu hari bekerja.",
-		nextHeading: "Langkah seterusnya",
 		stagePaid: "Bayaran diterima",
 		stageMeasureDetail:
 			"Pereka bentuk mengesahkan ukuran anda sebelum pengeluaran.",
@@ -507,11 +502,8 @@ export const ms: Dictionary = {
 		trackDelivery: "Jejak penghantaran anda",
 		progressHeading: "Kemajuan",
 		totalDue: "Jumlah perlu dibayar",
-		backToPlanner: "Kembali ke perancang",
-		backHome: "Kembali ke laman utama",
 	},
 	track: {
-		breadcrumb: "Pengesahan pesanan",
 		headingPlaced: "Pesanan diterima",
 		bodyPlaced:
 			"Terima kasih — pesanan anda sudah kami terima dan sedang disediakan.",
@@ -607,13 +599,11 @@ export const ms: Dictionary = {
 		menuLabel: "Menu akaun",
 	},
 	orders: {
-		breadcrumb: "Pesanan saya",
 		heading: "Pesanan saya",
 		empty: "Belum ada pesanan",
 		emptyBody:
 			"Apabila anda memesan reka bentuk, ia dipaparkan di sini bersama status bayaran, pengeluaran dan penghantarannya.",
 		startPlanning: "Mula reka bentuk",
-		placedOn: "Dibuat {date}",
 		statusAwaiting: "Menunggu bayaran",
 		statusPaid: "Dibayar",
 		statusCancelled: "Dibatalkan",
