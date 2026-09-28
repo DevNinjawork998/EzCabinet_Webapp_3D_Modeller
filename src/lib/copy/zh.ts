@@ -23,7 +23,6 @@ export const zh: Dictionary = {
 			finishes: "板材选择",
 			faq: "常见问题",
 			tutorials: "教学视频",
-			myOrders: "我的订单",
 			menu: "菜单",
 			startPlanning: "开始设计",
 			admin: "管理员",

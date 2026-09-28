@@ -22,6 +22,8 @@ const SHARED = new Set([
 	// Malay borrows the word outright — "Menu" is the Malay for it, not an
 	// untranslated string.
 	"landing.nav.menu",
+	// "Unit" is the Malay word too, and a count of one takes no plural.
+	"orders.unitsOne",
 ]);
 
 describe("dictionaries", () => {

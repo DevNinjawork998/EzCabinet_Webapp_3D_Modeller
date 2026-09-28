@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { journeySteps } from "@/app/admin/logistics/tracking";
+import { SiteHeader } from "@/components/SiteHeader";
 import { prisma } from "@/lib/catalogue/db";
 import { getDictionary } from "@/lib/copy/dictionary";
 import { htmlLang, isLocale, type Locale } from "@/lib/copy/locales";
@@ -150,15 +151,7 @@ export default async function TrackPage({
 
 	return (
 		<div className="flex min-h-screen flex-col bg-[#f4f3f1] text-[#171717]">
-			<header className="flex shrink-0 items-center gap-1.5 border-[#e5e5e5] border-b bg-white px-7 py-3.5 text-[#6b6b6b] text-[12px]">
-				<Link href={`/${lang}`} className="px-1 py-1.5 hover:text-neutral-600">
-					{t.common.brand}
-				</Link>
-				<span>/</span>
-				<span className="px-1 py-1.5 font-medium text-[#171717]">
-					{t.track.breadcrumb}
-				</span>
-			</header>
+			<SiteHeader lang={lang} t={t} />
 
 			<main className="flex flex-1 justify-center px-6 py-14">
 				<div className="flex w-full max-w-[560px] flex-col gap-6">
