@@ -503,6 +503,8 @@ export const en = {
 		},
 		stageDelivery: "Delivery to your site",
 		trackDelivery: "Track your delivery",
+		progressHeading: "Progress",
+		totalDue: "Total due",
 		backToPlanner: "Back to planner",
 		backHome: "Back to home",
 	},
@@ -607,16 +609,31 @@ export const en = {
 		autoReply:
 			"This number only sends EzCabinet order updates. To chat with our team, message us at {number}",
 	},
+	/** The shared header's account menu and the account side nav. */
+	account: {
+		navHeading: "Your account",
+		myOrders: "My orders",
+		signIn: "Sign in",
+		signOut: "Sign out",
+		menuLabel: "Account menu",
+	},
 	orders: {
 		breadcrumb: "My orders",
 		heading: "My orders",
 		empty: "No orders yet",
-		emptyBody: "Plan a room and place an order — it will show up here.",
+		emptyBody:
+			"When you order a design, it shows up here with its payment, production and delivery status.",
 		startPlanning: "Start planning",
 		placedOn: "Placed {date}",
 		statusAwaiting: "Awaiting payment",
 		statusPaid: "Paid",
 		statusCancelled: "Cancelled",
+		orderedOn: "Ordered {date}",
+		unitsOne: "{room} · 1 unit",
+		unitsOther: "{room} · {count} units",
+		stageNotStarted: "Not in production yet",
+		payNow: "Pay now",
+		viewOrder: "View order",
 	},
 	/** The one hard stop before checkout — see CLAUDE.md's conversion decision. */
 	signIn: {

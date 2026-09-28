@@ -506,6 +506,8 @@ export const ms: Dictionary = {
 		},
 		stageDelivery: "Penghantaran ke tapak anda",
 		trackDelivery: "Jejak penghantaran anda",
+		progressHeading: "Kemajuan",
+		totalDue: "Jumlah perlu dibayar",
 		backToPlanner: "Kembali ke perancang",
 		backHome: "Kembali ke laman utama",
 	},
@@ -597,16 +599,31 @@ export const ms: Dictionary = {
 		autoReply:
 			"Nombor ini hanya menghantar kemas kini pesanan EzCabinet. Untuk berbual dengan pasukan kami, hantar mesej ke {number}",
 	},
+	/** The shared header's account menu and the account side nav. */
+	account: {
+		navHeading: "Akaun anda",
+		myOrders: "Pesanan saya",
+		signIn: "Log masuk",
+		signOut: "Log keluar",
+		menuLabel: "Menu akaun",
+	},
 	orders: {
 		breadcrumb: "Pesanan saya",
 		heading: "Pesanan saya",
 		empty: "Belum ada pesanan",
-		emptyBody: "Reka bilik dan buat pesanan — ia akan dipaparkan di sini.",
+		emptyBody:
+			"Apabila anda memesan reka bentuk, ia dipaparkan di sini bersama status bayaran, pengeluaran dan penghantarannya.",
 		startPlanning: "Mula reka bentuk",
 		placedOn: "Dibuat {date}",
 		statusAwaiting: "Menunggu bayaran",
 		statusPaid: "Dibayar",
 		statusCancelled: "Dibatalkan",
+		orderedOn: "Dipesan {date}",
+		unitsOne: "{room} · 1 unit",
+		unitsOther: "{room} · {count} unit",
+		stageNotStarted: "Belum masuk pengeluaran",
+		payNow: "Bayar sekarang",
+		viewOrder: "Lihat pesanan",
 	},
 	signIn: {
 		heading: "Log masuk",
