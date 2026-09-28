@@ -53,8 +53,9 @@ Design's header: **EzCabinet** (→ `/[lang]`), **Room planner**
 
 The menu is a client component: `aria-haspopup="menu"`, `aria-expanded`,
 `role="menu"` / `menuitem`, closes on Escape, on outside click and on
-navigation; focus returns to the trigger on Escape. The server passes the user
-(`{ name, email } | null`) in as a prop; no client session fetch.
+navigation; focus returns to the trigger on Escape. It reads the session in the browser
+(`authClient.useSession()`), so the statically rendered landing page stays
+static.
 
 Used by `(account)/layout.tsx` and `track/[token]/page.tsx` (replacing its
 breadcrumb bar). The landing page renders only the right-hand part

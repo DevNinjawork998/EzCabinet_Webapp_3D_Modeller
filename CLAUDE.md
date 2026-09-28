@@ -476,6 +476,15 @@ not a key: signed out, it bounces through Google sign-in and back; signed in
 as anyone else, it is the same 404 as a made-up token. A standalone
 admin-booked delivery keeps link access — its recipient has no account.
 
+**The account area** is the route group `app/[lang]/(account)/` — My orders
+and each order page inside one layout (`SiteHeader` + "Your account" side
+nav); route groups leave URLs unchanged. The layout only reads who is signed
+in; access stays in each page (`viewerOf`, `canViewOrder`). `AccountMenu`
+reads the session in the browser so the statically rendered landing page,
+which also shows it, stays static. Profile, WhatsApp number, saved addresses
+and saved designs are later pieces of the Claude Design "Customer Account"
+file; customer sign-in stays Google only.
+
 **Not yet built.** Save writes the layout to Postgres under a `nanoid` slug, returns a short URL, creates the lead record, and attaches the screenshot. Then a `wa.me` deep link with the design URL prefilled.
 
 Ship 8–10 **preset designs** as their own indexable routes ("2.4m 3-door kitchen run", etc). Each is an SEO landing page and an entry point into the planner — solves the blank-canvas problem and the traffic problem together.
