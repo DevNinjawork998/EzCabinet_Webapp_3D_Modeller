@@ -136,7 +136,7 @@ export function InviteStaff() {
 							<select
 								value={role}
 								onChange={(e) => setRole(e.target.value as Role)}
-								className="min-h-10 rounded-[9px] border border-[#d4d4d4] px-3 py-[10px]"
+								className="select-chevron min-h-10 rounded-[9px] border border-[#d4d4d4] bg-white py-[10px] pl-3"
 							>
 								{STAFF_ROLES.map((r) => (
 									<option key={r} value={r}>

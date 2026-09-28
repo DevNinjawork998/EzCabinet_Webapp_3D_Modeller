@@ -273,7 +273,7 @@ export function UsersTable({
 											onChange={(e) =>
 												changeRole(user.id, e.target.value as Role)
 											}
-											className="min-h-9 w-fit rounded-lg border border-[#d4d4d4] px-[9px] py-[7px] text-[#404040] text-[12px] disabled:cursor-not-allowed disabled:opacity-50"
+											className="select-chevron min-h-9 w-fit rounded-lg border border-[#d4d4d4] bg-white py-[7px] pl-2.5 text-[#404040] text-[12px] disabled:cursor-not-allowed disabled:opacity-50"
 										>
 											{STAFF_ROLES.map((role) => (
 												<option key={role} value={role}>
