@@ -8,7 +8,6 @@ import { fill } from "@/lib/copy/fill";
 import {
 	CATEGORIES,
 	durationLabel,
-	LEVELS,
 	type PublicTutorial,
 	posterUrl,
 } from "@/lib/tutorials";
@@ -25,17 +24,14 @@ const MuxPlayer = dynamic(() => import("@mux/mux-player-react"), {
 
 const ALL = "all";
 
-/** `CATEGORIES`/`LEVELS` in `lib/tutorials.ts` carry English admin-form
- * labels; the public page reads the display copy from the dictionary by id
- * instead, so it stays trilingual without duplicating the id list. */
+/** `CATEGORIES` in `lib/tutorials.ts` carries English admin-form labels; the
+ * public page reads the display copy from the dictionary by id instead, so it
+ * stays trilingual without duplicating the id list. A tutorial's level is
+ * still recorded by the admin but no longer shown here. */
 function categoryLabel(t: Dictionary, id: string): string {
 	return (
 		t.tutorials.categories[id as keyof typeof t.tutorials.categories] ?? id
 	);
-}
-
-function levelLabel(t: Dictionary, id: string): string {
-	return t.tutorials.levels[id as keyof typeof t.tutorials.levels] ?? id;
 }
 
 /** The dark plate a card shows before its video exists, or while Mux is still
@@ -79,7 +75,6 @@ export function TutorialsBrowser({
 	copy: Dictionary;
 }) {
 	const [category, setCategory] = useState<string>(ALL);
-	const [level, setLevel] = useState<string>(ALL);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	// `filtered.map((t) => …)` below shadows the dictionary `t` with the
 	// tutorial item, so the card-badge lookups need their own binding to it.
@@ -96,9 +91,7 @@ export function TutorialsBrowser({
 	}, [activeId]);
 
 	const filtered = tutorials.filter(
-		(t) =>
-			(category === ALL || t.category === category) &&
-			(level === ALL || t.level === level),
+		(t) => category === ALL || t.category === category,
 	);
 	const active = tutorials.find((t) => t.id === activeId) ?? null;
 
@@ -116,31 +109,14 @@ export function TutorialsBrowser({
 								aria-pressed={category === c.id}
 								className={
 									category === c.id
-										? "rounded-full bg-neutral-900 px-[15px] py-2 font-medium text-[13px] text-white"
-										: "rounded-full border border-neutral-200 bg-white px-[15px] py-2 text-[13px] text-neutral-600"
+										? "rounded-full bg-[#1f5138] px-[15px] py-2 font-medium text-[13px] text-white"
+										: "rounded-full border border-neutral-200 bg-white px-[15px] py-2 text-[13px] text-neutral-600 hover:border-neutral-300"
 								}
 							>
 								{c.id === ALL ? c.label : categoryLabel(t, c.id)}
 							</button>
 						),
 					)}
-				</div>
-				<div className="flex shrink-0 items-center gap-1 rounded-full bg-neutral-100 p-[3px]">
-					{[{ id: ALL, label: t.tutorials.allLevels }, ...LEVELS].map((l) => (
-						<button
-							key={l.id}
-							type="button"
-							onClick={() => setLevel(l.id)}
-							aria-pressed={level === l.id}
-							className={
-								level === l.id
-									? "rounded-full bg-white px-3.5 py-1.5 font-medium text-[13px] text-neutral-900 shadow-sm"
-									: "rounded-full px-3.5 py-1.5 text-[13px] text-neutral-600"
-							}
-						>
-							{l.id === ALL ? l.label : levelLabel(t, l.id)}
-						</button>
-					))}
 				</div>
 			</div>
 
@@ -151,7 +127,7 @@ export function TutorialsBrowser({
 						{t.tutorials.emptyNoTutorials}
 					</div>
 				) : filtered.length > 0 ? (
-					<div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+					<div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6">
 						{filtered.map((t) => {
 							const duration = durationLabel(t.durationSec);
 							return (
@@ -199,9 +175,6 @@ export function TutorialsBrowser({
 										<div className="flex gap-1.5">
 											<span className="rounded-full bg-neutral-100 px-2.5 py-[3px] font-medium text-[11px] text-neutral-600">
 												{categoryLabel(copyT, t.category)}
-											</span>
-											<span className="rounded-full bg-[#f0efe9] px-2.5 py-[3px] font-medium text-[#8a8478] text-[11px]">
-												{levelLabel(copyT, t.level)}
 											</span>
 										</div>
 										<h3 className="font-semibold text-[15px] leading-5">

@@ -12,11 +12,14 @@ import { z } from "zod";
  */
 
 export const CATEGORIES = [
-	{ id: "base", label: "Base cabinets" },
-	{ id: "wall", label: "Wall cabinets" },
-	{ id: "wardrobe", label: "Wardrobes" },
-	{ id: "drawer", label: "Drawers" },
-	{ id: "island", label: "Islands" },
+	{ id: "base", label: "Base cabinet" },
+	{ id: "wall", label: "Wall cabinet" },
+	{ id: "tall", label: "Tall cabinet" },
+	{ id: "drawer", label: "Drawer base" },
+	{ id: "fridge", label: "Fridge housing" },
+	{ id: "tv", label: "TV cabinet" },
+	{ id: "wardrobe", label: "Wardrobe" },
+	{ id: "shoe", label: "Shoe cabinet" },
 ] as const;
 
 export const LEVELS = [
