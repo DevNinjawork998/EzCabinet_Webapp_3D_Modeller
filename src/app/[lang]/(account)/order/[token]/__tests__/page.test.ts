@@ -16,7 +16,9 @@ vi.mock("next/navigation", () => ({
 	},
 }));
 
-const { default: OrderPage } = await import("@/app/[lang]/order/[token]/page");
+const { default: OrderPage } = await import(
+	"@/app/[lang]/(account)/order/[token]/page"
+);
 
 const user = (id: string, role: AuthUser["role"] = "CUSTOMER"): AuthUser => ({
 	id,

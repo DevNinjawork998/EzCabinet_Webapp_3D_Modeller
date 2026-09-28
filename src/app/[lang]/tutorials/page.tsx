@@ -48,7 +48,7 @@ export default async function TutorialsPage({
 			{/* Nav */}
 			<div className="sticky top-0 z-10 border-neutral-200 border-b bg-[#fdfcfb]">
 				<div className="mx-auto flex h-14 max-w-[1180px] items-center justify-between px-8">
-					<div className="flex items-center gap-0.5 text-[13px] text-neutral-400">
+					<div className="flex items-center gap-0.5 text-[#6b6b6b] text-[13px]">
 						<Link
 							href={`/${lang}`}
 							className="px-1 py-2.5 font-semibold text-neutral-900"
@@ -63,14 +63,14 @@ export default async function TutorialsPage({
 					<div className="flex items-center gap-4">
 						<Link
 							href={`/${lang}/planner`}
-							className="rounded-[9px] bg-neutral-900 px-4.5 py-2.5 font-medium text-[13px] text-white"
+							className="inline-flex min-h-9 items-center rounded-[9px] bg-[#1f5138] px-4.5 font-medium text-[13px] text-white hover:bg-[#17402c]"
 						>
 							{t.landing.nav.startPlanning}
 						</Link>
 						<Link
 							href="/admin/login"
 							target="_blank"
-							className="border-neutral-200 border-l py-2.5 pl-4 text-[12px] text-neutral-400 hover:text-neutral-600"
+							className="border-neutral-200 border-l py-2.5 pl-4 text-[#6b6b6b] text-[12px] hover:text-neutral-500"
 						>
 							{t.landing.nav.admin}
 						</Link>
@@ -80,13 +80,13 @@ export default async function TutorialsPage({
 
 			{/* Header */}
 			<div className="mx-auto w-full max-w-[1180px] px-8 pt-14">
-				<p className="mb-2.5 font-semibold text-[#8a8478] text-xs uppercase tracking-[0.08em]">
+				<p className="mb-2.5 font-semibold text-[#5c574e] text-xs uppercase tracking-[0.08em]">
 					{t.tutorials.eyebrow}
 				</p>
 				<h1 className="mb-3 font-bold text-[34px] leading-[1.15] tracking-tight">
 					{t.tutorials.heading}
 				</h1>
-				<p className="mb-9 max-w-[560px] text-[15px] text-neutral-600 leading-[22px]">
+				<p className="mb-9 max-w-[560px] text-[#4a4a4a] text-[15px] leading-[22px]">
 					{t.tutorials.subtitle}
 				</p>
 			</div>

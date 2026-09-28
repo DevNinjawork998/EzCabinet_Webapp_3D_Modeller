@@ -22,7 +22,6 @@ export const ms: Dictionary = {
 			finishes: "Kemasan",
 			faq: "Soalan lazim",
 			tutorials: "Tutorial",
-			myOrders: "Pesanan saya",
 			menu: "Menu",
 			startPlanning: "Mula reka bentuk",
 			admin: "Pentadbir",
@@ -429,31 +428,26 @@ export const ms: Dictionary = {
 		eyebrow: "Belajar",
 		heading: "Tutorial DIY",
 		subtitle:
-			"Video langkah demi langkah untuk membina dan memasang unit EzCabinet sendiri, daripada badan kabinet flat-pack pertama sehingga memasang susunan penuh.",
+			"Video pendek yang menunjukkan cara memasang setiap jenis kabinet kami, daripada kabinet bawah dan dinding hingga konsol TV dan almari pakaian.",
 		allTypes: "Semua jenis",
-		allLevels: "Semua tahap",
 		emptyNoTutorials:
 			"Tutorial sedang dirakam. Sila semak semula tidak lama lagi.",
-		emptyNoMatches: "Tiada tutorial sepadan dengan penapis tersebut.",
+		emptyNoMatches: "Belum ada video untuk jenis kabinet ini.",
 		loadingPlayer: "Memuatkan pemain…",
 		copyright: "© Hak cipta {brand}",
 		backToSite: "Kembali ke laman utama",
 		categories: {
 			base: "Kabinet bawah",
-			wall: "Kabinet atas",
+			wall: "Kabinet dinding",
+			tall: "Kabinet tinggi",
+			drawer: "Kabinet laci",
+			fridge: "Kabinet peti sejuk",
+			tv: "Kabinet TV",
 			wardrobe: "Almari pakaian",
-			drawer: "Laci",
-			island: "Pulau dapur",
-		},
-		levels: {
-			beginner: "Pemula",
-			intermediate: "Pertengahan",
-			advanced: "Lanjutan",
+			shoe: "Kabinet kasut",
 		},
 	},
 	order: {
-		breadcrumb: "Pengesahan pesanan",
-		myOrders: "Pesanan saya",
 		headingConfirming: "Mengesahkan pembayaran anda",
 		bodyConfirming:
 			"Terima kasih — kami sedang menunggu pengesahan daripada penyedia pembayaran. Biasanya ini mengambil beberapa saat, dan halaman ini akan dikemas kini sendiri. Anda tidak perlu membayar lagi.",
@@ -474,14 +468,12 @@ export const ms: Dictionary = {
 		headingCancelled: "Pesanan dibatalkan",
 		bodyCancelled:
 			"Pesanan ini telah dibatalkan. Hubungi kami jika ini di luar jangkaan anda.",
-		orderId: "ID pesanan",
 		copyOrderId: "Salin ID pesanan",
 		copied: "Disalin",
 		summaryHeading: "Ringkasan pesanan",
 		qty: "Kuantiti {count}",
 		subtotal: "Subjumlah",
 		delivery: "Penghantaran",
-		total: "Jumlah",
 		totalPaid: "Jumlah dibayar",
 		addressHeading: "Alamat penghantaran",
 		payHeading: "Bayar melalui pindahan bank",
@@ -492,7 +484,6 @@ export const ms: Dictionary = {
 		payAmount: "Amaun",
 		payNote:
 			"Gunakan ID pesanan anda sebagai rujukan pindahan supaya kami dapat memadankan bayaran anda. Kami akan menghubungi anda sebaik ia diterima, lazimnya dalam satu hari bekerja.",
-		nextHeading: "Langkah seterusnya",
 		stagePaid: "Bayaran diterima",
 		stageMeasureDetail:
 			"Pereka bentuk mengesahkan ukuran anda sebelum pengeluaran.",
@@ -506,11 +497,10 @@ export const ms: Dictionary = {
 		},
 		stageDelivery: "Penghantaran ke tapak anda",
 		trackDelivery: "Jejak penghantaran anda",
-		backToPlanner: "Kembali ke perancang",
-		backHome: "Kembali ke laman utama",
+		progressHeading: "Kemajuan",
+		totalDue: "Jumlah perlu dibayar",
 	},
 	track: {
-		breadcrumb: "Pengesahan pesanan",
 		headingPlaced: "Pesanan diterima",
 		bodyPlaced:
 			"Terima kasih — pesanan anda sudah kami terima dan sedang disediakan.",
@@ -597,16 +587,29 @@ export const ms: Dictionary = {
 		autoReply:
 			"Nombor ini hanya menghantar kemas kini pesanan EzCabinet. Untuk berbual dengan pasukan kami, hantar mesej ke {number}",
 	},
+	/** The shared header's account menu and the account side nav. */
+	account: {
+		navHeading: "Akaun anda",
+		myOrders: "Pesanan saya",
+		signIn: "Log masuk",
+		signOut: "Log keluar",
+		menuLabel: "Menu akaun",
+	},
 	orders: {
-		breadcrumb: "Pesanan saya",
 		heading: "Pesanan saya",
 		empty: "Belum ada pesanan",
-		emptyBody: "Reka bilik dan buat pesanan — ia akan dipaparkan di sini.",
+		emptyBody:
+			"Apabila anda memesan reka bentuk, ia dipaparkan di sini bersama status bayaran, pengeluaran dan penghantarannya.",
 		startPlanning: "Mula reka bentuk",
-		placedOn: "Dibuat {date}",
 		statusAwaiting: "Menunggu bayaran",
 		statusPaid: "Dibayar",
 		statusCancelled: "Dibatalkan",
+		orderedOn: "Dipesan {date}",
+		unitsOne: "{room} · 1 unit",
+		unitsOther: "{room} · {count} unit",
+		stageNotStarted: "Belum masuk pengeluaran",
+		payNow: "Bayar sekarang",
+		viewOrder: "Lihat pesanan",
 	},
 	signIn: {
 		heading: "Log masuk",

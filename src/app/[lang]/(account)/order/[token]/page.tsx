@@ -10,11 +10,14 @@ import { getDictionary } from "@/lib/copy/dictionary";
 import { fill } from "@/lib/copy/fill";
 import { isLocale } from "@/lib/copy/locales";
 import { canViewOrder, viewerOf } from "@/lib/orders/access";
+import { orderCard, unitCount } from "@/lib/orders/card";
 import { paymentInstructions } from "@/lib/orders/payment";
 import { orderRef } from "@/lib/orders/ref";
 import { STAGES, stageReached } from "@/lib/orders/stage";
 import { summaryExtras, summaryLines } from "@/lib/orders/summary";
 import { activeGateway } from "@/lib/payments/registry";
+import { ROOM_TYPES } from "@/lib/planner/catalogue";
+import { PaymentBadge } from "../../PaymentBadge";
 import { OnlinePayment } from "./OnlinePayment";
 import { RefreshWhileSettling } from "./RefreshWhileSettling";
 
@@ -26,8 +29,8 @@ import { RefreshWhileSettling } from "./RefreshWhileSettling";
  * indexed: it carries a home address. The token is an address, not a key —
  * only the account that placed the order, or staff, may open it
  * (`lib/orders/access.ts`). Anyone else gets the same 404 as a made-up token.
+ * `noindex` comes from the account layout.
  */
-export const metadata = { robots: { index: false, follow: false } };
 
 const CARD =
 	"rounded-[14px] border border-[#e5e5e5] bg-white px-[22px] py-5 text-[#171717]";
@@ -71,6 +74,7 @@ export default async function OrderPage({
 				deliveryRm: true,
 				totalRm: true,
 				productionStage: true,
+				roomId: true,
 				deliveries: {
 					select: { publicToken: true },
 					orderBy: { createdAt: "desc" },
@@ -110,46 +114,165 @@ export default async function OrderPage({
 							? [o.headingAwaiting, o.bodyAwaitingOnline]
 							: [o.headingAwaiting, o.bodyAwaiting];
 
-	return (
-		<div className="flex min-h-screen flex-col bg-[#f4f3f1] text-[#171717]">
-			<header className="flex shrink-0 items-center gap-1.5 border-[#e5e5e5] border-b bg-white px-7 py-3.5 text-[#6b6b6b] text-[12px]">
-				<Link href={`/${lang}`} className="px-1 py-1.5 hover:text-neutral-600">
-					{t.common.brand}
-				</Link>
-				<span>/</span>
-				<Link
-					href={`/${lang}/orders`}
-					className="px-1 py-1.5 hover:text-neutral-600"
-				>
-					{o.myOrders}
-				</Link>
-				<span>/</span>
-				<span className="px-1 py-1.5 font-medium text-[#171717]">
-					{o.breadcrumb}
-				</span>
-			</header>
+	const card = orderCard({
+		status: order.status,
+		productionStage: order.productionStage,
+		hasDelivery: delivery !== null,
+	});
+	const units = unitCount(order.breakdown);
+	const room =
+		ROOM_TYPES.find((r) => r.id === order.roomId)?.label ?? order.roomId;
+	const title =
+		units === 0
+			? room
+			: fill(units === 1 ? t.orders.unitsOne : t.orders.unitsOther, {
+					room,
+					count: units,
+				});
+	const badgeLabel = {
+		paid: t.orders.statusPaid,
+		awaiting: t.orders.statusAwaiting,
+		cancelled: t.orders.statusCancelled,
+	}[card.badge];
+	const paid = order.status === "PAID";
+	const progress: { label: string; detail?: string; done: boolean }[] = [
+		{ label: o.stagePaid, done: paid },
+		...STAGES.map((stage) => ({
+			label: o.stages[stage],
+			detail: stage === "MEASURE" ? o.stageMeasureDetail : undefined,
+			done: paid && stageReached(order.productionStage, stage),
+		})),
+		{ label: o.stageDelivery, done: false },
+	];
+	const next = progress.findIndex((step) => !step.done);
 
+	return (
+		<>
 			{settling && <RefreshWhileSettling />}
-			<main className="flex flex-1 justify-center px-6 py-14">
-				<div className="flex w-full max-w-[560px] flex-col gap-6">
-					<div className="flex flex-col items-center gap-3.5 text-center">
-						<StatusIcon status={order.status} />
-						<div>
-							<h1 className="mb-1.5 font-semibold text-[24px]">{heading}</h1>
-							<p className="text-[#5c574e] text-[14px]">{body}</p>
-						</div>
-						<div className="flex items-center gap-2 rounded-full border border-[#e5e5e5] bg-white py-2 pr-2 pl-4">
-							<span className="text-[#5c574e] text-[12px]">{o.orderId}</span>
-							<span className="font-semibold text-[13px] tracking-[.02em]">
-								{ref}
-							</span>
-							<CopyOrderId
-								value={ref}
-								label={o.copyOrderId}
-								copiedLabel={o.copied}
+			<Link
+				href={`/${lang}/orders`}
+				className="flex min-h-9 items-center gap-1.5 self-start rounded-lg border border-[#d4d4d4] bg-white px-3 font-medium text-[#171717] text-[12px] hover:border-[#a3a3a3] hover:bg-[#faf9f7]"
+			>
+				<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+					<path
+						d="M7.5 2.5 4 6l3.5 3.5"
+						stroke="currentColor"
+						strokeWidth="1.4"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+				</svg>
+				{t.account.myOrders}
+			</Link>
+
+			<div className="flex flex-wrap items-end justify-between gap-3">
+				<div>
+					<h1 className="mb-1 font-semibold text-[22px]">{title}</h1>
+					<p className="flex flex-wrap items-center gap-1.5 text-[#5c574e] text-[13px]">
+						<span className="font-mono">{ref}</span>
+						<CopyOrderId
+							value={ref}
+							label={o.copyOrderId}
+							copiedLabel={o.copied}
+						/>
+						<span>
+							·{" "}
+							{fill(t.orders.orderedOn, {
+								date: order.createdAt.toLocaleDateString(lang, {
+									timeZone: "Asia/Kuala_Lumpur",
+									day: "numeric",
+									month: "short",
+									year: "numeric",
+								}),
+							})}
+						</span>
+					</p>
+				</div>
+				<PaymentBadge badge={card.badge} label={badgeLabel} />
+			</div>
+
+			<p className="text-[#404040] text-[14px]" role="status">
+				<span className="font-semibold text-[#171717]">{heading}.</span> {body}
+			</p>
+
+			<div className="flex flex-wrap items-start gap-[18px]">
+				<section className={`${CARD} min-w-0 flex-[1_1_300px]`}>
+					<h2 className={`${CARD_HEADING} mb-3.5`}>{o.progressHeading}</h2>
+					<ol className="flex flex-col gap-3">
+						{progress.map((step, i) => (
+							<li key={step.label} className="flex items-start gap-3">
+								<span
+									className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] text-white ${
+										step.done
+											? "bg-[#1f5138]"
+											: i === next
+												? "border-2 border-[#1f5138] bg-white"
+												: "bg-[#d4d4d4]"
+									}`}
+								>
+									{step.done ? "✓" : ""}
+								</span>
+								<div>
+									<p className="font-medium text-[13px]">{step.label}</p>
+									{step.detail && (
+										<p className="text-[#5c574e] text-[12px] leading-[17px]">
+											{step.detail}
+										</p>
+									)}
+								</div>
+							</li>
+						))}
+					</ol>
+				</section>
+
+				<div className="flex min-w-0 flex-[1_1_300px] flex-col gap-[18px]">
+					{payOnline && (
+						<section className={CARD}>
+							{failed && (
+								<div
+									role="alert"
+									className="mb-4 rounded-[10px] border border-[#f0b4ae] bg-[#fdf1ef] px-3.5 py-3 text-[#3d3a34] text-[13px] leading-[18px]"
+								>
+									<p className="mb-0.5 font-semibold">
+										{t.quote.paymentFailedTitle}
+									</p>
+									<p>{t.quote.paymentFailedBody}</p>
+								</div>
+							)}
+							<h2 className={`${CARD_HEADING} mb-3.5`}>{o.payOnlineHeading}</h2>
+							<OnlinePayment
+								token={token}
+								payLabel={fill(o.payOnlineCta, { amount: rm(order.totalRm) })}
+								errorText={o.payOnlineError}
+								settlingText={o.bodyConfirming}
 							/>
-						</div>
-					</div>
+						</section>
+					)}
+
+					{pay && (
+						<section className={CARD}>
+							<h2 className={`${CARD_HEADING} mb-3.5`}>{o.payHeading}</h2>
+							<dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-[13px]">
+								{(
+									[
+										[o.payBank, pay.bank],
+										[o.payAccountName, pay.accountName],
+										[o.payAccountNumber, pay.accountNumber],
+										[o.payReference, pay.reference],
+										[o.payAmount, rm(pay.amountRm)],
+									] as const
+								).map(([label, value]) => (
+									<div key={label} className="contents">
+										<dt className="text-[#5c574e]">{label}</dt>
+										<dd className="font-medium tabular-nums">{value}</dd>
+									</div>
+								))}
+							</dl>
+							<p className="mt-3.5 border-[#ecebe7] border-t pt-3 text-[#737373] text-[12px] leading-[17px]">
+								{o.payNote}
+							</p>
+						</section>
+					)}
 
 					<section className={CARD}>
 						<h2 className={`${CARD_HEADING} mb-3.5`}>{o.summaryHeading}</h2>
@@ -196,7 +319,7 @@ export default async function OrderPage({
 							<span className="tabular-nums">{rm(order.deliveryRm)}</span>
 						</div>
 						<div className="mt-1.5 flex justify-between border-[#ecebe7] border-t pt-2.5 font-semibold text-[14px]">
-							<span>{order.status === "PAID" ? o.totalPaid : o.total}</span>
+							<span>{paid ? o.totalPaid : o.totalDue}</span>
 							<span className="tabular-nums">{rm(order.totalRm)}</span>
 						</div>
 					</section>
@@ -208,151 +331,16 @@ export default async function OrderPage({
 						</p>
 					</section>
 
-					{payOnline && (
-						<section className={CARD}>
-							{failed && (
-								<div
-									role="alert"
-									className="mb-4 rounded-[10px] border border-[#f0b4ae] bg-[#fdf1ef] px-3.5 py-3 text-[#3d3a34] text-[13px] leading-[18px]"
-								>
-									<p className="mb-0.5 font-semibold">
-										{t.quote.paymentFailedTitle}
-									</p>
-									<p>{t.quote.paymentFailedBody}</p>
-								</div>
-							)}
-							<h2 className={`${CARD_HEADING} mb-3.5`}>{o.payOnlineHeading}</h2>
-							<OnlinePayment
-								token={token}
-								payLabel={fill(o.payOnlineCta, { amount: rm(order.totalRm) })}
-								errorText={o.payOnlineError}
-							/>
-						</section>
-					)}
-
-					{pay && (
-						<section className={CARD}>
-							<h2 className={`${CARD_HEADING} mb-3.5`}>{o.payHeading}</h2>
-							<dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-[13px]">
-								{(
-									[
-										[o.payBank, pay.bank],
-										[o.payAccountName, pay.accountName],
-										[o.payAccountNumber, pay.accountNumber],
-										[o.payReference, pay.reference],
-										[o.payAmount, rm(pay.amountRm)],
-									] as const
-								).map(([label, value]) => (
-									<div key={label} className="contents">
-										<dt className="text-[#5c574e]">{label}</dt>
-										<dd className="font-medium tabular-nums">{value}</dd>
-									</div>
-								))}
-							</dl>
-							<p className="mt-3.5 border-[#ecebe7] border-t pt-3 text-[#737373] text-[12px] leading-[17px]">
-								{o.payNote}
-							</p>
-						</section>
-					)}
-
-					{order.status === "PAID" && (
-						<section className={CARD}>
-							<h2 className={`${CARD_HEADING} mb-3.5`}>{o.nextHeading}</h2>
-							<ol className="flex flex-col gap-3">
-								{(
-									[
-										{ label: o.stagePaid, done: true },
-										...STAGES.map((stage) => ({
-											label: o.stages[stage],
-											detail:
-												stage === "MEASURE" ? o.stageMeasureDetail : undefined,
-											done: stageReached(order.productionStage, stage),
-										})),
-										{ label: o.stageDelivery },
-									] as {
-										label: string;
-										detail?: string;
-										done?: boolean;
-									}[]
-								).map((stage) => (
-									<li key={stage.label} className="flex items-start gap-3">
-										<span
-											className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] text-white ${
-												stage.done ? "bg-[#1f5138]" : "bg-[#d4d4d4]"
-											}`}
-										>
-											{stage.done ? "✓" : ""}
-										</span>
-										<div>
-											<p className="font-medium text-[13px]">{stage.label}</p>
-											{stage.detail && (
-												<p className="text-[#737373] text-[12px] leading-[17px]">
-													{stage.detail}
-												</p>
-											)}
-										</div>
-									</li>
-								))}
-							</ol>
-							{delivery && (
-								<Link
-									href={`/${lang}/track/${delivery.publicToken}`}
-									className="mt-4 inline-flex min-h-11 items-center rounded-full bg-[#1f5138] px-5 font-semibold text-[13px] text-white hover:bg-[#1a4430]"
-								>
-									{o.trackDelivery}
-								</Link>
-							)}
-						</section>
-					)}
-
-					<div className="flex flex-wrap justify-center gap-3">
+					{delivery && (
 						<Link
-							href={`/${lang}/planner`}
-							className="flex min-h-11 items-center rounded-full border border-[#d4d4d4] px-[22px] font-medium text-[#404040] text-[13px] hover:border-[#a3a3a3] hover:bg-white"
+							href={`/${lang}/track/${delivery.publicToken}`}
+							className="inline-flex min-h-10 items-center self-start rounded-[9px] bg-[#1f5138] px-4 font-semibold text-[13px] text-white hover:bg-[#1a4430]"
 						>
-							{o.backToPlanner}
+							{o.trackDelivery}
 						</Link>
-						<Link
-							href={`/${lang}`}
-							className="flex min-h-11 items-center rounded-full border border-[#d4d4d4] px-[22px] font-medium text-[#404040] text-[13px] hover:border-[#a3a3a3] hover:bg-white"
-						>
-							{o.backHome}
-						</Link>
-					</div>
+					)}
 				</div>
-			</main>
-		</div>
-	);
-}
-
-/** Paid, waiting or cancelled — the checkout design's result mark. */
-function StatusIcon({
-	status,
-}: {
-	status: "AWAITING_PAYMENT" | "PAID" | "CANCELLED";
-}) {
-	const [background, path] =
-		status === "PAID"
-			? ["bg-[#1f5138]", "M5 12.5l4.5 4.5L19 7"]
-			: status === "CANCELLED"
-				? ["bg-[#b42318]", "M8 8l8 8M16 8l-8 8"]
-				: ["bg-[#8a6d1f]", "M12 8.5V12l2.5 1.5"];
-	return (
-		<span
-			className={`flex h-[52px] w-[52px] items-center justify-center rounded-full ${background}`}
-		>
-			<svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
-				{status === "AWAITING_PAYMENT" && (
-					<circle cx="12" cy="12" r="7" stroke="#fff" strokeWidth="2" />
-				)}
-				<path
-					d={path}
-					stroke="#fff"
-					strokeWidth="2.2"
-					strokeLinecap="round"
-					strokeLinejoin="round"
-				/>
-			</svg>
-		</span>
+			</div>
+		</>
 	);
 }

@@ -151,3 +151,16 @@ body {
 		transition: none;
 	}
 }
+
+/*
+ * A native <select> with our own chevron. Chrome draws its arrow hard against
+ * the text and padding cannot move it, so the arrow is replaced and the
+ * right padding leaves it room.
+ */
+@utility select-chevron {
+	appearance: none;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='none'%3E%3Cpath d='M2.5 4 5 6.5 7.5 4' stroke='%23525252' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 10px center;
+	padding-right: 30px;
+}

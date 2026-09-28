@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { AccountMenu } from "@/components/AccountMenu";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import RevealOnEnter from "@/components/scroll/RevealOnEnter";
 import ScrollSequence from "@/components/scroll/ScrollSequence";
@@ -222,9 +223,6 @@ export default async function Home({
 						<Link href={`/${lang}/tutorials`} className={navLink}>
 							{t.landing.nav.tutorials}
 						</Link>
-						<Link href={`/${lang}/orders`} className={navLink}>
-							{t.landing.nav.myOrders}
-						</Link>
 					</nav>
 					<div className="flex shrink-0 items-center gap-4">
 						{/* Inline here rather than the strip above the bar: one row of
@@ -238,6 +236,20 @@ export default async function Home({
 									inline
 								/>
 							</Suspense>
+						</div>
+						{/* Below sm the row cannot fit it beside the CTA (Malay overflows
+						    360px), so the disclosure carries a My orders link instead —
+						    signed out, that page bounces through sign-in and back. */}
+						<div className="hidden sm:block">
+							<AccountMenu
+								lang={lang}
+								labels={{
+									signIn: t.account.signIn,
+									signOut: t.account.signOut,
+									myOrders: t.account.myOrders,
+									menu: t.account.menuLabel,
+								}}
+							/>
 						</div>
 						<Link
 							href={`/${lang}/planner`}
@@ -287,8 +299,11 @@ export default async function Home({
 								<Link href={`/${lang}/tutorials`} className={navLink}>
 									{t.landing.nav.tutorials}
 								</Link>
-								<Link href={`/${lang}/orders`} className={navLink}>
-									{t.landing.nav.myOrders}
+								<Link
+									href={`/${lang}/orders`}
+									className={`${navLink} sm:hidden`}
+								>
+									{t.account.myOrders}
 								</Link>
 								<div
 									className="mt-1 border-t px-2.5 pt-2 pb-1"

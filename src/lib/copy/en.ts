@@ -27,7 +27,6 @@ export const en = {
 			finishes: "Finishes",
 			faq: "FAQ",
 			tutorials: "Tutorials",
-			myOrders: "My orders",
 			menu: "Menu",
 			startPlanning: "Start planning",
 			admin: "Admin",
@@ -425,31 +424,26 @@ export const en = {
 		eyebrow: "Learn",
 		heading: "DIY tutorials",
 		subtitle:
-			"Step-by-step videos for building and installing EzCabinet units yourself, from a first flat-pack carcass to fitting a full run.",
+			"Short videos showing how to install each cabinet type we offer, from base and wall cabinets to TV consoles and wardrobes.",
 		allTypes: "All types",
-		allLevels: "All levels",
 		emptyNoTutorials: "Tutorials are being filmed. Check back soon.",
-		emptyNoMatches: "No tutorials match those filters yet.",
+		emptyNoMatches: "No videos for this cabinet type yet.",
 		loadingPlayer: "Loading player…",
 		copyright: "© {brand}",
 		backToSite: "Back to site",
 		categories: {
-			base: "Base cabinets",
-			wall: "Wall cabinets",
-			wardrobe: "Wardrobes",
-			drawer: "Drawers",
-			island: "Islands",
-		},
-		levels: {
-			beginner: "Beginner",
-			intermediate: "Intermediate",
-			advanced: "Advanced",
+			base: "Base cabinet",
+			wall: "Wall cabinet",
+			tall: "Tall cabinet",
+			drawer: "Drawer base",
+			fridge: "Fridge housing",
+			tv: "TV cabinet",
+			wardrobe: "Wardrobe",
+			shoe: "Shoe cabinet",
 		},
 	},
 	/** The page a customer lands on after checkout, reached by its public token. */
 	order: {
-		breadcrumb: "Order confirmation",
-		myOrders: "My orders",
 		headingConfirming: "Confirming your payment",
 		bodyConfirming:
 			"Thanks — we're waiting for the payment provider to confirm. This usually takes a few seconds, and this page updates by itself. You don't need to pay again.",
@@ -470,14 +464,12 @@ export const en = {
 		headingCancelled: "Order cancelled",
 		bodyCancelled:
 			"This order was cancelled. Get in touch if that isn't what you expected.",
-		orderId: "Order ID",
 		copyOrderId: "Copy order ID",
 		copied: "Copied",
 		summaryHeading: "Order summary",
 		qty: "Qty {count}",
 		subtotal: "Subtotal",
 		delivery: "Delivery",
-		total: "Total",
 		totalPaid: "Total paid",
 		addressHeading: "Delivery address",
 		payHeading: "Pay by bank transfer",
@@ -488,7 +480,6 @@ export const en = {
 		payAmount: "Amount",
 		payNote:
 			"Use your order ID as the transfer reference so we can match your payment. We'll contact you once it arrives, usually within one working day.",
-		nextHeading: "What happens next",
 		stagePaid: "Payment received",
 		stageMeasureDetail:
 			"A designer confirms your measurements before production.",
@@ -503,8 +494,8 @@ export const en = {
 		},
 		stageDelivery: "Delivery to your site",
 		trackDelivery: "Track your delivery",
-		backToPlanner: "Back to planner",
-		backHome: "Back to home",
+		progressHeading: "Progress",
+		totalDue: "Total due",
 	},
 	/**
 	 * The delivery tracking page a customer reaches from their link.
@@ -515,7 +506,6 @@ export const en = {
 	 * the locale on the one screen a customer opens more than once.
 	 */
 	track: {
-		breadcrumb: "Order confirmation",
 		headingPlaced: "Order placed",
 		bodyPlaced: "Thanks — we've got your order and we're getting it ready.",
 		headingDelivered: "Delivered",
@@ -607,16 +597,29 @@ export const en = {
 		autoReply:
 			"This number only sends EzCabinet order updates. To chat with our team, message us at {number}",
 	},
+	/** The shared header's account menu and the account side nav. */
+	account: {
+		navHeading: "Your account",
+		myOrders: "My orders",
+		signIn: "Sign in",
+		signOut: "Sign out",
+		menuLabel: "Account menu",
+	},
 	orders: {
-		breadcrumb: "My orders",
 		heading: "My orders",
 		empty: "No orders yet",
-		emptyBody: "Plan a room and place an order — it will show up here.",
+		emptyBody:
+			"When you order a design, it shows up here with its payment, production and delivery status.",
 		startPlanning: "Start planning",
-		placedOn: "Placed {date}",
 		statusAwaiting: "Awaiting payment",
 		statusPaid: "Paid",
 		statusCancelled: "Cancelled",
+		orderedOn: "Ordered {date}",
+		unitsOne: "{room} · 1 unit",
+		unitsOther: "{room} · {count} units",
+		stageNotStarted: "Not in production yet",
+		payNow: "Pay now",
+		viewOrder: "View order",
 	},
 	/** The one hard stop before checkout — see CLAUDE.md's conversion decision. */
 	signIn: {
