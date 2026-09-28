@@ -237,15 +237,20 @@ export default async function Home({
 								/>
 							</Suspense>
 						</div>
-						<AccountMenu
-							lang={lang}
-							labels={{
-								signIn: t.account.signIn,
-								signOut: t.account.signOut,
-								myOrders: t.account.myOrders,
-								menu: t.account.menuLabel,
-							}}
-						/>
+						{/* Below sm the row cannot fit it beside the CTA (Malay overflows
+						    360px), so the disclosure carries a My orders link instead —
+						    signed out, that page bounces through sign-in and back. */}
+						<div className="hidden sm:block">
+							<AccountMenu
+								lang={lang}
+								labels={{
+									signIn: t.account.signIn,
+									signOut: t.account.signOut,
+									myOrders: t.account.myOrders,
+									menu: t.account.menuLabel,
+								}}
+							/>
+						</div>
 						<Link
 							href={`/${lang}/planner`}
 							className="inline-flex min-h-9 items-center rounded-[9px] bg-[var(--cta)] px-4.5 font-semibold text-[13px] text-white transition-[transform,background-color] hover:bg-[var(--cta-hover)] active:translate-y-px"
@@ -293,6 +298,12 @@ export default async function Home({
 								))}
 								<Link href={`/${lang}/tutorials`} className={navLink}>
 									{t.landing.nav.tutorials}
+								</Link>
+								<Link
+									href={`/${lang}/orders`}
+									className={`${navLink} sm:hidden`}
+								>
+									{t.account.myOrders}
 								</Link>
 								<div
 									className="mt-1 border-t px-2.5 pt-2 pb-1"

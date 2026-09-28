@@ -125,6 +125,7 @@ export default async function OrdersPage({
 										{" · "}
 										{fill(s.orderedOn, {
 											date: order.createdAt.toLocaleDateString(lang, {
+												timeZone: "Asia/Kuala_Lumpur",
 												day: "numeric",
 												month: "short",
 												year: "numeric",
