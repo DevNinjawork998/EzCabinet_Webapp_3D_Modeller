@@ -149,14 +149,17 @@ export function DesignViewer({
 
 		(async () => {
 			try {
-				const [{ buildRenderMesh }, text] = await Promise.all([
+				const [{ buildRenderMesh, MAX_TRIANGLES }, text] = await Promise.all([
 					import("@/lib/mesh/renderMesh"),
 					objTextFrom(source),
 				]);
 				if (cancelled) return;
 
+				// The triangle cap lives in `convertDesign.ts`, not in
+				// `buildRenderMesh`, so it is repeated here — a preview that paints
+				// what publish will refuse is the opposite of a preview.
 				const converted = buildRenderMesh(text);
-				if (converted) {
+				if (converted && converted.triangleCount <= MAX_TRIANGLES) {
 					setMesh(converted);
 					return;
 				}
