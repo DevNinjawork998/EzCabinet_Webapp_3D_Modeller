@@ -22,6 +22,7 @@ import {
 import { summariseCatalogueChanges } from "@/lib/catalogue/diff";
 import { siteImageSrc } from "@/lib/catalogue/siteImages";
 import type { DesignMeasurement } from "@/lib/mesh/measureDesign";
+import { PLANNER_CATALOGUE } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
 
 /**
@@ -1578,6 +1579,11 @@ function CabinetDesigns() {
 														: null)
 												}
 												className="h-56 w-full lg:h-80"
+												// The seed until the published catalogue loads, so the first
+												// preview is never blank.
+												finishes={(base ?? PLANNER_CATALOGUE).finishes}
+												doorStyles={(base ?? PLANNER_CATALOGUE).doorStyles}
+												finishPhotos={finishPhotos}
 											/>
 										)}
 
