@@ -22,6 +22,7 @@ import {
 import { summariseCatalogueChanges } from "@/lib/catalogue/diff";
 import { siteImageSrc } from "@/lib/catalogue/siteImages";
 import type { DesignMeasurement } from "@/lib/mesh/measureDesign";
+import { PLANNER_CATALOGUE } from "@/lib/planner/catalogue";
 import type { PlannerCatalogue } from "@/lib/planner/catalogueSchema";
 
 /**
@@ -552,6 +553,15 @@ function CabinetDesigns() {
 		window.addEventListener("beforeunload", warn);
 		return () => window.removeEventListener("beforeunload", warn);
 	}, [settingsDirty]);
+
+	useEffect(() => {
+		if (!panelOpen) return;
+		const close = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setPanelOpen(false);
+		};
+		window.addEventListener("keydown", close);
+		return () => window.removeEventListener("keydown", close);
+	}, [panelOpen]);
 
 	function selectTab(next: Tab) {
 		setTab(next);
@@ -1466,10 +1476,21 @@ function CabinetDesigns() {
 			</main>
 
 			{panelOpen && (
-				<div className="fixed inset-0 z-30 flex justify-end bg-neutral-900/30">
-					<div className="flex h-full w-full max-w-[480px] flex-col overflow-y-auto bg-white shadow-2xl">
-						<div className="sticky top-0 z-10 flex items-center justify-between border-neutral-200 border-b bg-white px-5.5 py-4.5">
-							<p className="font-semibold text-[15px]">
+				// Centred rather than a right-hand drawer: on an ultrawide the
+				// drawer sat a screen's width from the table it edits. Backdrop
+				// clicks deliberately do not close it — a stray one would lose a
+				// half-typed form.
+				<div className="fixed inset-0 z-40 flex items-center justify-center bg-neutral-900/40 sm:p-6">
+					<div
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="design-panel-title"
+						className={`flex h-full w-full flex-col bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:max-w-[560px] sm:rounded-xl ${
+							batch ? "" : "lg:max-w-[960px]"
+						}`}
+					>
+						<div className="flex shrink-0 items-center justify-between border-neutral-200 border-b px-5.5 py-4.5">
+							<p id="design-panel-title" className="font-semibold text-[15px]">
 								{editingId ? "Edit design" : "Upload new design"}
 							</p>
 							<button
@@ -1481,61 +1502,118 @@ function CabinetDesigns() {
 							</button>
 						</div>
 
-						<div className="flex flex-col gap-5 p-5.5">
-							<div>
-								<p className="mb-1.5 font-semibold text-[11px] text-neutral-600 uppercase tracking-wide">
-									Design file
-								</p>
-								<div className="rounded-[10px] border-[1.5px] border-neutral-300 border-dashed bg-neutral-50 p-5 text-center">
-									{file || existingFilename ? (
-										<>
-											<p className="font-medium text-sm">
-												{file ? file.name : existingFilename}
-											</p>
-											<p className="mt-1 text-neutral-500 text-xs">
-												{file ? "uploaded just now" : "currently attached"}
-											</p>
-											<button
-												type="button"
-												onClick={() => {
-													setFile(null);
-													setExistingFilename(null);
-													setMeasured(null);
-													setMeasureError(null);
-												}}
-												className="mt-2.5 text-amber-700 text-xs underline"
-											>
-												Remove and choose a different file
-											</button>
-										</>
-									) : (
-										<>
-											<p className="mb-1 text-neutral-700 text-sm">
-												Drag a design file here, or
-											</p>
-											<label className="inline-block cursor-pointer rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs">
-												Browse files
-												<input
-													type="file"
-													accept=".obj,.zip"
-													// Several at once: one export per width, each its own
-													// cabinet. Editing still replaces exactly one file.
-													multiple={!editingId}
-													className="hidden"
-													onChange={(e) => {
-														const files = Array.from(e.target.files ?? []);
-														if (files.length > 0) acceptFiles(files);
+						<div
+							className={`flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5.5 ${
+								batch
+									? ""
+									: "lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:items-start lg:gap-6"
+							}`}
+						>
+							{/* Left on wide screens: the file and what it read as, held
+							    in view while the fields beside it scroll. */}
+							<div className="flex flex-col gap-5 lg:sticky lg:top-0">
+								<div>
+									<p className="mb-1.5 font-semibold text-[11px] text-neutral-600 uppercase tracking-wide">
+										Design file
+									</p>
+									<div className="rounded-[10px] border-[1.5px] border-neutral-300 border-dashed bg-neutral-50 p-5 text-center">
+										{file || existingFilename ? (
+											<>
+												<p className="font-medium text-sm">
+													{file ? file.name : existingFilename}
+												</p>
+												<p className="mt-1 text-neutral-500 text-xs">
+													{file ? "uploaded just now" : "currently attached"}
+												</p>
+												<button
+													type="button"
+													onClick={() => {
+														setFile(null);
+														setExistingFilename(null);
+														setMeasured(null);
+														setMeasureError(null);
 													}}
-												/>
-											</label>
-											<p className="mt-2.5 text-[11px] text-neutral-400">
-												.obj, or .zip with its textures — up to 40 MB.
-												{!editingId &&
-													" Pick several to add every width of a cabinet at once."}
-											</p>
-										</>
-									)}
+													className="mt-2.5 text-amber-700 text-xs underline"
+												>
+													Remove and choose a different file
+												</button>
+											</>
+										) : (
+											<>
+												<p className="mb-1 text-neutral-700 text-sm">
+													Drag a design file here, or
+												</p>
+												<label className="inline-block cursor-pointer rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs">
+													Browse files
+													<input
+														type="file"
+														accept=".obj,.zip"
+														// Several at once: one export per width, each its own
+														// cabinet. Editing still replaces exactly one file.
+														multiple={!editingId}
+														className="hidden"
+														onChange={(e) => {
+															const files = Array.from(e.target.files ?? []);
+															if (files.length > 0) acceptFiles(files);
+														}}
+													/>
+												</label>
+												<p className="mt-2.5 text-[11px] text-neutral-400">
+													.obj, or .zip with its textures — up to 40 MB.
+													{!editingId &&
+														" Pick several to add every width of a cabinet at once."}
+												</p>
+											</>
+										)}
+									</div>
 								</div>
+
+								{!batch && (
+									<>
+										{(file || (editingId && existingFilename)) && (
+											<DesignViewer
+												source={
+													file ??
+													(editingId
+														? `/api/admin/cabinet-designs/${editingId}/file`
+														: null)
+												}
+												className="h-56 w-full lg:h-80"
+												// The seed until the published catalogue loads, so the first
+												// preview is never blank.
+												finishes={(base ?? PLANNER_CATALOGUE).finishes}
+												doorStyles={(base ?? PLANNER_CATALOGUE).doorStyles}
+												finishPhotos={finishPhotos}
+											/>
+										)}
+
+										{measured && (
+											<p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-[12px] text-green-900">
+												Read from the file:{" "}
+												<strong>
+													{measured.widthMm} × {measured.heightMm} ×{" "}
+													{measured.depthMm} mm
+												</strong>
+												{measured.doors > 0 && `, ${measured.doors} door`}
+												{measured.drawers > 0 && `, ${measured.drawers} drawer`}
+												{measured.floorHeightMm >= 1200 &&
+													`, hung at ${measured.floorHeightMm}mm`}
+												. {measured.partCount} parts. Check the fields below
+												before saving — they are a reading, not a spec.
+												{measured.notes.map((n) => (
+													<span key={n} className="mt-1 block text-amber-800">
+														{n}
+													</span>
+												))}
+											</p>
+										)}
+										{measureError && (
+											<p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+												{measureError}
+											</p>
+										)}
+									</>
+								)}
 							</div>
 
 							{batch ? (
@@ -1546,45 +1624,7 @@ function CabinetDesigns() {
 									setField={setField}
 								/>
 							) : (
-								<>
-									{(file || (editingId && existingFilename)) && (
-										<DesignViewer
-											source={
-												file ??
-												(editingId
-													? `/api/admin/cabinet-designs/${editingId}/file`
-													: null)
-											}
-											className="h-56 w-full"
-										/>
-									)}
-
-									{measured && (
-										<p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-[12px] text-green-900">
-											Read from the file:{" "}
-											<strong>
-												{measured.widthMm} × {measured.heightMm} ×{" "}
-												{measured.depthMm} mm
-											</strong>
-											{measured.doors > 0 && `, ${measured.doors} door`}
-											{measured.drawers > 0 && `, ${measured.drawers} drawer`}
-											{measured.floorHeightMm >= 1200 &&
-												`, hung at ${measured.floorHeightMm}mm`}
-											. {measured.partCount} parts. Check the fields below
-											before saving — they are a reading, not a spec.
-											{measured.notes.map((n) => (
-												<span key={n} className="mt-1 block text-amber-800">
-													{n}
-												</span>
-											))}
-										</p>
-									)}
-									{measureError && (
-										<p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
-											{measureError}
-										</p>
-									)}
-
+								<div className="flex flex-col gap-5">
 									<div>
 										<p className={LABEL_CLASS}>Cabinet name</p>
 										<input
@@ -1773,17 +1813,17 @@ function CabinetDesigns() {
 											</button>
 										</div>
 									</div>
-								</>
+								</div>
 							)}
 
 							{error && (
-								<p className="rounded border border-red-300 bg-red-50 p-2.5 text-red-900 text-sm">
+								<p className="rounded border border-red-300 bg-red-50 p-2.5 text-red-900 text-sm lg:col-span-2">
 									{error}
 								</p>
 							)}
 						</div>
 
-						<div className="sticky bottom-0 mt-auto flex justify-end gap-2.5 border-neutral-200 border-t bg-white px-5.5 py-4">
+						<div className="flex shrink-0 justify-end gap-2.5 border-neutral-200 border-t px-5.5 py-4">
 							<button
 								type="button"
 								onClick={() => setPanelOpen(false)}
