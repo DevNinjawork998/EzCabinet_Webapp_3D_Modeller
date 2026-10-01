@@ -84,11 +84,12 @@ picked even when it will not convert.
   so the viewer calls `markShadowsDirty()` itself whenever its `groups`, door
   style or doors mode change.
 - **Scale:** real metres. `DesignedCabinet` draws in its own frame in metres;
-  the `FRAME_SIZE` rescale goes away. A small pure helper,
-  `previewFrame(groups)`, takes the union of the groups' `bboxMm` and returns
-  the offset that centres the cabinet on x/z and stands it on y = 0, plus a
-  camera distance from its largest dimension. Orbit target is the cabinet's
-  mid-height.
+  the `FRAME_SIZE` rescale goes away. No centring is needed: a `MeshGroup`'s
+  frame is already x centred on the width, z centred on the depth, y up from
+  the underside. A small pure helper, `previewFrame(sizeMm)`, takes
+  `RenderMesh.sizeMm` (`[width, depth, height]`) and returns the orbit target
+  (the cabinet's mid-height) and a camera position whose distance grows with
+  the largest dimension.
 - Kept from today: `dpr={[1, 2]}`, `resize={{ scroll: false, debounce: 0 }}`
   (the zero-size-measure fix for a scrolling overlay), `OrbitControls` with pan
   off, the "drag to rotate · scroll to zoom" hint.
@@ -149,9 +150,9 @@ preview is safe.
 
 ## Testing
 
-- **Unit:** `previewFrame` — a cabinet whose bbox is off-origin comes back
-  centred on x/z with its base on y = 0, and the camera distance grows with the
-  largest dimension. `buildRenderMesh` itself is already covered by
+- **Unit:** `previewFrame` — the target sits at the cabinet's mid-height on
+  the origin, the camera is in front of and above it, and the camera distance
+  scales with the largest dimension. `buildRenderMesh` itself is already covered by
   `src/lib/mesh/__tests__/renderMesh.test.ts`.
 - **Browser** (`/admin/cabinet-designs`, 2560 and 390 wide):
   - edit an existing design — painted preview, not grey;

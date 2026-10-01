@@ -1,0 +1,657 @@
+# Admin Design Preview Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** The design preview in the `/admin/cabinet-designs` upload/edit modal renders a cabinet exactly as the planner does — same mesh conversion, same `DesignedCabinet`, same `StudioLighting` — with finish, door-style and doors shut/open/hidden controls.
+
+**Architecture:** `DesignViewer` runs `buildRenderMesh` (pure, `lib/mesh/renderMesh.ts`) on the file text in the browser and renders the groups with the planner's `DesignedCabinet` inside the planner's `StudioLighting`. A file that will not convert falls back to the existing grey `OBJLoader` render with a notice. The camera is placed by a small pure helper, `previewFrame`, which is the one unit-tested piece.
+
+**Tech Stack:** Next.js App Router, React 19, @react-three/fiber + drei, three.js, Tailwind 4, Vitest, Biome.
+
+**Spec:** `docs/superpowers/specs/2026-10-01-admin-design-preview-design.md`
+
+## Global Constraints
+
+- No change to `src/components/planner/**`, `src/lib/mesh/**` or `src/lib/planner/**` — the preview *consumes* them.
+- `DesignViewer` stays imported only by the admin page behind `next/dynamic`; nothing new reaches a customer bundle.
+- Preview controls are local state only — nothing saved, the form's "Front / finish options" chips untouched.
+- `quality="low"`; no `HighQualityEffects`.
+- Preview plan: `{ template: "rect", widthMm: 2000, depthMm: 2000 }`, ceiling `2400` mm.
+- `DesignedCabinet` defaults in the preview: `hinge="left"`, `sheetOffset={0}`, `selected={false}`, `gaps` and `exposed` omitted.
+- UI copy in sentence case. Fallback notice text, verbatim: `Won't convert — the planner will draw this one procedurally.`
+- Commands: `pnpm test`, `pnpm lint`, `pnpm typecheck` (the pre-existing `prisma.config.ts` `defineConfig` error is not ours; any *other* error is).
+
+## Review Focus
+
+1. **Switching file mid-conversion** (admin picks file A, then B before A finishes) — the preview must show B, never A. Owned by Task 2 (cancel flag + reset both `mesh` and `object` at the start of each load); verified in Task 2 Step 8.
+2. **A file with no recognised fronts** (drafter misnamed the doors) — the finish touches nothing, and the admin must be told rather than left looking at an unpainted cabinet. Task 2 shows an amber note in place of the doors switch; verified in Task 2 Step 8.
+3. **Catalogue not loaded yet** (`base` is `null` on first open) — the preview must still render with the seed's finishes and door styles, not crash. Task 2 Step 3 passes `PLANNER_CATALOGUE` palettes as the fallback.
+4. **Selected finish disappears** (an admin deletes a finish in the Finishes tab while the modal state survives) — fall back to the first finish, not `undefined.hex`. Task 2 resolves `finishes.find(…) ?? finishes[0]`.
+5. **Very small or very large cabinet** (a 300 mm filler, a 2400 mm tall unit) — the whole cabinet must be in frame. Task 1's test pins distance scaling with the largest dimension, including height.
+
+---
+
+### Task 1: `previewFrame` — camera placement from a cabinet's size
+
+**Files:**
+- Create: `src/components/admin/previewFrame.ts`
+- Test: `src/components/admin/__tests__/previewFrame.test.ts`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces:
+  ```ts
+  export type PreviewFrame = {
+    /** Orbit target, metres: the cabinet's mid-height on the origin. */
+    target: [number, number, number];
+    /** Camera position, metres: in front of (+z), above and to the right of the target. */
+    camera: [number, number, number];
+  };
+  /** `sizeMm` is `RenderMesh.sizeMm`: `[width, depth, height]`. */
+  export function previewFrame(sizeMm: [number, number, number]): PreviewFrame;
+  ```
+
+- [ ] **Step 1: Write the failing test**
+
+`src/components/admin/__tests__/previewFrame.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { previewFrame } from "../previewFrame";
+
+const dist = (a: number[], b: number[]) =>
+	Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+describe("previewFrame", () => {
+	it("targets the cabinet's mid-height on the origin, in metres", () => {
+		// [width, depth, height] — RenderMesh.sizeMm's order.
+		const { target } = previewFrame([800, 600, 720]);
+		expect(target).toEqual([0, 0.36, 0]);
+	});
+
+	it("puts the camera in front of and above the target", () => {
+		const { target, camera } = previewFrame([800, 600, 720]);
+		expect(camera[2]).toBeGreaterThan(target[2]);
+		expect(camera[1]).toBeGreaterThan(target[1]);
+	});
+
+	it("backs off in proportion to the largest dimension", () => {
+		const small = previewFrame([400, 300, 360]);
+		const big = previewFrame([800, 600, 720]);
+		expect(dist(big.camera, big.target)).toBeCloseTo(
+			2 * dist(small.camera, small.target),
+		);
+	});
+
+	it("frames a tall unit by its height, not its width", () => {
+		const base = previewFrame([600, 580, 870]);
+		const tall = previewFrame([600, 580, 2400]);
+		expect(dist(tall.camera, tall.target) / dist(base.camera, base.target))
+			.toBeCloseTo(2400 / 870);
+	});
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pnpm vitest run src/components/admin/__tests__/previewFrame.test.ts`
+Expected: FAIL — cannot resolve `../previewFrame`.
+
+- [ ] **Step 3: Write minimal implementation**
+
+`src/components/admin/previewFrame.ts`:
+
+```ts
+/**
+ * Where the admin preview's camera sits for one cabinet.
+ *
+ * A `MeshGroup`'s frame is already x centred on the width, z centred on the
+ * depth and y up from the underside (see `renderMesh.ts`), so nothing needs
+ * centring — only the camera has to back off far enough to see the whole
+ * thing. The direction is the three-quarter view the old viewer used.
+ */
+export type PreviewFrame = {
+	/** Orbit target, metres: the cabinet's mid-height on the origin. */
+	target: [number, number, number];
+	/** Camera position, metres: in front of (+z), above and to the right. */
+	camera: [number, number, number];
+};
+
+const DIRECTION = (() => {
+	const v: [number, number, number] = [2.8, 2, 3.4];
+	const length = Math.hypot(...v);
+	return v.map((n) => n / length) as [number, number, number];
+})();
+
+/** Camera distance per metre of the cabinet's largest dimension. Fits a 40°
+ * field of view with a margin. */
+const DISTANCE_PER_M = 2.2;
+
+/** `sizeMm` is `RenderMesh.sizeMm`: `[width, depth, height]`. */
+export function previewFrame(
+	sizeMm: [number, number, number],
+): PreviewFrame {
+	const [, , heightMm] = sizeMm;
+	const target: [number, number, number] = [0, heightMm / 2000, 0];
+	const distance = (Math.max(...sizeMm) / 1000) * DISTANCE_PER_M;
+	return {
+		target,
+		camera: [
+			target[0] + DIRECTION[0] * distance,
+			target[1] + DIRECTION[1] * distance,
+			target[2] + DIRECTION[2] * distance,
+		],
+	};
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pnpm vitest run src/components/admin/__tests__/previewFrame.test.ts`
+Expected: PASS, 4 tests.
+
+- [ ] **Step 5: Lint and commit**
+
+```bash
+pnpm biome check --write src/components/admin/previewFrame.ts src/components/admin/__tests__/previewFrame.test.ts
+git add src/components/admin/previewFrame.ts src/components/admin/__tests__/previewFrame.test.ts docs/superpowers/specs/2026-10-01-admin-design-preview-design.md docs/superpowers/plans/2026-10-01-admin-design-preview.md
+git commit -m "feat(admin): previewFrame places the design preview camera
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 2: `DesignViewer` renders the planner's cabinet, with controls
+
+**Files:**
+- Modify (full rewrite): `src/components/admin/DesignViewer.tsx`
+- Modify: `src/app/admin/cabinet-designs/CabinetDesignsClient.tsx` — imports (top of file), and the `<DesignViewer … />` element inside the modal (search for `<DesignViewer`; around line 1573).
+
+**Interfaces:**
+- Consumes:
+  - `previewFrame(sizeMm: [number, number, number]): { target, camera }` — Task 1.
+  - `buildRenderMesh(objText: string): RenderMesh | null` and types `RenderMesh` (`{ groups: MeshGroup[]; sizeMm: Vec3; triangleCount: number }`), `MeshGroup` (`role: "carcass" | "door" | "drawerFront" | "shelf" | "hardware" | "other"`, …) — `src/lib/mesh/renderMesh.ts`.
+  - `DesignedCabinet` — `src/components/planner/DesignedCabinet.tsx`. Props used: `groups`, `door: DoorStyle | null`, `hinge: "left" | "right"`, `open: boolean`, `doorsHidden?: boolean`, `finishHex: string`, `finishPhoto: string | null`, `sheetOffset: number`, `selected: boolean`.
+  - `StudioLighting({ plan: FloorPlan, ceilingHeightMm: number, quality: "low" | "high" })` — `src/components/planner/Lighting.tsx`.
+  - `SHADOW_MAP`, `markShadowsDirty(frames?: number): void` — `src/components/planner/lightingRig.ts`.
+  - `Finish` (`{ id, label, hex }`), `DoorStyle` (`{ id, label, look: "slab" | "shaker" | "glass", … }`) — `src/lib/planner/catalogueSchema.ts`.
+  - `chipClass(active: boolean): string` — `src/components/admin/styles.ts`.
+  - `PLANNER_CATALOGUE` — `src/lib/planner/catalogue.ts` (`.finishes: Finish[]`, `.doorStyles: DoorStyle[]`); and `CabinetDesignsClient`'s existing state `base: PlannerCatalogue | null`, `finishPhotos: Record<string, string>`.
+- Produces:
+  ```ts
+  export function DesignViewer(props: {
+    source: File | string | null;
+    /** Sizes the canvas box only; the controls sit below it. */
+    className?: string;
+    finishes: Finish[];
+    doorStyles: DoorStyle[];
+    /** `finish:<id>` → decor photo URL, as CabinetDesignsClient already holds. */
+    finishPhotos: Record<string, string>;
+  }): JSX.Element | null;
+  ```
+
+No unit test: the component is R3F rendering, verified in the browser (Step 8), and its one piece of pure logic is Task 1's `previewFrame`.
+
+- [ ] **Step 1: Replace `src/components/admin/DesignViewer.tsx` with:**
+
+```tsx
+"use client";
+
+import { Center, OrbitControls } from "@react-three/drei";
+import { Canvas } from "@react-three/fiber";
+import { useEffect, useState } from "react";
+import type { Group } from "three";
+import { Box3, Vector3 } from "three";
+import { DesignedCabinet } from "@/components/planner/DesignedCabinet";
+import { StudioLighting } from "@/components/planner/Lighting";
+import {
+	markShadowsDirty,
+	SHADOW_MAP,
+} from "@/components/planner/lightingRig";
+import type { RenderMesh } from "@/lib/mesh/renderMesh";
+import type { DoorStyle, Finish } from "@/lib/planner/catalogueSchema";
+import type { FloorPlan } from "@/lib/planner/floorplan";
+import { previewFrame } from "./previewFrame";
+import { chipClass } from "./styles";
+
+/**
+ * Shows an uploaded design file the way the planner will draw it.
+ *
+ * The file goes through `buildRenderMesh` — the function publish runs — in the
+ * browser, and the result is drawn by the planner's own `DesignedCabinet` under
+ * the planner's own `StudioLighting`. So the admin sees the customer's cabinet,
+ * not a grey approximation, and above all sees which triangles take the finish:
+ * the drafter's part names decide that (CLAUDE.md known issue 1), and a misnamed
+ * door is invisible in grey and obvious in colour.
+ *
+ * A file that will not convert is still shown, in grey through three's own
+ * `OBJLoader`, because the admin still needs to see which file they picked —
+ * and is told the planner will draw it procedurally, which is what publish does.
+ *
+ * It stays out of the public bundle because the only thing that imports it is
+ * an admin page, behind a dynamic import.
+ */
+
+/** A room just big enough to light and floor one cabinet. Only the lighting
+ * rig's shadow camera reads it. */
+const PREVIEW_PLAN: FloorPlan = { template: "rect", widthMm: 2000, depthMm: 2000 };
+const PREVIEW_CEILING_MM = 2400;
+
+/** Fit a non-converting model into a box about this big, whatever units it was
+ * drawn in. The grey fallback only — a converted mesh is drawn in metres. */
+const FRAME_SIZE = 2;
+
+type Doors = "shut" | "open" | "hidden";
+const DOORS: { id: Doors; label: string }[] = [
+	{ id: "shut", label: "Doors shut" },
+	{ id: "open", label: "Open" },
+	{ id: "hidden", label: "Hidden" },
+];
+
+/**
+ * The `.obj` text, from whichever shape the design arrived in.
+ *
+ * Both cases end up as bytes, so both go through `objTextFromBytes` — the same
+ * reader the publish route uses, which spots an archive by its magic number
+ * rather than its name. A stored design keeps its original filename in the
+ * blob's content disposition, so the name is not something a fetch can rely on.
+ *
+ * Imported lazily: `lib/mesh` pulls in fflate, and this whole component is
+ * already behind a dynamic import to keep it out of the customer bundle.
+ */
+async function objTextFrom(source: File | string): Promise<string> {
+	const { objTextFromBytes } = await import("@/lib/mesh/archive");
+
+	if (typeof source === "string") {
+		const res = await fetch(source);
+		if (!res.ok) throw new Error("could not fetch the design file");
+		return objTextFromBytes(new Uint8Array(await res.arrayBuffer()));
+	}
+
+	return objTextFromBytes(new Uint8Array(await source.arrayBuffer()));
+}
+
+/**
+ * The grey fallback's framing.
+ *
+ * One mechanism only. An earlier version scaled here *and* wrapped the result
+ * in drei's `<Bounds fit clip>`, and the two disagreed about what they were
+ * measuring — the canvas mounted, the file parsed, and nothing appeared.
+ * `<Center>` puts the model on the origin; the scale below decides how big it
+ * is; the camera never moves. A viewer only has to look right, not measure.
+ */
+function RawModel({ object }: { object: Group }) {
+	const size = new Box3().setFromObject(object).getSize(new Vector3());
+	const longest = Math.max(size.x, size.y, size.z) || 1;
+
+	// Z-up files arrive lying on their back. A cabinet is never deeper than it
+	// is tall, so that comparison is a safe way to spot one.
+	const zUp = size.z > size.y;
+
+	return (
+		<Center>
+			<primitive
+				object={object}
+				scale={FRAME_SIZE / longest}
+				rotation={zUp ? [-Math.PI / 2, 0, 0] : [0, 0, 0]}
+			/>
+		</Center>
+	);
+}
+
+/** Shared by both canvases. The panel is a fixed overlay with a scrolling
+ * body. R3F sizes itself through react-use-measure, and with scroll tracking
+ * on it measured this container as zero and never created its root — the
+ * canvas element existed but no frame was ever drawn. */
+const CANVAS_RESIZE = { scroll: false, debounce: 0 } as const;
+
+export function DesignViewer({
+	/** The picked file, or a URL an admin route streams the stored one from. */
+	source,
+	className = "",
+	finishes,
+	doorStyles,
+	finishPhotos,
+}: {
+	source: File | string | null;
+	/** Sizes the canvas box only; the controls sit below it. */
+	className?: string;
+	finishes: Finish[];
+	doorStyles: DoorStyle[];
+	/** `finish:<id>` → decor photo URL. */
+	finishPhotos: Record<string, string>;
+}) {
+	/** What the planner will draw. */
+	const [mesh, setMesh] = useState<RenderMesh | null>(null);
+	/** Only when `mesh` is null: the file as drawn, in grey. */
+	const [object, setObject] = useState<Group | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [loading, setLoading] = useState(false);
+
+	const [finishId, setFinishId] = useState<string | null>(null);
+	const [doorId, setDoorId] = useState<string | null>(null);
+	const [doors, setDoors] = useState<Doors>("shut");
+
+	useEffect(() => {
+		// Reset both first, so switching files never shows the last one's
+		// cabinet under the next one's name.
+		setMesh(null);
+		setObject(null);
+		setError(null);
+		if (!source) return;
+
+		let cancelled = false;
+		setLoading(true);
+
+		(async () => {
+			try {
+				const [{ buildRenderMesh }, text] = await Promise.all([
+					import("@/lib/mesh/renderMesh"),
+					objTextFrom(source),
+				]);
+				if (cancelled) return;
+
+				const converted = buildRenderMesh(text);
+				if (converted) {
+					setMesh(converted);
+					return;
+				}
+
+				// Loaded on demand. The loader is three's own, from `examples/jsm`,
+				// and has no business in any bundle but this one.
+				const { OBJLoader } = await import(
+					"three/examples/jsm/loaders/OBJLoader.js"
+				);
+				if (cancelled) return;
+				const parsed = new OBJLoader().parse(text);
+				if (parsed.children.length === 0) {
+					setError("No geometry in that file.");
+				} else {
+					setObject(parsed);
+				}
+			} catch (e) {
+				if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+			} finally {
+				if (!cancelled) setLoading(false);
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [source]);
+
+	if (!source) return null;
+
+	// A finish or door style deleted elsewhere while this is open falls back to
+	// the first, rather than painting `undefined`.
+	const finish = finishes.find((f) => f.id === finishId) ?? finishes[0];
+	const door = doorStyles.find((d) => d.id === doorId) ?? doorStyles[0];
+	const hasFronts =
+		mesh?.groups.some((g) => g.role === "door" || g.role === "drawerFront") ??
+		false;
+	const frame = mesh ? previewFrame(mesh.sizeMm) : null;
+
+	// The shadow map only redraws when asked. Swinging doors ask for
+	// themselves (`Hinge`, `Slide`); a door style or a hidden front changes
+	// what casts without moving anything, so it has to ask here.
+	const pickDoor = (id: string) => {
+		setDoorId(id);
+		markShadowsDirty();
+	};
+	const pickDoors = (next: Doors) => {
+		setDoors(next);
+		markShadowsDirty();
+	};
+
+	return (
+		<div className="flex flex-col gap-2.5">
+			<div
+				className={`relative overflow-hidden rounded-lg border border-neutral-200 bg-[#f4f2ee] ${className}`}
+			>
+				{mesh && frame && (
+					<Canvas
+						dpr={[1, 2]}
+						shadows={SHADOW_MAP}
+						camera={{ fov: 40, position: frame.camera }}
+						resize={CANVAS_RESIZE}
+						style={{ width: "100%", height: "100%" }}
+					>
+						<StudioLighting
+							plan={PREVIEW_PLAN}
+							ceilingHeightMm={PREVIEW_CEILING_MM}
+							quality="low"
+						/>
+						<mesh rotation-x={-Math.PI / 2} receiveShadow>
+							<planeGeometry
+								args={[PREVIEW_PLAN.widthMm / 1000, PREVIEW_PLAN.depthMm / 1000]}
+							/>
+							<meshStandardMaterial color="#e9e5de" />
+						</mesh>
+						<DesignedCabinet
+							groups={mesh.groups}
+							door={door}
+							hinge="left"
+							open={doors === "open"}
+							doorsHidden={doors === "hidden"}
+							finishHex={finish.hex}
+							finishPhoto={finishPhotos[`finish:${finish.id}`] ?? null}
+							sheetOffset={0}
+							selected={false}
+						/>
+						<OrbitControls
+							makeDefault
+							enablePan={false}
+							target={frame.target}
+						/>
+					</Canvas>
+				)}
+
+				{object && (
+					<Canvas
+						dpr={[1, 2]}
+						camera={{ fov: 40, position: [2.8, 2, 3.4] }}
+						resize={CANVAS_RESIZE}
+						style={{ width: "100%", height: "100%" }}
+					>
+						<ambientLight intensity={1.1} />
+						<directionalLight position={[4, 7, 6]} intensity={1.6} />
+						<RawModel object={object} />
+						<OrbitControls makeDefault enablePan={false} />
+					</Canvas>
+				)}
+
+				{(loading || error) && (
+					<p
+						className={`absolute inset-0 flex items-center justify-center px-4 text-center text-xs ${
+							error ? "text-amber-800" : "text-neutral-500"
+						}`}
+					>
+						{error ?? "Reading the model…"}
+					</p>
+				)}
+
+				{(mesh || object) && (
+					<p className="pointer-events-none absolute bottom-1.5 left-0 right-0 text-center text-[10px] text-neutral-400">
+						drag to rotate · scroll to zoom
+					</p>
+				)}
+			</div>
+
+			{object && (
+				<p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+					Won't convert — the planner will draw this one procedurally.
+				</p>
+			)}
+
+			{mesh && (
+				<div className="flex flex-col gap-2">
+					<div className="flex flex-wrap items-center gap-1.5">
+						{finishes.map((f) => {
+							const photo = finishPhotos[`finish:${f.id}`];
+							const active = f.id === finish.id;
+							return (
+								<button
+									key={f.id}
+									type="button"
+									title={f.label}
+									aria-label={f.label}
+									aria-pressed={active}
+									onClick={() => setFinishId(f.id)}
+									className={`h-6 w-6 rounded-full border border-neutral-300 bg-center bg-cover ${
+										active ? "ring-2 ring-neutral-900 ring-offset-1" : ""
+									}`}
+									style={{
+										backgroundColor: f.hex,
+										backgroundImage: photo ? `url(${photo})` : undefined,
+									}}
+								/>
+							);
+						})}
+						<span className="ml-1 text-[11px] text-neutral-500">
+							{finish.label}
+						</span>
+					</div>
+
+					<div className="flex flex-wrap gap-1.5">
+						{doorStyles.map((d) => (
+							<button
+								key={d.id}
+								type="button"
+								aria-pressed={d.id === door.id}
+								onClick={() => pickDoor(d.id)}
+								className={chipClass(d.id === door.id)}
+							>
+								{d.label}
+							</button>
+						))}
+					</div>
+
+					{hasFronts ? (
+						<div className="flex flex-wrap gap-1.5">
+							{DOORS.map((d) => (
+								<button
+									key={d.id}
+									type="button"
+									aria-pressed={doors === d.id}
+									onClick={() => pickDoors(d.id)}
+									className={chipClass(doors === d.id)}
+								>
+									{d.label}
+								</button>
+							))}
+						</div>
+					) : (
+						<p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+							No doors or drawer fronts recognised in this file, so the
+							finish reaches nothing. Check the drafter's part names.
+						</p>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
+```
+
+- [ ] **Step 2: Import the seed catalogue in the page**
+
+Add to the imports of `src/app/admin/cabinet-designs/CabinetDesignsClient.tsx`:
+
+```ts
+import { PLANNER_CATALOGUE } from "@/lib/planner/catalogue";
+```
+
+- [ ] **Step 3: Pass the palettes to the viewer**
+
+Replace the existing element:
+
+```tsx
+<DesignViewer
+	source={
+		file ??
+		(editingId
+			? `/api/admin/cabinet-designs/${editingId}/file`
+			: null)
+	}
+	className="h-56 w-full lg:h-80"
+/>
+```
+
+with:
+
+```tsx
+<DesignViewer
+	source={
+		file ??
+		(editingId
+			? `/api/admin/cabinet-designs/${editingId}/file`
+			: null)
+	}
+	className="h-56 w-full lg:h-80"
+	// The seed until the published catalogue loads, so the first
+	// preview is never blank.
+	finishes={(base ?? PLANNER_CATALOGUE).finishes}
+	doorStyles={(base ?? PLANNER_CATALOGUE).doorStyles}
+	finishPhotos={finishPhotos}
+/>
+```
+
+- [ ] **Step 4: Format, typecheck, lint, test**
+
+Run:
+```bash
+pnpm biome check --write src/components/admin/DesignViewer.tsx src/app/admin/cabinet-designs/CabinetDesignsClient.tsx
+pnpm typecheck 2>&1 | grep "error TS" | grep -v prisma.config.ts
+pnpm lint && pnpm test
+```
+Expected: the `grep` prints nothing; lint clean; all tests pass, including Task 1's 4.
+
+- [ ] **Step 5: Confirm the planner and engine were not touched**
+
+Run: `git diff --stat src/components/planner src/lib`
+Expected: empty output.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/components/admin/DesignViewer.tsx src/app/admin/cabinet-designs/CabinetDesignsClient.tsx
+git commit -m "feat(admin): design preview draws the planner's cabinet
+
+Runs buildRenderMesh in the browser and renders through DesignedCabinet
+and StudioLighting, with finish, door style and doors shut/open/hidden
+controls. A file that won't convert keeps the grey OBJ view, with a notice.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 7: Prepare a no-fronts test file** (for Review Focus 2)
+
+With the dev server running and `AUTH_ENABLED=false` locally, take any existing design's file and rename its door groups so `roles.ts` cannot recognise them:
+
+```bash
+mkdir -p .playwright-mcp
+curl -s http://localhost:3000/api/admin/cabinet-designs/<an-existing-design-id>/file -o .playwright-mcp/src.bin
+# A .zip needs unzipping first; an .obj is plain text.
+file .playwright-mcp/src.bin
+# For an .obj:
+sed -E 's/(Door|door|DOOR|Drawer|drawer)/Pnl/g' .playwright-mcp/src.bin > .playwright-mcp/no-fronts.obj
+```
+
+Get a design id from the page's network panel or `GET /api/admin/cabinet-designs`.
+
+- [ ] **Step 8: Browser verification** (dev server on `http://localhost:3000`, Playwright or Chrome; viewport 2560×1080, then 390×844)
+
+On `/admin/cabinet-designs`:
+
+1. **Edit an existing design** (row → Edit). Expected: preview is painted in the first finish with studio lighting and a floor shadow — not flat grey. Finish swatches, door style chips and a Doors shut / Open / Hidden switch appear under it.
+2. **Switch finishes.** Expected: door and drawer fronts change colour; carcass does not. If a finish has a decor photo uploaded in Site content, its swatch shows the photo and the fronts wear it.
+3. **Pick the glass door style.** Expected: fronts become see-through.
+4. **Shut → Open → Hidden.** Expected: doors swing open; then disappear with the carcass and interior still drawn.
+5. **Review Focus 1 — switch file mid-load:** open Upload, pick one `.obj`, and immediately pick another (Remove, then Browse). Expected: the preview ends on the second file.
+6. **Review Focus 2 — no fronts:** upload `.playwright-mcp/no-fronts.obj` from Step 7 (do not save). Expected: the amber "No doors or drawer fronts recognised…" note in place of the doors switch.
+7. **Fallback:** if a file past `MAX_TRIANGLES` (200,000) is to hand, upload it (do not save). Expected: grey render plus "Won't convert — the planner will draw this one procedurally." If none is to hand, report this check as not run — do not fake it.
+8. **390 wide:** controls wrap; nothing overflows the sheet.
+
+Report each as pass / fail / not run, with screenshots under `.playwright-mcp/` (gitignored).
