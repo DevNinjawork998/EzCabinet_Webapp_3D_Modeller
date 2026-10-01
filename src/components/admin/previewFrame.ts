@@ -4,7 +4,9 @@
  * A `MeshGroup`'s frame is already x centred on the width, z centred on the
  * depth and y up from the underside (see `renderMesh.ts`), so nothing needs
  * centring — only the camera has to back off far enough to see the whole
- * thing. The direction is the three-quarter view the old viewer used.
+ * thing. The direction is the three-quarter view the old viewer used; the
+ * distance fits the cabinet's bounding sphere, because its longest side alone
+ * underestimates a near-cube such as a corner unit.
  */
 export type PreviewFrame = {
 	/** Orbit target, metres: the cabinet's mid-height on the origin. */
@@ -19,15 +21,19 @@ const DIRECTION = (() => {
 	return v.map((n) => n / length) as [number, number, number];
 })();
 
-/** Camera distance per metre of the cabinet's largest dimension. Fits a 40°
- * field of view with a margin. */
-const DISTANCE_PER_M = 2.2;
+/** Half the viewer camera's 40° vertical field of view. */
+const HALF_FOV_RAD = (20 * Math.PI) / 180;
+/** Breathing room around the cabinet. */
+const MARGIN = 1.1;
 
 /** `sizeMm` is `RenderMesh.sizeMm`: `[width, depth, height]`. */
 export function previewFrame(sizeMm: [number, number, number]): PreviewFrame {
 	const [, , heightMm] = sizeMm;
 	const target: [number, number, number] = [0, heightMm / 2000, 0];
-	const distance = (Math.max(...sizeMm) / 1000) * DISTANCE_PER_M;
+	// The target is the box's centre, so a sphere of half its diagonal holds
+	// every corner from any direction.
+	const radius = Math.hypot(...sizeMm) / 2000;
+	const distance = (MARGIN * radius) / Math.sin(HALF_FOV_RAD);
 	return {
 		target,
 		camera: [
